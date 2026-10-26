@@ -19,7 +19,7 @@ Item {
     readonly property var shapes: ({
         // sw = strip width, sh = strip height, nw = notch width, nb = notch bottom, r = notch corner radius
         "hidden": { sw: 0,       sh: 0,  nw: 120, nb: 2,   r: 1,  win: Qt.size(screenW, 2) },
-        "bar":    { sw: screenW, sh: 30, nw: 232, nb: 38,  r: 14, win: Qt.size(screenW, 38) },
+        "bar":    { sw: screenW, sh: 30, nw: 124, nb: 42,  r: 15, win: Qt.size(screenW, 42) },
         "large":  { sw: 0,       sh: 0,  nw: 480, nb: Math.max(170, largeContent.contentHeight), r: 30, win: Qt.size(screenW, screenH) }
     })
 
@@ -147,9 +147,16 @@ Item {
         width: surface.notchW
         height: surface.notchBottom
         HoverHandler { id: notchHover }
-        TapHandler {
-            acceptedButtons: Qt.LeftButton
-            onTapped: if (root.mode === "bar") root.setMode("large")
+        // Search and power live in the notch (bar mode only). The large island opens with a
+        // click on the clock side, a scroll down, or Win+N.
+        Row {
+            anchors { horizontalCenter: parent.horizontalCenter; verticalCenter: parent.verticalCenter; verticalCenterOffset: 1 }
+            spacing: 14
+            opacity: root.mode === "bar" ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: 140 } }
+            NotchButton { glyph: "search"; onTapped: island.openSearch() }
+            NotchButton { glyph: "power"; onTapped: island.openPowerMenu() }
         }
         WheelHandler {
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -158,6 +165,13 @@ Item {
                 else if (e.angleDelta.y > 0 && root.mode === "large") root.setMode("bar")
             }
         }
+    }
+
+    // Scrolling down anywhere on the bar opens the large island.
+    WheelHandler {
+        enabled: root.mode === "bar"
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: (e) => { if (e.angleDelta.y < 0) root.setMode("large") }
     }
 
     // ---- bar content --------------------------------------------------------------------
@@ -227,25 +241,26 @@ Item {
                 font { family: Theme.font; pixelSize: 12; weight: Font.Medium }
                 color: Theme.subtext
             }
-        }
-    }
-
-    // Clock in the notch (bar mode); a running timer takes its place and a finished one pulses.
-    Text {
-        id: notchText
-        x: (root.width - width) / 2
-        y: (surface.notchBottom - height) / 2 + 1
-        text: timerState.done ? "Time's up" : (timerState.active ? timerState.text : Qt.formatTime(root.now, "H:mm"))
-        opacity: root.mode === "bar" ? 1 : 0
-        visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: 140 } }
-        font { family: Theme.mono; pixelSize: 14; weight: Font.Medium }
-        color: timerState.done || timerState.active ? Theme.accent : Theme.text
-        SequentialAnimation on scale {
-            running: timerState.done
-            loops: Animation.Infinite
-            NumberAnimation { to: 1.12; duration: 420; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 1.0; duration: 420; easing.type: Easing.InOutSine }
+            // Clock; a running timer takes its place, a finished one pulses.
+            Text {
+                id: clockText
+                text: timerState.done ? "Time's up" : (timerState.active ? timerState.text : Qt.formatTime(root.now, "H:mm"))
+                anchors.verticalCenter: parent.verticalCenter
+                font { family: Theme.mono; pixelSize: 13; weight: Font.Medium }
+                color: timerState.done || timerState.active ? Theme.accent : Theme.text
+                SequentialAnimation on scale {
+                    running: timerState.done
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 1.1; duration: 420; easing.type: Easing.InOutSine }
+                    NumberAnimation { to: 1.0; duration: 420; easing.type: Easing.InOutSine }
+                }
+            }
+            // The whole right-hand group opens the large island.
+            TapHandler {
+                acceptedButtons: Qt.LeftButton
+                onTapped: root.setMode("large")
+            }
+            HoverHandler { cursorShape: Qt.PointingHandCursor }
         }
     }
 

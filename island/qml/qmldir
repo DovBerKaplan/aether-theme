@@ -8,3 +8,4 @@ ToggleChip 1.0 ToggleChip.qml
 MediaCard 1.0 MediaCard.qml
 TimerRow 1.0 TimerRow.qml
 LargeIsland 1.0 LargeIsland.qml
+NotchButton 1.0 NotchButton.qml
