@@ -1,0 +1,11 @@
+Aether
+Copyright (C) the Aether contributors. Licensed under GPL-3.0-or-later (see LICENSE).
+
+Third-party material
+- theme/vendor/whitesur-kvantum: WhiteSur Kvantum theme by vinceliuice, GPL-3.0
+  (https://github.com/vinceliuice/WhiteSur-kde). Recolored at build time.
+- The Plasma desktop theme starts from KDE's Breeze "default" theme installed on the system
+  (LGPL-2.0-or-later); only its SVG fills are changed and the frames are redrawn.
+- system/gestures/install-gestures.sh downloads libinput-gestures by Mark Blakeney (GPL-3.0) at install time;
+  it is not part of this repository.
+- Fonts (Inter, JetBrains Mono) and icon themes (Papirus) are not bundled; install them from your distribution.
