@@ -1,0 +1,16 @@
+{
+  "KPlugin": {
+    "Id": "AetherGlass",
+    "Name": "Aether Glass",
+    "Description": "Liquid-glass Plasma style following the active color scheme",
+    "Authors": [
+      {
+        "Name": "Dov Mador"
+      }
+    ],
+    "Version": "1.0",
+    "License": "LGPL-2.0-or-later",
+    "Category": "Plasma Theme"
+  },
+  "X-Plasma-API-Minimum-Version": "6.0"
+}

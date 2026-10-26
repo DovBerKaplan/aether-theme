@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="-4 -4 24 24">
+  <style type="text/css" id="current-color-scheme">.ColorScheme-Text { color:#e1e2eb; }</style>
+  <!-- Control Centre glyph in the macOS style: two toggle pills, knob left on top, right below -->
+  <path class="ColorScheme-Text" fill="currentColor" fill-rule="evenodd"
+        d="M4.5 2h7a2.5 2.5 0 0 1 0 5h-7a2.5 2.5 0 0 1 0-5zm0 1.1a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8z
+           M4.5 9h7a2.5 2.5 0 0 1 0 5h-7a2.5 2.5 0 0 1 0-5zm7 1.1a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8z"/>
+</svg>

@@ -1,0 +1,12 @@
+{
+  "KPlugin": {
+    "Id": "AetherOS",
+    "Name": "AetherOS Ambient",
+    "Authors": [
+      {
+        "Name": "Dov Mador"
+      }
+    ],
+    "License": "CC-BY-SA-4.0"
+  }
+}

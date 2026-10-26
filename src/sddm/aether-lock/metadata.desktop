@@ -1,0 +1,13 @@
+[SddmGreeterTheme]
+Name=Aether Lock
+Description=iPad / LunariaOS style lock screen for the AetherOS theme
+Author=Dov Mador
+License=GPL-3.0-or-later
+Type=sddm-theme
+Version=1.0
+Screenshot=preview.png
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=aether-lock
+Theme-API=2.0
+QtVersion=6
