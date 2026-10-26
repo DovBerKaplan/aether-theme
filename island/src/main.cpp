@@ -143,6 +143,19 @@ public:
         m_view->setMask(input.isEmpty() ? QRegion(0, 0, 1, 1) : input);
     }
 
+    // The two buttons in the notch. Search opens KRunner; power opens KDE's own shutdown screen
+    // (shut down / restart / log out), which asks for confirmation instead of acting at once.
+    Q_INVOKABLE void openSearch()
+    {
+        QDBusInterface i(QStringLiteral("org.kde.krunner"), QStringLiteral("/App"), QStringLiteral("org.kde.krunner.App"));
+        i.asyncCall(QStringLiteral("toggleDisplay"));
+    }
+    Q_INVOKABLE void openPowerMenu()
+    {
+        QDBusInterface i(QStringLiteral("org.kde.LogoutPrompt"), QStringLiteral("/LogoutPrompt"), QStringLiteral("org.kde.LogoutPrompt"));
+        i.asyncCall(QStringLiteral("promptAll"));
+    }
+
     Q_INVOKABLE void setKeyboard(bool wanted)
     {
         if (auto *ls = LayerShellQt::Window::get(m_view)) {
