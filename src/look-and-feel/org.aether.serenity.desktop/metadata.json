@@ -1,0 +1,17 @@
+{
+  "KPackageStructure": "Plasma/LookAndFeel",
+  "KPlugin": {
+    "Id": "org.aether.serenity.desktop",
+    "Name": "Aether Serenity",
+    "Description": "Aether Serenity - AetherOS liquid glass desktop",
+    "Authors": [
+      {
+        "Name": "DovBerKaplan"
+      }
+    ],
+    "License": "GPL-3.0-or-later",
+    "Version": "1.0",
+    "Category": ""
+  },
+  "X-Plasma-API-Minimum-Version": "6.0"
+}

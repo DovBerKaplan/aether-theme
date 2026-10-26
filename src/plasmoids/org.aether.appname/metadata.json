@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "DovBerKaplan" }],
+        "Category": "Windows and Tasks",
+        "Description": "Bold name of the focused app, like the macOS menu bar",
+        "Icon": "application-x-executable",
+        "Id": "org.aether.appname",
+        "License": "GPL-2.0-or-later",
+        "Name": "Aether App Name",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
