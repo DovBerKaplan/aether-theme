@@ -35,6 +35,7 @@
 #include "AudioModel.h"
 #include "BluetoothModel.h"
 #include "NetworkModel.h"
+#include "SystemPanels.h"
 #include "SystemInfo.h"
 
 #include <KWindowEffects>
@@ -498,6 +499,12 @@ int main(int argc, char **argv)
     view.rootContext()->setContextProperty(QStringLiteral("bluetooth"), &bluetooth);
     AudioModel audio_;
     view.rootContext()->setContextProperty(QStringLiteral("sound"), &audio_);
+    PowerModel power;
+    view.rootContext()->setContextProperty(QStringLiteral("power"), &power);
+    DisplayModel displayModel;
+    view.rootContext()->setContextProperty(QStringLiteral("displaySettings"), &displayModel);
+    SessionActions session;
+    view.rootContext()->setContextProperty(QStringLiteral("session"), &session);
     IslandController controller(&view);
     view.rootContext()->setContextProperty(QStringLiteral("island"), &controller);
     NotificationSink sink;
