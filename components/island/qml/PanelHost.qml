@@ -43,6 +43,7 @@ Item {
 
     // The page for the current panel. Real panels are loaded on demand and torn down shortly
     // after the island closes (their destructor stops scanning/polling).
+    readonly property var realPanels: ({ wifi: "WifiPanel.qml", bluetooth: "BluetoothPanel.qml", sound: "SoundPanel.qml" })
     property bool open: false
     signal closeRequested()
     onOpenChanged: if (open) closeDelay.stop(); else closeDelay.restart()
@@ -55,10 +56,10 @@ Item {
             id: stage
             anchors.fill: parent
             active: root.open || closeDelay.running
-            source: root.panelId === "wifi" ? "WifiPanel.qml" : "PlaceholderPanel.qml"
+            source: root.realPanels[root.panelId] || "PlaceholderPanel.qml"
         }
         Binding { target: stage.item; property: "panelId"; value: root.panelId; when: stage.item && stage.item.panelId !== undefined }
-        Binding { target: stage.item; property: "title"; value: root.titles[root.panelId] || root.panelId; when: stage.item && root.panelId !== "wifi" }
+        Binding { target: stage.item; property: "title"; value: root.titles[root.panelId] || root.panelId; when: stage.item && !root.realPanels[root.panelId] }
         Binding { target: stage.item; property: "page"; value: root.page; when: stage.item }
         Binding { target: stage.item; property: "maxHeight"; value: root.maxHeight; when: stage.item }
         Connections {

@@ -16,3 +16,5 @@ PanelHost 1.0 PanelHost.qml
 PlaceholderPanel 1.0 PlaceholderPanel.qml
 WifiRow 1.0 WifiRow.qml
 WifiPanel 1.0 WifiPanel.qml
+BluetoothPanel 1.0 BluetoothPanel.qml
+SoundPanel 1.0 SoundPanel.qml
