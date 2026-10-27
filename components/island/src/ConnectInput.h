@@ -88,6 +88,15 @@ public:
         }
         return true;
     }
+    // Reading conversations is not something the daemon offers over D-Bus (checked: no signals, no objects), so
+    // reading is handed to KDE Connect's own SMS app, which the daemon launches for this device.
+    Q_INVOKABLE void openMessagesApp(const QString &id, const QString &name)
+    {
+        note(QStringLiteral("sms-app"), name);
+        if (!m_fake) {
+            QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(Service, devPath(id) + QStringLiteral("/sms"), QStringLiteral("org.kde.kdeconnect.device.sms"), QStringLiteral("launchApp")));
+        }
+    }
     // Recipient suggestions from the phone's contact cache: [{name, number}], at most 6.
     Q_INVOKABLE QVariantList suggest(const QString &id, const QString &query)
     {
