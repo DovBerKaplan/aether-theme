@@ -45,6 +45,8 @@ var dict = {
     "Messages": "הודעות", "Phone media": "מדיה בטלפון", "Calls": "שיחות", "Contacts": "אנשי קשר", "Keyboard": "מקלדת",
     "Ringing %1": "מצלצל ב‑%1", "Ping sent to %1": "פינג נשלח אל %1", "Clipboard sent to %1": "לוח הגזירים נשלח אל %1", "Sent to %1": "נשלח אל %1",
     "Pairing request sent to %1": "בקשת צימוד נשלחה אל %1", "Paired with %1": "מצומד עם %1", "Pairing cancelled": "הצימוד בוטל", "Unpaired from %1": "הצימוד עם %1 בוטל",
+    "%1h": "לפני %1 שע׳", "%1d": "לפני %1 ימים", "Clear all": "נקה הכל", "Reply": "השב", "Write a reply…": "כתוב תשובה…",
+    "Reply sent": "התשובה נשלחה", "Action sent": "הפעולה נשלחה", "Notifications cleared": "ההתראות נוקו",
     // Bluetooth
     "Device": "מכשיר", "Device details": "פרטי המכשיר", "No Bluetooth adapter": "אין מתאם Bluetooth",
     "Visible as “%1” while this panel is open": "גלוי בשם “%1” כל עוד החלון פתוח", "Bluetooth settings ↗": "הגדרות Bluetooth ↗",

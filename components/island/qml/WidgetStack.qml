@@ -53,7 +53,7 @@ Item {
             onSearchRequested: root.mediaRequested()
         }
     }
-    Component { id: connectCard; ConnectCard { onOpenRequested: root.panelRequested("connect") } }
+    Component { id: connectCard; ConnectCard { onOpenRequested: (target) => root.panelRequested(target) } }
 
     // ---- normal -------------------------------------------------------------------------
     Column {

@@ -1,6 +1,6 @@
 # Widgets Spec — removable YouTube Music, and a KDE Connect widget
 
-Status: **W1 and C1 built** (2026-10-28): widget stack with edit mode, removable YouTube Music (closes Pear, disables autostart), and the KDE Connect device core - compact card, Overview panel (ring, ping, clipboard, share, features, pairing, unpair), fake backend (`AETHER_CONNECT_FAKE=1`). C2 onward is still a plan.
+Status: **W1, C1 and C2 built** (2026-10-28): widget stack with edit mode, removable YouTube Music (closes Pear, disables autostart), and the KDE Connect device core - compact card, Overview panel (ring, ping, clipboard, share, features, pairing, unpair), fake backend (`AETHER_CONNECT_FAKE=1`); C2 adds the phone Notifications page (live list, dismiss, reply, the notification's own buttons, clear all, card badge) and keeps the plain forwarded copies out of the island history and off disk. C3 onward is still a plan. **Not yet verified on a real notification:** the daemon object's property names are read defensively and were checked only against the fake data.
 
 Two requests, one mechanism:
 

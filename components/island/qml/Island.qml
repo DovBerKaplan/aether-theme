@@ -24,6 +24,9 @@ Item {
     // The YouTube Music widget: on = the card, the "bar becomes the app" mode and the app itself;
     // off = none of it exists (no card, no mode, no app process, no tray icon, no autostart).
     readonly property bool mediaOn: tiles.widgets.indexOf("media") >= 0
+    // With the KDE Connect widget on, the phone's notifications live there (with reply and actions); the
+    // plain forwarded copies are kept out of the history list and off disk.
+    Binding { target: notifStore; property: "ignoredApps"; value: tiles.widgets.indexOf("connect") >= 0 ? ["KDE Connect"] : [] }
     onMediaOnChanged: {
         if (!mediaOn && mode === "media") setMode("large")
         media.setEnabled(mediaOn, true)
@@ -71,8 +74,9 @@ Item {
     property string panelFrom: "large"
     function openPanel(id) {
         if (!id) return
-        panelHost.panelId = id
-        panelHost.page = ""
+        const parts = id.split(":")          // "connect:notifications" opens that page directly
+        panelHost.panelId = parts[0]
+        panelHost.page = parts.length > 1 ? parts[1] : ""
         panelFrom = (mode === "bar" || mode === "hidden") ? "bar" : "large"
         setMode("panel")
     }

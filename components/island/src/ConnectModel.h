@@ -16,6 +16,9 @@
 #include <QDBusMessage>
 #include <QDBusReply>
 #include <QDBusServiceWatcher>
+#include <QDateTime>
+#include <QFile>
+#include <QHash>
 #include <QDir>
 #include <QObject>
 #include <QProcess>
@@ -32,6 +35,7 @@ class ConnectModel : public QObject
     Q_PROPERTY(QVariantList devices READ devices NOTIFY changed)
     Q_PROPERTY(QString selectedId READ selectedId NOTIFY changed)
     Q_PROPERTY(QVariantMap selected READ selected NOTIFY changed)        // the device the card shows, or {}
+    Q_PROPERTY(QVariantList notifications READ notifications NOTIFY notificationsChanged)   // the selected phone's, newest first; filled only while watched
     Q_PROPERTY(QVariantMap lastAction READ lastAction NOTIFY lastActionChanged)   // {kind, device} of the latest action
 
 public:
@@ -65,6 +69,63 @@ public:
     QString selectedId() const { return m_selectedId; }
     QVariantMap selected() const { return find(m_selectedId); }
     QVariantMap lastAction() const { return m_lastAction; }
+    QVariantList notifications() const { return m_notifs; }
+
+    // The Notifications page is open: read the full list (and keep it fresh from the daemon's signals).
+    // Closed, only the count is read - a phone can hold dozens of notifications.
+    Q_INVOKABLE void watchNotifications(bool on)
+    {
+        if (m_watchNotifs == on) {
+            return;
+        }
+        m_watchNotifs = on;
+        if (on) {
+            m_debounce.start();
+        } else {
+            m_notifs.clear();
+            Q_EMIT notificationsChanged();
+        }
+    }
+    Q_INVOKABLE void dismissNotification(const QString &id, const QString &notifId)
+    {
+        if (m_fake) {
+            for (int i = 0; i < m_notifs.size(); ++i) {
+                if (m_notifs.at(i).toMap().value(QStringLiteral("id")).toString() == notifId) {
+                    m_notifs.removeAt(i);
+                    break;
+                }
+            }
+            bumpCount(id, m_notifs.size());
+            Q_EMIT notificationsChanged();
+            return;
+        }
+        QDBusMessage m = QDBusMessage::createMethodCall(Service, devPath(id) + QStringLiteral("/notifications/") + notifId,
+                                                        QStringLiteral("org.kde.kdeconnect.device.notifications.notification"), QStringLiteral("dismiss"));
+        QDBusConnection::sessionBus().asyncCall(m);
+        m_debounce.start();
+    }
+    Q_INVOKABLE void clearNotifications(const QString &id)
+    {
+        record(QStringLiteral("dismiss-all"), id);
+        const QVariantList all = m_notifs;
+        for (const QVariant &v : all) {
+            if (v.toMap().value(QStringLiteral("dismissable")).toBool()) {
+                dismissNotification(id, v.toMap().value(QStringLiteral("id")).toString());
+            }
+        }
+    }
+    // Answer a notification that offers a reply (a message app): the phone sends it from its own app.
+    Q_INVOKABLE void replyToNotification(const QString &id, const QString &replyId, const QString &text)
+    {
+        if (!replyId.isEmpty() && !text.trimmed().isEmpty()) {
+            plugin(id, QStringLiteral("notifications"), QStringLiteral("sendReply"), {replyId, text}, QStringLiteral("reply"));
+        }
+    }
+    // A button the notification itself carries (Archive, Mark as read...).
+    Q_INVOKABLE void notificationAction(const QString &id, const QString &internalId, const QString &action)
+    {
+        plugin(id, QStringLiteral("notifications"), QStringLiteral("sendAction"), {internalId, action}, QStringLiteral("action"));
+    }
 
     // The card follows this device from now on (saved).
     Q_INVOKABLE void select(const QString &id)
@@ -146,6 +207,7 @@ public:
 Q_SIGNALS:
     void changed();
     void lastActionChanged();
+    void notificationsChanged();
 
 private Q_SLOTS:
     void onAny(const QDBusMessage &) { m_debounce.start(); }
@@ -246,6 +308,11 @@ private:
                 m_devices = fixture();
             }
             pickSelected();
+            if (m_watchNotifs && m_notifs.isEmpty() && m_selectedId == QLatin1String("fake-phone") && !m_fakeNotifsServed) {
+                m_fakeNotifsServed = true;
+                m_notifs = fixtureNotifications();
+                Q_EMIT notificationsChanged();
+            }
             Q_EMIT changed();
             return;
         }
@@ -322,6 +389,61 @@ private:
         }
         pickSelected();
         Q_EMIT changed();
+        loadNotifications();
+    }
+
+    void bumpCount(const QString &id, int n)
+    {
+        for (QVariant &v : m_devices) {
+            QVariantMap d = v.toMap();
+            if (d.value(QStringLiteral("id")).toString() == id) {
+                d[QStringLiteral("notifications")] = n;
+                v = d;
+            }
+        }
+        Q_EMIT changed();
+    }
+    // The selected phone's notifications, read property by property. The object's property names are
+    // read defensively (everything the daemon offers is fetched, the known ones are mapped) because
+    // the plugin objects are KDE-internal.
+    void loadNotifications()
+    {
+        if (!m_watchNotifs || m_fake) {
+            return;
+        }
+        QVariantList out;
+        const QVariantMap d = find(m_selectedId);
+        if (!d.isEmpty() && d.value(QStringLiteral("reachable")).toBool()) {
+            const QString base = devPath(m_selectedId) + QStringLiteral("/notifications");
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            const QStringList ids = stringList(base, QStringLiteral("org.kde.kdeconnect.device.notifications"), QStringLiteral("activeNotifications"));
+            QHash<QString, qint64> seen;
+            for (const QString &nid : ids) {
+                const QVariantMap p = getAll(base + QLatin1Char('/') + nid, QStringLiteral("org.kde.kdeconnect.device.notifications.notification"));
+                if (p.isEmpty()) {
+                    continue;
+                }
+                seen.insert(nid, m_firstSeen.value(nid, now));
+                const QString text = p.value(QStringLiteral("text")).toString();
+                out << QVariantMap{{QStringLiteral("id"), nid},
+                                   {QStringLiteral("internalId"), p.value(QStringLiteral("internalId"), nid).toString()},
+                                   {QStringLiteral("appName"), p.value(QStringLiteral("appName")).toString()},
+                                   {QStringLiteral("title"), p.value(QStringLiteral("title")).toString()},
+                                   {QStringLiteral("text"), text.isEmpty() ? p.value(QStringLiteral("ticker")).toString() : text},
+                                   {QStringLiteral("dismissable"), p.value(QStringLiteral("dismissable"), true).toBool()},
+                                   {QStringLiteral("silent"), p.value(QStringLiteral("silent")).toBool()},
+                                   {QStringLiteral("iconPath"), p.value(QStringLiteral("hasIcon")).toBool() ? p.value(QStringLiteral("iconPath")).toString() : QString()},
+                                   {QStringLiteral("replyId"), p.value(QStringLiteral("replyId")).toString()},
+                                   {QStringLiteral("actions"), p.value(QStringLiteral("actions")).toStringList()},
+                                   {QStringLiteral("ts"), double(seen.value(nid))}};
+            }
+            m_firstSeen = seen;   // forget what is gone
+            std::stable_sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) { return a.toMap().value(QStringLiteral("ts")).toDouble() > b.toMap().value(QStringLiteral("ts")).toDouble(); });
+        }
+        if (out != m_notifs) {
+            m_notifs = out;
+            Q_EMIT notificationsChanged();
+        }
     }
 
     // Three devices like the owner's, with invented values; used only when AETHER_CONNECT_FAKE=1.
@@ -343,6 +465,22 @@ private:
                 dev("fake-new", "Nokia 3310 (fake)", "phone", false, true, -1, false, "", -1, 0)};
     }
 
+    // Invented, harmless phone notifications for AETHER_CONNECT_FAKE=1.
+    static QVariantList fixtureNotifications()
+    {
+        const double now = double(QDateTime::currentMSecsSinceEpoch());
+        auto n = [now](const char *id, const char *app, const char *title, const char *text, bool dismissable, const char *reply, QStringList actions, int minutesAgo) {
+            return QVariantMap{{QStringLiteral("id"), QString::fromLatin1(id)}, {QStringLiteral("internalId"), QString::fromLatin1(id)}, {QStringLiteral("appName"), QString::fromLatin1(app)},
+                               {QStringLiteral("title"), QString::fromUtf8(title)}, {QStringLiteral("text"), QString::fromUtf8(text)}, {QStringLiteral("dismissable"), dismissable},
+                               {QStringLiteral("silent"), false}, {QStringLiteral("iconPath"), QString()}, {QStringLiteral("replyId"), QString::fromLatin1(reply)},
+                               {QStringLiteral("actions"), actions}, {QStringLiteral("ts"), now - minutesAgo * 60000.0}};
+        };
+        return {n("f1", "Messages", "Dana", "Are we still on for 6? I can bring the cables.", true, "reply-f1", {}, 2),
+                n("f2", "Mail", "Weekly report", "The report is ready: 3 items need your review before Thursday.", true, "", {QStringLiteral("Archive"), QStringLiteral("Mark as read")}, 9),
+                n("f3", "Calendar", "Design review in 15 minutes", "Room 4B, with the whole team", true, "", {}, 14),
+                n("f4", "Chat", "Group: Weekend", "Noa: sending the photos now", true, "reply-f4", {}, 31),
+                n("f5", "Downloads", "Download complete", "map-2026.pdf (4.2 MB)", false, "", {}, 55)};
+    }
     QSettings m_prefs{QDir::homePath() + QStringLiteral("/.config/aetherislandrc"), QSettings::IniFormat};
     QTimer m_debounce;
     const bool m_fake;
@@ -350,4 +488,7 @@ private:
     QVariantList m_devices;
     QString m_selectedId;
     QVariantMap m_lastAction;
+    QVariantList m_notifs;
+    QHash<QString, qint64> m_firstSeen;
+    bool m_watchNotifs = false, m_fakeNotifsServed = false;
 };

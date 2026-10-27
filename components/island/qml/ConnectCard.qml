@@ -7,7 +7,7 @@ import "."
 // Loud things (ring) live in the panel behind a second tap. Message text never appears on the card.
 Item {
     id: root
-    signal openRequested()
+    signal openRequested(string target)      // "connect" or "connect:notifications"
 
     readonly property var d: connectModel.selected
     readonly property bool has: d.id !== undefined
@@ -29,7 +29,7 @@ Item {
         Behavior on color { ColorAnimation { duration: Tokens.motion.duration.micro } }
     }
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
-    TapHandler { id: tap; onTapped: root.openRequested() }
+    TapHandler { id: tap; onTapped: root.openRequested("connect") }
 
     // ---- a device is selected ------------------------------------------------------------
     Item {
@@ -75,6 +75,30 @@ Item {
                     color: Theme.subtext
                 }
                 SignalBars { anchors.horizontalCenter: parent.horizontalCenter; level: root.d.signal === undefined ? -1 : root.d.signal }
+            }
+            Item {        // the phone's notifications: a bell with the count, opens the list
+                visible: root.online && root.d.notifications !== undefined && root.d.notifications > 0
+                width: 34; height: 34
+                anchors.verticalCenter: parent.verticalCenter
+                Rectangle {
+                    anchors.fill: parent; radius: 17
+                    color: Qt.rgba(1, 1, 1, bellTap.pressed ? Tokens.tint.strong : bellHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                    Behavior on color { ColorAnimation { duration: Tokens.motion.duration.micro } }
+                }
+                Glyph { anchors.centerIn: parent; name: "bell"; size: 15 }
+                Rectangle {      // the count: small, quiet - no message text on the card
+                    anchors { right: parent.right; top: parent.top; rightMargin: -3; topMargin: -3 }
+                    width: Math.max(16, cnt.implicitWidth + 8); height: 16; radius: 8
+                    color: Theme.text
+                    Text {
+                        id: cnt; anchors.centerIn: parent
+                        text: root.d.notifications > 99 ? "99+" : root.d.notifications
+                        font { family: Theme.mono; pixelSize: Tokens.type.caption; weight: Font.Medium }
+                        color: Tokens.role.dark.textOnAccent
+                    }
+                }
+                HoverHandler { id: bellHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { id: bellTap; onTapped: root.openRequested("connect:notifications") }
             }
             Item {        // send clipboard
                 visible: root.online && root.d.pluginState !== undefined && root.d.pluginState["kdeconnect_clipboard"] === true

@@ -21,6 +21,10 @@ class NotificationStore : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantList list READ list NOTIFY listChanged)
+    // Apps whose notifications are shown somewhere better (the KDE Connect widget shows the phone's, with
+    // reply and actions): they are not added to the history, and what is already there is dropped - so their
+    // text is never written to disk either.
+    Q_PROPERTY(QStringList ignoredApps READ ignoredApps WRITE setIgnoredApps NOTIFY ignoredAppsChanged)
 
 public:
     explicit NotificationStore(QObject *parent = nullptr)
@@ -41,6 +45,26 @@ public:
     {
         m_proc.kill();
         m_proc.waitForFinished(500);
+    }
+
+    QStringList ignoredApps() const { return m_ignored; }
+    void setIgnoredApps(const QStringList &apps)
+    {
+        if (apps == m_ignored) {
+            return;
+        }
+        m_ignored = apps;
+        bool removed = false;
+        for (int i = m_items.size() - 1; i >= 0; --i) {
+            if (isIgnored(m_items.at(i).toObject().value(QStringLiteral("app")).toString())) {
+                m_items.removeAt(i);
+                removed = true;
+            }
+        }
+        if (removed) {
+            changed();
+        }
+        Q_EMIT ignoredAppsChanged();
     }
 
     QVariantList list() const
@@ -73,6 +97,7 @@ public:
 
 Q_SIGNALS:
     void listChanged();
+    void ignoredAppsChanged();
 
 private:
     void changed()
@@ -115,6 +140,9 @@ private:
             return;   // progress-style updates (replaces_id set) would spam the list
         }
         const QString app = d.at(0).toString();
+        if (isIgnored(app)) {
+            return;
+        }
         const QString summary = d.at(3).toString();
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
         // replaces_id refers to ids Plasma handed out, which we never see; update the most
@@ -177,6 +205,18 @@ private:
     QProcess m_proc;
     QByteArray m_buffer;
     QTimer m_save{this};
+    bool isIgnored(const QString &app) const
+    {
+        // forwarded phone notifications come from "KDE Connect" (matched loosely: case and spacing)
+        const QString a = app.simplified().remove(QLatin1Char(' ')).toLower();
+        for (const QString &x : m_ignored) {
+            if (a == x.simplified().remove(QLatin1Char(' ')).toLower()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    QStringList m_ignored;
     QJsonArray m_items;          // newest first
     qint64 m_topKey = 0;
 };
