@@ -502,6 +502,8 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 font { family: Theme.mono; pixelSize: Tokens.type.body; weight: Font.Medium }
                 color: timerState.done || timerState.active ? Theme.accent : Theme.text
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: root.openPanel("calendar") }
                 SequentialAnimation on scale {
                     running: timerState.done
                     loops: Animation.Infinite
@@ -509,7 +511,7 @@ Item {
                     NumberAnimation { to: 1.0; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
                 }
             }
-            NotchButton { glyph: "power"; onTapped: island.openPowerMenu() }
+            NotchButton { glyph: "power"; onTapped: root.openPanel("power") }
         }
         WheelHandler {
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -573,6 +575,7 @@ Item {
         visible: opacity > 0 || root.dragging && root.mode === "panel"
         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
         open: root.mode === "panel"
+        timer: timerState
         onBackRequested: root.panelBack()
         onCloseRequested: root.setMode("bar")
         onPullStarted: root.pullBegin()

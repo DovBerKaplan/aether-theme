@@ -1,6 +1,6 @@
 # Panels Spec — dedicated windows for the island's buttons
 
-Status: **Phase 1 built** (2026-10-27): panel mode, PanelHost, shared components, two-zone chips, OpenPanel/ClosePanel D-Bus. Panels themselves are placeholders; the bar clock and power button are not rewired yet (phases 2-4).
+Status: **Phases 1-4 built** (2026-10-27): panel mode and frame, Wi-Fi, Bluetooth, Sound, Battery, Display, Power and Calendar panels, all opened from the chips, the bar's clock and power button, or `OpenPanel` over D-Bus. Not yet: tiles (phase 5), the items listed as skipped in each phase's commit.
 
 The goal, in one sentence: every control in the island (Wi‑Fi, Bluetooth,
 sound, brightness, battery, clock, power) opens its **own detail panel**. The

@@ -12,7 +12,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick Qml DBus)
 find_package(KF6WindowSystem REQUIRED)
 find_package(LayerShellQt REQUIRED)
 
-qt_add_executable(aether-island src/main.cpp src/SystemInfo.h src/MediaController.h src/AudioLevels.h src/NotificationStore.h src/NetworkModel.h src/AudioModel.h src/BluetoothModel.h)
+qt_add_executable(aether-island src/main.cpp src/SystemInfo.h src/MediaController.h src/AudioLevels.h src/NotificationStore.h src/NetworkModel.h src/AudioModel.h src/BluetoothModel.h src/SystemPanels.h)
 target_link_libraries(aether-island PRIVATE
     Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus
     KF6::WindowSystem LayerShellQt::Interface)
