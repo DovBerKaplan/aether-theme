@@ -1,3 +1,14 @@
 module AetherShared
 singleton Theme 1.0 Theme.qml
 CardSurface 1.0 CardSurface.qml
+singleton Tokens 1.0 Tokens.qml
+Switch 1.0 Switch.qml
+SectionLabel 1.0 SectionLabel.qml
+ListRow 1.0 ListRow.qml
+Button 1.0 Button.qml
+SegmentedControl 1.0 SegmentedControl.qml
+TextField 1.0 TextField.qml
+LinearProgress 1.0 LinearProgress.qml
+KeyValueRow 1.0 KeyValueRow.qml
+ConfirmTile 1.0 ConfirmTile.qml
+PanelScaffold 1.0 PanelScaffold.qml

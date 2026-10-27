@@ -16,22 +16,22 @@ Item {
     Rectangle {
         id: track
         anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
-        height: 8; radius: 4
-        color: Qt.rgba(1, 1, 1, 0.14)
+        height: 8; radius: Tokens.radius.xs
+        color: Qt.rgba(1, 1, 1, Tokens.tint.soft)
         Rectangle {
             width: Math.max(track.height, track.width * root.shown)
-            height: parent.height; radius: 4
+            height: parent.height; radius: Tokens.radius.xs
             color: root.fillColor
-            Behavior on width { enabled: !root.dragging; NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+            Behavior on width { enabled: !root.dragging; NumberAnimation { duration: Tokens.motion.duration.fast; easing.type: Tokens.motion.easing.enter } }
         }
     }
     Rectangle {                       // knob, only while hovered or dragged
         x: Math.max(0, Math.min(track.width - width, track.width * root.shown - width / 2))
         anchors.verticalCenter: parent.verticalCenter
-        width: 16; height: 16; radius: 8
+        width: 16; height: 16; radius: Tokens.radius.sm
         color: "white"
         opacity: area.containsMouse || root.dragging ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 120 } }
+        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
     }
     MouseArea {
         id: area

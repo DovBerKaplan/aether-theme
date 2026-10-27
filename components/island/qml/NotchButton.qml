@@ -12,8 +12,8 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: Qt.rgba(1, 1, 1, tap.pressed ? 0.22 : hover.hovered ? 0.13 : 0)
-        Behavior on color { ColorAnimation { duration: 110 } }
+        color: Qt.rgba(1, 1, 1, tap.pressed ? Tokens.tint.strong : hover.hovered ? Tokens.tint.soft : 0)
+        Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
     }
     Glyph {
         anchors.centerIn: parent
@@ -21,7 +21,7 @@ Item {
         size: 15
         color: Theme.text
         scale: tap.pressed ? 0.92 : 1
-        Behavior on scale { NumberAnimation { duration: 90 } }
+        Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.micro } }
     }
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
     TapHandler { id: tap; onTapped: root.tapped() }
