@@ -19,10 +19,12 @@
 #include <QDBusReply>
 #include <QDBusVariant>
 #include <QDesktopServices>
+#include <QDir>
 #include <QMap>
 #include <QObject>
 #include <QProcess>
 #include <QSet>
+#include <QSettings>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantList>
@@ -41,6 +43,8 @@ class NetworkModel : public QObject
     Q_PROPERTY(QString connecting READ connecting NOTIFY changed)      // ssid being joined, or ""
     Q_PROPERTY(QString step READ step NOTIFY changed)                  // what the join is doing now
     Q_PROPERTY(bool scanning READ scanning NOTIFY changed)
+    Q_PROPERTY(bool restoring READ restoring NOTIFY changed)           // a failed switch is putting the previous network back
+    Q_PROPERTY(QString restoringTo READ restoringTo NOTIFY changed)
     // [{ssid, signal 0-100, level 0-4, secure, security, band, saved, connected, inRange, supported}]
     Q_PROPERTY(QVariantList networks READ networks NOTIFY networksChanged)
 
@@ -60,7 +64,7 @@ public:
         m_scanDone.setInterval(4000);
         connect(&m_scanDone, &QTimer::timeout, this, [this] { m_scanning = false; Q_EMIT changed(); });
         m_joinTimeout.setSingleShot(true);
-        m_joinTimeout.setInterval(45000);
+        m_joinTimeout.setInterval(30000);
         connect(&m_joinTimeout, &QTimer::timeout, this, [this] { failJoin(QStringLiteral("failed"), QStringLiteral("Network didn't respond")); });
 
         auto bus = QDBusConnection::systemBus();
@@ -68,7 +72,12 @@ public:
                     this, SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
         bus.connect(NMService, SettingsPath, SettingsIface, QStringLiteral("NewConnection"), this, SLOT(onProfilesChanged(QDBusObjectPath)));
         bus.connect(NMService, SettingsPath, SettingsIface, QStringLiteral("ConnectionRemoved"), this, SLOT(onProfilesChanged(QDBusObjectPath)));
+        // No password after a few seconds in "need auth" means nobody is going to answer: give up
+        // instead of letting NetworkManager sit in it for two minutes.
+        m_needAuth.setSingleShot(true);
+        connect(&m_needAuth, &QTimer::timeout, this, [this] { needAuthGaveUp(); });
         QTimer::singleShot(0, this, [this] { refresh(false); });
+        QTimer::singleShot(6000, this, [this] { housekeeping(); });   // after the desktop has settled
     }
 
     bool available() const { return !m_dev.isEmpty(); }
@@ -78,6 +87,8 @@ public:
     QString connecting() const { return m_connecting; }
     QString step() const { return m_step; }
     bool scanning() const { return m_scanning; }
+    bool restoring() const { return m_restoring; }
+    QString restoringTo() const { return m_prevSsid; }
     QVariantList networks() const { return m_networks; }
 
     // The panel is open: read access points, scan now and every 10 s.
@@ -119,6 +130,9 @@ public:
         Q_EMIT changed();
     }
     // Join a network. Saved or open: psk may be empty. Otherwise psk is the new password.
+    // Switching is safe: the network we were on is remembered and put back if the attempt fails,
+    // is cancelled or times out. A failed attempt never changes or deletes anything that was saved:
+    // a new password goes into a NEW profile that lives in memory until the connection works.
     Q_INVOKABLE void connectTo(const QString &ssid, const QString &psk, bool autoconnect = true)
     {
         if (m_dev.isEmpty() || !m_connecting.isEmpty()) {
@@ -132,45 +146,60 @@ public:
             Q_EMIT connectFailed(ssid, QStringLiteral("unsupported"), QStringLiteral("This network type needs the system settings"));
             return;
         }
-        m_createdConn.clear();
-        const QString savedPath = m_saved.value(ssid).path;
-        if (!psk.isEmpty() && !savedPath.isEmpty()) {
-            deleteProfile(savedPath);   // replacing a stale password: start from a clean profile
+        if (!net.value(QStringLiteral("inRange")).toBool()) {   // never leave a working network for one that is not there
+            Q_EMIT connectFailed(ssid, QStringLiteral("failed"), QStringLiteral("Out of range"));
+            return;
         }
+        const QString security = net.value(QStringLiteral("security")).toString();
+        const bool open = security == QLatin1String("Open");
+        const QString savedPath = m_saved.value(ssid).path;
+        if (!open && psk.isEmpty() && savedPath.isEmpty()) {
+            Q_EMIT connectFailed(ssid, QStringLiteral("password"), QStringLiteral("Enter the password"));
+            return;
+        }
+        m_createdConn.clear();
+        m_oldProfile.clear();
+        m_userDisconnect = false;
+        m_restoring = false;
+        m_needsPassword.remove(ssid);
+        snapshotPrevious(ssid);
         m_usedPsk = !psk.isEmpty();
         beginJoin(ssid);
-        if (!savedPath.isEmpty() && psk.isEmpty()) {
+        if (!savedPath.isEmpty() && psk.isEmpty()) {   // known network, known password
             QDBusMessage m = QDBusMessage::createMethodCall(NMService, NMPath, QStringLiteral("org.freedesktop.NetworkManager"), QStringLiteral("ActivateConnection"));
             m << QVariant::fromValue(QDBusObjectPath(savedPath)) << QVariant::fromValue(QDBusObjectPath(m_dev)) << QVariant::fromValue(QDBusObjectPath(QStringLiteral("/")));
             watchCall(QDBusConnection::systemBus().asyncCall(m));
             return;
         }
-        const QString security = net.value(QStringLiteral("security")).toString();
-        const bool open = security == QLatin1String("Open");
-        if (!open && psk.isEmpty()) {
-            m_connecting.clear();
-            Q_EMIT connectFailed(ssid, QStringLiteral("password"), QStringLiteral("Enter the password"));
-            Q_EMIT changed();
-            return;
-        }
         NMSettings s;
-        s[QStringLiteral("connection")] = {{QStringLiteral("type"), QStringLiteral("802-11-wireless")},
-                                           {QStringLiteral("id"), ssid},
-                                           {QStringLiteral("autoconnect"), autoconnect}};
-        s[QStringLiteral("802-11-wireless")] = {{QStringLiteral("ssid"), ssid.toUtf8()},
-                                                {QStringLiteral("mode"), QStringLiteral("infrastructure")}};
-        if (!open) {
-            s[QStringLiteral("802-11-wireless-security")] = {
-                {QStringLiteral("key-mgmt"), security == QLatin1String("WPA3") ? QStringLiteral("sae") : QStringLiteral("wpa-psk")},
-                {QStringLiteral("psk"), psk},
-                {QStringLiteral("psk-flags"), 0u}};   // 0 = stored by NetworkManager, no agent needed
+        if (!savedPath.isEmpty()) {
+            // New password for a known network: copy every setting it has (addresses, DNS, priority...)
+            // except the identity; the original stays untouched until this one is connected.
+            s = settingsOf(savedPath);
+            s[QStringLiteral("connection")].remove(QStringLiteral("uuid"));
+            s[QStringLiteral("connection")].remove(QStringLiteral("timestamp"));
+            m_oldProfile = savedPath;
+        } else {
+            s[QStringLiteral("connection")] = {{QStringLiteral("type"), QStringLiteral("802-11-wireless")},
+                                               {QStringLiteral("id"), ssid},
+                                               {QStringLiteral("autoconnect"), autoconnect}};
+            s[QStringLiteral("802-11-wireless")] = {{QStringLiteral("ssid"), ssid.toUtf8()},
+                                                    {QStringLiteral("mode"), QStringLiteral("infrastructure")}};
         }
-        QDBusMessage m = QDBusMessage::createMethodCall(NMService, NMPath, QStringLiteral("org.freedesktop.NetworkManager"), QStringLiteral("AddAndActivateConnection"));
-        m << QVariant::fromValue(s) << QVariant::fromValue(QDBusObjectPath(m_dev))
-          << QVariant::fromValue(QDBusObjectPath(net.value(QStringLiteral("apPath")).toString().isEmpty() ? QStringLiteral("/") : net.value(QStringLiteral("apPath")).toString()));
+        if (!open) {
+            QVariantMap sec = s.value(QStringLiteral("802-11-wireless-security"));
+            sec[QStringLiteral("key-mgmt")] = security == QLatin1String("WPA3") ? QStringLiteral("sae") : QStringLiteral("wpa-psk");
+            sec[QStringLiteral("psk")] = psk;
+            sec[QStringLiteral("psk-flags")] = 0u;   // 0 = stored by NetworkManager itself: no agent, no wallet
+            s[QStringLiteral("802-11-wireless-security")] = sec;
+        }
+        QDBusMessage m = QDBusMessage::createMethodCall(NMService, NMPath, QStringLiteral("org.freedesktop.NetworkManager"), QStringLiteral("AddAndActivateConnection2"));
+        const QString ap = net.value(QStringLiteral("apPath")).toString();
+        m << QVariant::fromValue(s) << QVariant::fromValue(QDBusObjectPath(m_dev)) << QVariant::fromValue(QDBusObjectPath(ap.isEmpty() ? QStringLiteral("/") : ap))
+          << QVariant::fromValue(QVariantMap{{QStringLiteral("persist"), QStringLiteral("memory")}});   // nothing on disk until it works
         auto *w = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(m), this);
         connect(w, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *self) {
-            QDBusPendingReply<QDBusObjectPath, QDBusObjectPath> r = *self;
+            QDBusPendingReply<QDBusObjectPath, QDBusObjectPath, QVariantMap> r = *self;
             self->deleteLater();
             if (r.isError()) {
                 failJoin(QStringLiteral("failed"), QStringLiteral("Couldn't start the connection"));
@@ -184,22 +213,40 @@ public:
         if (m_connecting.isEmpty()) {
             return;
         }
-        const QString ac = devProp(DeviceIface, QStringLiteral("ActiveConnection")).value<QDBusObjectPath>().path();
-        if (!ac.isEmpty() && ac != QLatin1String("/")) {
-            QDBusMessage m = QDBusMessage::createMethodCall(NMService, NMPath, QStringLiteral("org.freedesktop.NetworkManager"), QStringLiteral("DeactivateConnection"));
-            m << QVariant::fromValue(QDBusObjectPath(ac));
-            QDBusConnection::systemBus().asyncCall(m);
-        }
+        deactivateCurrent();
         if (!m_createdConn.isEmpty()) {
             deleteProfile(m_createdConn);
         }
         endJoin();
+        restorePrevious();
     }
+    // An explicit disconnect is final: nothing puts the network back, and the saved profile and
+    // its password stay exactly as they were (disconnecting is not forgetting).
     Q_INVOKABLE void disconnectActive()
     {
+        m_userDisconnect = true;
+        m_prevConn.clear();
+        if (!m_connecting.isEmpty()) {
+            cancel();
+        }
         if (!m_dev.isEmpty()) {
             QDBusConnection::systemBus().asyncCall(QDBusMessage::createMethodCall(NMService, m_dev, DeviceIface, QStringLiteral("Disconnect")));
         }
+    }
+    // "Connect automatically" for one network. Default is on for everything known; turning it off
+    // is remembered so the island never switches it back on behind the user's back.
+    Q_INVOKABLE void setAutoconnect(const QString &ssid, bool on)
+    {
+        QSettings prefs(QDir::homePath() + QStringLiteral("/.config/aetherislandrc"), QSettings::IniFormat);
+        QStringList manual = prefs.value(QStringLiteral("Network/ManualUuids")).toStringList();
+        for (const Saved &p : m_saved.values(ssid)) {
+            if (on) { manual.removeAll(p.uuid); } else if (!manual.contains(p.uuid)) { manual << p.uuid; }
+            setProfileAutoconnect(p.uuid, on);
+        }
+        prefs.setValue(QStringLiteral("Network/ManualUuids"), manual);
+        prefs.sync();
+        m_savedDirty = true;
+        QTimer::singleShot(700, this, [this] { refresh(true); });
     }
     Q_INVOKABLE void forget(const QString &ssid)
     {
@@ -261,12 +308,20 @@ Q_SIGNALS:
     // kind: "password" | "unsupported" | "failed"
     void connectFailed(const QString &ssid, const QString &kind, const QString &text);
     void connected(const QString &ssid);
+    void restored(const QString &ssid);
 
 private Q_SLOTS:
     void onPropertiesChanged(const QString &, const QVariantMap &, const QStringList &) { scheduleRefresh(); }
     void onProfilesChanged(const QDBusObjectPath &) { m_savedDirty = true; scheduleRefresh(); }
     void onDeviceState(uint state, uint old, uint reason)
     {
+        // "Need auth" is normal for a split second while NetworkManager fetches a stored secret. If
+        // it lasts and we have no password to give, nobody is going to answer.
+        if (state == 60 && !m_usedPsk) {
+            m_needAuth.start(m_connecting.isEmpty() ? 8000 : 4000);
+        } else if (state != 60) {
+            m_needAuth.stop();
+        }
         if (!m_connecting.isEmpty()) {
             switch (state) {
             case 40: case 50: m_step = QStringLiteral("Connecting…"); break;
@@ -277,12 +332,20 @@ private Q_SLOTS:
             }
             if (state == 100) {
                 const QString ssid = m_connecting;
+                if (!m_createdConn.isEmpty()) {            // it works: keep it, and retire the profile it replaces
+                    QDBusConnection::systemBus().asyncCall(QDBusMessage::createMethodCall(NMService, m_createdConn, QStringLiteral("org.freedesktop.NetworkManager.Settings.Connection"), QStringLiteral("Save")));
+                    if (!m_oldProfile.isEmpty()) {
+                        deleteProfile(m_oldProfile);
+                    }
+                    m_savedDirty = true;
+                }
+                m_prevConn.clear();
                 endJoin();
                 Q_EMIT connected(ssid);
             } else if (state == 120 || (state == 30 && old >= 40 && old <= 90)) {
                 // 7 no secrets, 8-11 supplicant: the password was refused. 5/6: no address.
                 if (reason >= 7 && reason <= 11) {
-                    failJoin(QStringLiteral("password"), QStringLiteral("Wrong password. Try again."));
+                    failJoin(QStringLiteral("password"), m_usedPsk ? QStringLiteral("Wrong password. Try again.") : QStringLiteral("Enter the password"));
                 } else if (reason == 5 || reason == 6) {
                     failJoin(QStringLiteral("failed"), QStringLiteral("No IP address — try again or move closer"));
                 } else if (reason == 53) {
@@ -292,12 +355,16 @@ private Q_SLOTS:
                 }
             }
             Q_EMIT changed();
+        } else if (state == 100 && m_restoring) {
+            m_restoring = false;
+            Q_EMIT restored(m_prevSsid);
+            Q_EMIT changed();
         }
         scheduleRefresh();
     }
 
 private:
-    struct Saved { QString path; QString uuid; };
+    struct Saved { QString path; QString uuid; bool autoconnect = true; uint pskFlags = 0; };
 
     static inline const QString NMService = QStringLiteral("org.freedesktop.NetworkManager");
     static inline const QString NMPath = QStringLiteral("/org/freedesktop/NetworkManager");
@@ -355,6 +422,7 @@ private:
         m_connecting.clear();
         m_step.clear();
         m_createdConn.clear();
+        m_oldProfile.clear();
         m_usedPsk = false;
         m_joinTimeout.stop();
         Q_EMIT changed();
@@ -366,13 +434,160 @@ private:
             return;
         }
         const QString ssid = m_connecting;
-        // A profile made for this attempt must not outlive a failed one (a wrong password is never saved).
+        // The profile made for this attempt lived in memory only; drop it. The saved one was never touched.
         if (!m_createdConn.isEmpty()) {
             deleteProfile(m_createdConn);
-            m_savedDirty = true;
         }
+        if (kind == QLatin1String("password")) {
+            m_needsPassword.insert(ssid);
+        }
+        deactivateCurrent();
         endJoin();
+        restorePrevious();
         Q_EMIT connectFailed(ssid, kind, text);
+    }
+    // What we were connected to before this attempt (empty when we were not connected).
+    void snapshotPrevious(const QString &joining)
+    {
+        m_prevConn.clear();
+        m_prevSsid.clear();
+        const QString ac = devProp(DeviceIface, QStringLiteral("ActiveConnection")).value<QDBusObjectPath>().path();
+        if (ac.isEmpty() || ac == QLatin1String("/") || devProp(DeviceIface, QStringLiteral("State")).toUInt() != 100 || m_activeSsid == joining) {
+            return;
+        }
+        m_prevConn = propOf(ac, QStringLiteral("org.freedesktop.NetworkManager.Connection.Active"), QStringLiteral("Connection")).value<QDBusObjectPath>().path();
+        m_prevSsid = m_activeSsid;
+    }
+    // Put the old network back after a failed switch, unless the user asked to disconnect.
+    void restorePrevious()
+    {
+        const QString prev = m_prevConn;
+        m_prevConn.clear();
+        if (m_userDisconnect || prev.isEmpty() || prev == QLatin1String("/") || !m_enabled || m_dev.isEmpty()) {
+            return;
+        }
+        QDBusMessage m = QDBusMessage::createMethodCall(NMService, NMPath, QStringLiteral("org.freedesktop.NetworkManager"), QStringLiteral("ActivateConnection"));
+        m << QVariant::fromValue(QDBusObjectPath(prev)) << QVariant::fromValue(QDBusObjectPath(m_dev)) << QVariant::fromValue(QDBusObjectPath(QStringLiteral("/")));
+        QDBusConnection::systemBus().asyncCall(m);
+        m_restoring = true;
+        Q_EMIT changed();
+        QTimer::singleShot(20000, this, [this] { if (m_restoring) { m_restoring = false; Q_EMIT changed(); } });
+    }
+    void deactivateCurrent()
+    {
+        const QString ac = devProp(DeviceIface, QStringLiteral("ActiveConnection")).value<QDBusObjectPath>().path();
+        if (!ac.isEmpty() && ac != QLatin1String("/")) {
+            QDBusMessage m = QDBusMessage::createMethodCall(NMService, NMPath, QStringLiteral("org.freedesktop.NetworkManager"), QStringLiteral("DeactivateConnection"));
+            m << QVariant::fromValue(QDBusObjectPath(ac));
+            QDBusConnection::systemBus().asyncCall(m);
+        }
+    }
+    void needAuthGaveUp()
+    {
+        if (!m_connecting.isEmpty()) {   // our own attempt, no password to give: ask the user, put the old network back
+            failJoin(QStringLiteral("password"), QStringLiteral("Enter the password"));
+            return;
+        }
+        // An automatic attempt is stuck waiting for a password (the wallet is locked, or no prompt can
+        // appear). Let go so NetworkManager can try the next network, and say so once.
+        const QString ac = devProp(DeviceIface, QStringLiteral("ActiveConnection")).value<QDBusObjectPath>().path();
+        const QString id = ac.isEmpty() || ac == QLatin1String("/") ? QString()
+                         : propOf(ac, QStringLiteral("org.freedesktop.NetworkManager.Connection.Active"), QStringLiteral("Id")).toString();
+        deactivateCurrent();
+        if (!id.isEmpty() && !m_needsPassword.contains(id)) {
+            m_needsPassword.insert(id);
+            QDBusMessage n = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.Notifications"), QStringLiteral("/org/freedesktop/Notifications"),
+                                                            QStringLiteral("org.freedesktop.Notifications"), QStringLiteral("Notify"));
+            n << QStringLiteral("Aether") << uint(0) << QStringLiteral("network-wireless") << QStringLiteral("Password needed")
+              << id << QStringList() << QVariantMap() << int(8000);
+            QDBusConnection::sessionBus().asyncCall(n);
+        }
+        m_savedDirty = true;
+        scheduleRefresh();
+    }
+    NMSettings settingsOf(const QString &path)
+    {
+        QDBusMessage g = QDBusMessage::createMethodCall(NMService, path, QStringLiteral("org.freedesktop.NetworkManager.Settings.Connection"), QStringLiteral("GetSettings"));
+        const QDBusMessage reply = blockingCall(g);
+        return reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()
+                   ? qdbus_cast<NMSettings>(reply.arguments().first().value<QDBusArgument>()) : NMSettings();
+    }
+    // nmcli keeps the password when it flips a flag (checked on a throwaway profile); a raw Update
+    // built from GetSettings would not, because GetSettings never returns secrets.
+    static void setProfileAutoconnect(const QString &uuid, bool on)
+    {
+        QProcess::startDetached(QStringLiteral("nmcli"), {QStringLiteral("connection"), QStringLiteral("modify"), QStringLiteral("uuid"), uuid,
+                                                          QStringLiteral("connection.autoconnect"), on ? QStringLiteral("yes") : QStringLiteral("no")});
+    }
+    // Once per start, a few seconds in: default-on auto-connect, and passwords out of the wallet.
+    void housekeeping()
+    {
+        loadSaved();
+        QSettings prefs(QDir::homePath() + QStringLiteral("/.config/aetherislandrc"), QSettings::IniFormat);
+        const QStringList manual = prefs.value(QStringLiteral("Network/ManualUuids")).toStringList();
+        bool wallet = walletOpen();
+        const QString only = qEnvironmentVariable("AETHER_HOUSEKEEP_ONLY");   // test hook: limit this pass to one network
+        for (auto it = m_saved.cbegin(); it != m_saved.cend(); ++it) {
+            const Saved &p = it.value();
+            if (!only.isEmpty() && it.key() != only) {
+                continue;
+            }
+            if (!p.autoconnect && !manual.contains(p.uuid)) {
+                setProfileAutoconnect(p.uuid, true);      // everything known connects by itself unless the user said otherwise
+            }
+            if (p.pskFlags == 1 && wallet) {
+                migrateToSystemOwned(p.path);
+            }
+        }
+        m_savedDirty = true;
+        QTimer::singleShot(1500, this, [this] { refresh(true); });
+    }
+    static bool walletOpen()
+    {
+        QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kwalletd6"), QStringLiteral("/modules/kwalletd6"), QStringLiteral("org.kde.KWallet"), QStringLiteral("isOpen"));
+        m << QStringLiteral("kdewallet");
+        const QDBusReply<bool> r = QDBusConnection::sessionBus().call(m, QDBus::Block, 1500);
+        return r.isValid() && r.value();
+    }
+    // A wallet-owned password makes auto-connect depend on the wallet being unlocked and a prompt that
+    // may never appear. Read it once (silently - the wallet is open) and keep it in NetworkManager's own
+    // storage. Verified before it counts; undone if the check fails. The password is never logged.
+    void migrateToSystemOwned(const QString &path)
+    {
+        QDBusMessage g = QDBusMessage::createMethodCall(NMService, path, QStringLiteral("org.freedesktop.NetworkManager.Settings.Connection"), QStringLiteral("GetSecrets"));
+        g << QStringLiteral("802-11-wireless-security");
+        const QDBusMessage reply = QDBusConnection::systemBus().call(g, QDBus::Block, 2500);
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            return;
+        }
+        const NMSettings secrets = qdbus_cast<NMSettings>(reply.arguments().first().value<QDBusArgument>());
+        QString psk = secrets.value(QStringLiteral("802-11-wireless-security")).value(QStringLiteral("psk")).toString();
+        if (psk.isEmpty()) {
+            return;
+        }
+        NMSettings s = settingsOf(path);
+        QVariantMap sec = s.value(QStringLiteral("802-11-wireless-security"));
+        sec[QStringLiteral("psk")] = psk;
+        sec[QStringLiteral("psk-flags")] = 0u;
+        s[QStringLiteral("802-11-wireless-security")] = sec;
+        QDBusMessage u = QDBusMessage::createMethodCall(NMService, path, QStringLiteral("org.freedesktop.NetworkManager.Settings.Connection"), QStringLiteral("Update"));
+        u << QVariant::fromValue(s);
+        const QDBusMessage ur = QDBusConnection::systemBus().call(u, QDBus::Block, 3000);
+        // read back: flags must now be 0 and the secret must be there
+        QDBusMessage g2 = QDBusMessage::createMethodCall(NMService, path, QStringLiteral("org.freedesktop.NetworkManager.Settings.Connection"), QStringLiteral("GetSecrets"));
+        g2 << QStringLiteral("802-11-wireless-security");
+        const QDBusMessage r2 = QDBusConnection::systemBus().call(g2, QDBus::Block, 2500);
+        bool ok = ur.type() == QDBusMessage::ReplyMessage && r2.type() == QDBusMessage::ReplyMessage && !r2.arguments().isEmpty()
+                  && qdbus_cast<NMSettings>(r2.arguments().first().value<QDBusArgument>()).value(QStringLiteral("802-11-wireless-security")).value(QStringLiteral("psk")).toString() == psk
+                  && settingsOf(path).value(QStringLiteral("802-11-wireless-security")).value(QStringLiteral("psk-flags")).toUInt() == 0;
+        if (!ok) {   // put it back the way it was
+            sec[QStringLiteral("psk-flags")] = 1u;
+            s[QStringLiteral("802-11-wireless-security")] = sec;
+            QDBusMessage back = QDBusMessage::createMethodCall(NMService, path, QStringLiteral("org.freedesktop.NetworkManager.Settings.Connection"), QStringLiteral("Update"));
+            back << QVariant::fromValue(s);
+            QDBusConnection::systemBus().call(back, QDBus::Block, 3000);
+        }
+        psk.fill(QLatin1Char('\0'));
     }
     void watchCall(const QDBusPendingCall &call)
     {
@@ -423,7 +638,9 @@ private:
             }
             const QString ssid = QString::fromUtf8(s.value(QStringLiteral("802-11-wireless")).value(QStringLiteral("ssid")).toByteArray());
             if (!ssid.isEmpty()) {
-                m_saved.insert(ssid, {p.path(), s.value(QStringLiteral("connection")).value(QStringLiteral("uuid")).toString()});
+                const QVariantMap c = s.value(QStringLiteral("connection"));
+                m_saved.insert(ssid, {p.path(), c.value(QStringLiteral("uuid")).toString(), c.value(QStringLiteral("autoconnect"), true).toBool(),
+                                      s.value(QStringLiteral("802-11-wireless-security")).value(QStringLiteral("psk-flags")).toUInt()});
             }
         }
         m_savedDirty = false;
@@ -515,6 +732,8 @@ private:
                 const QString ssid = n.value(QStringLiteral("ssid")).toString();
                 n[QStringLiteral("saved")] = m_saved.contains(ssid);
                 n[QStringLiteral("connected")] = connectedSsids.contains(ssid);
+                n[QStringLiteral("autoconnect")] = m_saved.contains(ssid) ? m_saved.value(ssid).autoconnect : true;
+                n[QStringLiteral("needsPassword")] = m_needsPassword.contains(ssid);
                 list << n;
             }
             std::sort(list.begin(), list.end(), [](const QVariantMap &a, const QVariantMap &b) {
@@ -544,9 +763,11 @@ private:
         Q_EMIT changed();
     }
 
-    QTimer m_refresh, m_poll, m_scanTimer, m_scanDone, m_joinTimeout;
+    QTimer m_refresh, m_poll, m_scanTimer, m_scanDone, m_joinTimeout, m_needAuth;
     QString m_dev, m_connectivity = QStringLiteral("none"), m_activeSsid, m_connecting, m_step, m_createdConn;
-    bool m_enabled = false, m_active = false, m_scanning = false, m_savedDirty = true, m_usedPsk = false;
+    bool m_enabled = false, m_active = false, m_scanning = false, m_savedDirty = true, m_usedPsk = false, m_restoring = false, m_userDisconnect = false;
+    QString m_prevConn, m_prevSsid, m_oldProfile;
+    QSet<QString> m_needsPassword;
     QVariantList m_networks;
     QMultiMap<QString, Saved> m_saved;
 };
