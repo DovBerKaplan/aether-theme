@@ -8,7 +8,8 @@
 // The window is a layer-shell surface (overlay layer, anchored top). Its size follows the
 // state so the input region always matches what is visible; KWin blurs behind the shape
 // the QML side reports through setBlurShape().
-#include <QDateTime>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>
@@ -100,11 +101,7 @@ public:
             readScheme();
         });
         readScheme();
-        // Pear autostarts with its window; the ecosystem keeps it invisible except
-        // inside the island. A few seconds of slack cover its cold start - but never
-        // hide it out from under an open media view.
-        QTimer::singleShot(6000, this, [this] { if (!m_mediaActive) hideMediaWindow(); });
-        QTimer::singleShot(12000, this, [this] { if (!m_mediaActive) hideMediaWindow(); });
+        ensureMediaScript();
     }
 
     bool dark() const { return m_dark; }
@@ -188,86 +185,18 @@ public:
         }
     }
 
-    // The YouTube Music window lives *inside* the island: shown exactly in the media
-    // panel's hole, hidden again when the island folds. KWin only loads scripts from
-    // files, so each run goes through a fresh temp file. Retries cover a cold start
-    // (seconds before the window exists) but are cancelled the moment media mode ends,
-    // so a late retry can never resurrect a floating window.
+    // The YouTube Music window lives *inside* the island, owned by the persistent KWin
+    // script aether-media (components/island/kwin). The window never moves, resizes or
+    // fades while shown: it sits still in the media panel's seat and the island's glass
+    // does all the motion, frosting over it and clearing again. Island -> script is two
+    // keyless global shortcuts; script -> island is the Media* slots below.
     Q_INVOKABLE void showMediaWindow(int x, int y, int w, int h)
     {
-        m_mediaActive = true;
-        ++m_showGeneration;
-        const int gen = m_showGeneration;
-        m_mediaRect = QRect(x, y, w, h);
-        // Seat the window full-size but transparent, then fade it in on the same
-        // ease-out curve as the glass spring (~225 ms): one synchronized materialise.
-        // (No staged resizes: Chromium under XWayland renders them poorly.)
-        runKwinScript(mediaStepScript(x, y, w, h, 0.0, true));
-        for (int i = 1; i <= 5; ++i) {
-            const qreal eased = 1.0 - (1.0 - i / 5.0) * (1.0 - i / 5.0);
-            QTimer::singleShot(i * 45, this, [this, gen, x, y, w, h, eased] {
-                if (m_mediaActive && gen == m_showGeneration) {
-                    runKwinScript(mediaStepScript(x, y, w, h, eased, false));
-                }
-            });
-        }
-        auto retry = [this, gen, x, y, w, h] {
-            if (m_mediaActive && gen == m_showGeneration) {
-                runKwinScript(showScript(x, y, w, h));
-            }
-        };
-        QTimer::singleShot(800, this, retry);
-        QTimer::singleShot(2500, this, retry);
-        QTimer::singleShot(5000, this, retry);
-        QTimer::singleShot(8000, this, retry);   // a cold Electron start can outlast 5s
-        QTimer::singleShot(12000, this, retry);
+        const QPoint origin = m_view->screen() ? m_view->screen()->geometry().topLeft() : QPoint();
+        m_mediaRect = QRect(x, y, w, h).translated(origin);
+        invokeKwinShortcut(QStringLiteral("Aether Media Show"));
     }
-    // Ride the glass: QML pushes the spring's geometry every frame while the media
-    // panel opens or folds, and the app window tracks it in BOTH axes - shrinking
-    // with the collapsing glass (a true swallow) instead of fading on its own.
-    Q_INVOKABLE void syncMediaWindow(int glassLeft, int glassW, int bottom)
-    {
-        const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        if (now - m_lastWindowSync < 35 || m_mediaRect.height() <= 0) {
-            return;
-        }
-        m_lastWindowSync = now;
-        const int w = qMax(2, qMin(m_mediaRect.width(), glassW - 40));   // 2x bezel
-        const int h = qMax(2, qMin(m_mediaRect.height(), bottom - 24));
-        const int x = glassLeft + (glassW - w) / 2;
-        runKwinScript(QStringLiteral(
-                          "var ws = workspace.windowList();"
-                          "for (var i = 0; i < ws.length; i++) {"
-                          "  var w = ws[i];"
-                          "  if (String(w.resourceClass).indexOf('youtube-music') >= 0) {"
-                          "    w.frameGeometry = { x: %1, y: %2, width: %3, height: %4 };"
-                          "  }"
-                          "}")
-                          .arg(x)
-                          .arg(m_mediaRect.y())
-                          .arg(w)
-                          .arg(h));
-    }
-
-    Q_INVOKABLE void hideMediaWindow()
-    {
-        m_mediaActive = false;
-        ++m_showGeneration;
-        // The glass springs shut over ~750 ms while QML syncs the window down with
-        // it; only when it has settled does the window actually vanish.
-        QTimer::singleShot(950, this, [this] {
-            if (!m_mediaActive) {
-                runKwinScript(QStringLiteral(
-                    "var ws = workspace.windowList();"
-                    "for (var i = 0; i < ws.length; i++) {"
-                    "  var w = ws[i];"
-                    "  if (String(w.resourceClass).indexOf('youtube-music') >= 0) {"
-                    "    w.minimized = true; w.skipTaskbar = true; w.opacity = 1.0;"
-                    "  }"
-                    "}"));
-            }
-        });
-    }
+    Q_INVOKABLE void hideMediaWindow() { invokeKwinShortcut(QStringLiteral("Aether Media Hide")); }
 
 
 public Q_SLOTS:
@@ -278,6 +207,14 @@ public Q_SLOTS:
     void Media() { Q_EMIT stateRequested(QStringLiteral("media")); }
     void Hide() { Q_EMIT stateRequested(QStringLiteral("hidden")); }
     void Toggle() { Q_EMIT stateRequested(QStringLiteral("toggle")); }
+    // Called back by the aether-media KWin script.
+    QString mediaSeat() const   // "x,y,w,h" in screen coordinates
+    {
+        return QStringLiteral("%1,%2,%3,%4").arg(m_mediaRect.x()).arg(m_mediaRect.y()).arg(m_mediaRect.width()).arg(m_mediaRect.height());
+    }
+    void MediaWindowReady() { Q_EMIT mediaWindowReady(); }       // seated and visible: clear the frost
+    void MediaWindowMissing() { Q_EMIT mediaWindowMissing(); }   // nothing to seat: launch the app
+    void MediaFocusLost() { Q_EMIT mediaFocusLost(); }           // another window was activated
     // Detail panels: wifi, bluetooth, sound, display, battery, calendar, power.
     void OpenPanel(const QString &id) { Q_EMIT panelRequested(id); }
     void ClosePanel() { Q_EMIT stateRequested(QStringLiteral("close")); }
@@ -295,97 +232,55 @@ public Q_SLOTS:
 Q_SIGNALS:
     void darkChanged();
     void stateRequested(const QString &state);
+    void mediaWindowReady();
+    void mediaWindowMissing();
+    void mediaFocusLost();
     void panelRequested(const QString &id);
 
 private:
-    // One synchronized step of the app window: it grows downward (and fades in)
-    // following the glass spring's easing, so window and bar move as one.
-    static QString mediaStepScript(int x, int y, int w, int h, qreal v, bool decorate)
-    {
-        QString extra = decorate
-            ? QStringLiteral("    w.noBorder = true; w.skipTaskbar = false; w.keepAbove = true; w.minimized = false;")
-            : QString();
-        return QStringLiteral(
-                   "var ws = workspace.windowList();"
-                   "for (var i = 0; i < ws.length; i++) {"
-                   "  var w = ws[i];"
-                   "  if (String(w.resourceClass).indexOf('youtube-music') >= 0) {"
-                   "%1"
-                   "    w.frameGeometry = { x: %2, y: %3, width: %4, height: %5 };"
-                   "    w.opacity = %6;"
-                   "  }"
-                   "}")
-                   .arg(extra)
-                   .arg(x)
-                   .arg(y)
-                   .arg(w)
-                   .arg(h)
-                   .arg(v, 0, 'f', 2);
-    }
-    QString showScript(int x, int y, int w, int h) const
-    {
-        return QStringLiteral(
-            "var prev = workspace.activeWindow;"
-            "var ws = workspace.windowList();"
-            "for (var i = 0; i < ws.length; i++) {"
-            "  var w = ws[i];"
-            "  if (String(w.resourceClass).indexOf('youtube-music') >= 0) {"
-            "    w.noBorder = true; w.skipTaskbar = false; w.keepAbove = true;"
-            "    w.minimized = false;"
-            "    w.frameGeometry = { x: %1, y: %2, width: %3, height: %4 };"
-            "    w.opacity = 1.0;"
-            "  }"
-            "}"
-            // Restoring must not steal focus: the app counts as in use (and the media
-            // view stays open on pointer-leave) only after a real click inside it.
-            "if (prev && prev !== workspace.activeWindow && String(prev.resourceClass).indexOf('youtube-music') < 0)"
-            "  workspace.activeWindow = prev;")
-            .arg(x)
-            .arg(y)
-            .arg(w)
-            .arg(h);
-    }
     // Raw DBus messages, never QDBusInterface: its constructor introspects the target
-    // synchronously, and building one per tick (or on a busy compositor) blocks the
-    // island's event loop for up to the full DBus timeout.
-    static int kwinLoadScript(const QString &path)
+    // synchronously and would block the island's event loop on a busy compositor.
+    static QDBusMessage kwinScripting(const QString &method)
     {
-        auto msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/Scripting"),
-                                                  QStringLiteral("org.kde.kwin.Scripting"), QStringLiteral("loadScript"));
-        msg << path;
-        const QDBusReply<int> id = QDBusConnection::sessionBus().call(msg, QDBus::Block, 500);
-        return id.isValid() ? id.value() : -1;
+        return QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/Scripting"),
+                                              QStringLiteral("org.kde.kwin.Scripting"), method);
     }
-    static void kwinCall(const QString &path, const QString &method, const QVariant &arg = {})
+    static void invokeKwinShortcut(const QString &name)
     {
-        auto msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), path,
-                                                  QStringLiteral("org.kde.kwin.Script"), method);
-        if (arg.isValid()) {
-            msg << arg;
-        }
+        auto msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kglobalaccel"), QStringLiteral("/component/kwin"),
+                                                  QStringLiteral("org.kde.kglobalaccel.Component"), QStringLiteral("invokeShortcut"));
+        msg << name;
         QDBusConnection::sessionBus().asyncCall(msg);
     }
-    static void runKwinScript(const QString &js)
+    // The installer enables aether-media as a KWin package; this covers running from the
+    // source tree (or a KWin that started before the package existed). Fully async.
+    void ensureMediaScript()
     {
-        static int counter = 0;
-        const QString path = QDir::temp().absoluteFilePath(QStringLiteral("aether-kwin-%1.js").arg(++counter));
-        QFile f(path);
-        if (f.open(QIODevice::WriteOnly)) {
-            f.write(js.toUtf8());
-            f.close();
-        }
-        const int id = kwinLoadScript(path);
-        if (id > 0) {
-            kwinCall(QStringLiteral("/Scripting/Script") + QString::number(id), QStringLiteral("run"));
-            // One-shot: unload shortly after, so scripts never accumulate in KWin.
-            QTimer::singleShot(1500, [path] {
-                auto msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/Scripting"),
-                                                          QStringLiteral("org.kde.kwin.Scripting"), QStringLiteral("unloadScript"));
-                msg << path;
-                QDBusConnection::sessionBus().asyncCall(msg);
-                QFile::remove(path);
+        auto bus = QDBusConnection::sessionBus();
+        auto query = kwinScripting(QStringLiteral("isScriptLoaded"));
+        query << QStringLiteral("aether-media");
+        auto *w = new QDBusPendingCallWatcher(bus.asyncCall(query), this);
+        connect(w, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+            w->deleteLater();
+            const QDBusPendingReply<bool> loaded = *w;
+            if (loaded.isValid() && loaded.value()) {
+                return;
+            }
+            const QString rel = QStringLiteral("/aether-media/contents/code/main.js");
+            const QString installed = QCoreApplication::applicationDirPath() + QStringLiteral("/../share/aether-island/kwin") + rel;
+            auto load = kwinScripting(QStringLiteral("loadScript"));
+            load << (QFile::exists(installed) ? installed : QStringLiteral(AETHER_KWIN_DIR) + rel) << QStringLiteral("aether-media");
+            auto *lw = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(load), this);
+            connect(lw, &QDBusPendingCallWatcher::finished, this, [](QDBusPendingCallWatcher *lw) {
+                lw->deleteLater();
+                const QDBusPendingReply<int> id = *lw;
+                if (id.isValid() && id.value() >= 0) {
+                    QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(
+                        QStringLiteral("org.kde.KWin"), QStringLiteral("/Scripting/Script") + QString::number(id.value()),
+                        QStringLiteral("org.kde.kwin.Script"), QStringLiteral("run")));
+                }
             });
-        }
+        });
     }
     void readScheme()
     {
@@ -406,10 +301,7 @@ private:
     bool m_dark = true;
     QString m_uiMode = QStringLiteral("hidden");
     int m_uiBottom = 2;
-    bool m_mediaActive = false;
-    int m_showGeneration = 0;
     QRect m_mediaRect;
-    qint64 m_lastWindowSync = 0;
 };
 
 // Installed copy first (~/.local/share/aether-island/qml next to ~/.local/bin), development tree as fallback.

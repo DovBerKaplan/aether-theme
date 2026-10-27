@@ -33,6 +33,9 @@ Item {
     property real holeW: 0
     property real holeH: 0
     property real holeR: 18
+    // Frost over the hole (1 = the seat is glass, 0 = clear): the app is revealed and
+    // covered by this alone, so it never has to move or fade on its own.
+    property real holeFrost: 0
     readonly property bool hasHole: holeW > 0 && holeH > 0
 
     readonly property real k: 0.5523
@@ -152,6 +155,29 @@ Item {
             strokeColor: Theme.rim
             strokeWidth: 1
             PathSvg { path: root.rimPath }
+        }
+    }
+
+    // Frost filling the seat: the glass body itself plus a deeper veil, so whatever sits
+    // behind (the app arriving or leaving) cannot show through.
+    Shape {
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+        visible: root.hasHole && root.holeFrost > 0.001
+        opacity: root.holeFrost
+        ShapePath {
+            strokeWidth: -1
+            fillGradient: LinearGradient {
+                x1: 0; y1: 0; x2: 0; y2: root.notchBottom
+                GradientStop { position: 0.0; color: Theme.bodyTop }
+                GradientStop { position: 1.0; color: Theme.bodyBottom }
+            }
+            PathSvg { path: svg(root.holeSegments, true) }
+        }
+        ShapePath {
+            strokeWidth: -1
+            fillColor: Qt.alpha(Theme.bodyBottom, 0.6)
+            PathSvg { path: svg(root.holeSegments, true) }
         }
     }
 

@@ -20,6 +20,40 @@ for app in island toasts; do
   cmake --install "$ROOT/components/$app/build" >/dev/null
 done
 
+echo "== kwin media seat"
+# YouTube Music lives only inside the island: the aether-media KWin script owns its window
+# (hides it from the moment it maps, seats it in the media panel on request). A window rule
+# keeps it out of the taskbar, the switcher and the pager even before the script runs.
+KSCRIPTS="$HOME/.local/share/kwin/scripts"
+rm -rf "$KSCRIPTS/aether-media"
+mkdir -p "$KSCRIPTS"
+cp -r "$ROOT/components/island/kwin/aether-media" "$KSCRIPTS/"
+kwriteconfig6 --file kwinrc --group Plugins --key aether-mediaEnabled true
+R=(--file kwinrulesrc --group aether-media)
+kwriteconfig6 "${R[@]}" --key Description "Aether media window (YouTube Music lives inside the island)"
+for kv in wmclass=youtube-music wmclassmatch=2 types=1 above=true aboverule=2 \
+          skiptaskbar=true skiptaskbarrule=2 skipswitcher=true skipswitcherrule=2 skippager=true skippagerrule=2; do
+  kwriteconfig6 "${R[@]}" --key "${kv%%=*}" "${kv#*=}"
+done
+order=$(kreadconfig6 --file kwinrulesrc --group General --key Order)
+[[ ",$order," == *",aether-media,"* ]] || kwriteconfig6 --file kwinrulesrc --group General --key Order "${order:+$order,}aether-media"
+# The app must never map a window at login - the island asks for it when the panel opens.
+PEAR_CFG="$HOME/.config/YouTube Music/config.json"
+if [[ -f $PEAR_CFG ]]; then
+  python3 - "$PEAR_CFG" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path) as f:
+    cfg = json.load(f)
+if cfg.setdefault("options", {}).get("appVisible") is not False:
+    cfg["options"]["appVisible"] = False
+    with open(path, "w") as f:
+        json.dump(cfg, f, indent="\t", ensure_ascii=False)
+PY
+fi
+qdbus6 org.kde.KWin /KWin reconfigure 2>/dev/null || true
+qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start 2>/dev/null || true
+
 echo "== services"
 mkdir -p "$HOME/.config/systemd/user" "$HOME/.local/share/applications"
 for app in island toasts; do
