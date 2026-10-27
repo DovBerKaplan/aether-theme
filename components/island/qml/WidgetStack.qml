@@ -11,6 +11,7 @@ Item {
     id: root
     property bool editing: false
     signal mediaRequested()
+    signal panelRequested(string id)
 
     readonly property int rowH: 56
     readonly property int gap: Tokens.space.sm
@@ -44,6 +45,16 @@ Item {
     Connections { target: tiles; function onWidgetsChanged() { if (!root.editing) root.load() } }
     onEditingChanged: if (!editing) load()
 
+    Component {
+        id: mediaCard
+        MediaCard {
+            LayoutMirroring.enabled: false      // player controls and the progress bar keep their direction
+            LayoutMirroring.childrenInherit: true
+            onSearchRequested: root.mediaRequested()
+        }
+    }
+    Component { id: connectCard; ConnectCard { onOpenRequested: root.panelRequested("connect") } }
+
     // ---- normal -------------------------------------------------------------------------
     Column {
         id: normalCol
@@ -55,12 +66,8 @@ Item {
             delegate: Loader {
                 required property string wid
                 width: normalCol.width
-                active: wid === "media"
-                sourceComponent: MediaCard {
-                    LayoutMirroring.enabled: false      // player controls and the progress bar keep their direction
-                    LayoutMirroring.childrenInherit: true
-                    onSearchRequested: root.mediaRequested()
-                }
+                active: wid === "media" || wid === "connect"
+                sourceComponent: wid === "connect" ? connectCard : mediaCard
             }
         }
     }

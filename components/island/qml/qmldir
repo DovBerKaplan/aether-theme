@@ -25,3 +25,7 @@ CalendarPanel 1.0 CalendarPanel.qml
 Tile 1.0 Tile.qml
 TileGrid 1.0 TileGrid.qml
 WidgetStack 1.0 WidgetStack.qml
+BatteryRing 1.0 BatteryRing.qml
+SignalBars 1.0 SignalBars.qml
+ConnectCard 1.0 ConnectCard.qml
+ConnectPanel 1.0 ConnectPanel.qml
