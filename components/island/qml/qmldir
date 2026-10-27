@@ -24,3 +24,4 @@ DisplayPanel 1.0 DisplayPanel.qml
 CalendarPanel 1.0 CalendarPanel.qml
 Tile 1.0 Tile.qml
 TileGrid 1.0 TileGrid.qml
+WidgetStack 1.0 WidgetStack.qml

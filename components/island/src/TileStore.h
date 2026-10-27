@@ -22,6 +22,8 @@ class TileStore : public QObject
     Q_PROPERTY(QVariantList catalog READ catalog CONSTANT)           // every tile that can be shown
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)   // interface language: "en" | "he"
     Q_PROPERTY(bool hebrewDates READ hebrewDates WRITE setHebrewDates NOTIFY hebrewDatesChanged)   // Calendar panel
+    Q_PROPERTY(QStringList widgets READ widgets NOTIFY widgetsChanged)         // large-island widgets that are on, in order
+    Q_PROPERTY(QVariantList widgetCatalog READ widgetCatalog CONSTANT)          // every widget that can be on
     Q_PROPERTY(bool keepAwake READ keepAwake NOTIFY stateChanged)
     Q_PROPERTY(bool micMuted READ micMuted NOTIFY stateChanged)
     Q_PROPERTY(bool wifiBefore READ wifiBefore NOTIFY stateChanged)  // radios as they were before airplane mode
@@ -44,6 +46,41 @@ public:
     }
     ~TileStore() override { release(); }
 
+    QStringList widgets() const
+    {
+        // Never configured: today's behavior (the YouTube Music card). Configured (even to nothing): as saved.
+        if (!m_settings.contains(QStringLiteral("Widgets/Configured"))) {
+            return {QStringLiteral("media")};
+        }
+        QStringList out;
+        for (const QString &id : m_settings.value(QStringLiteral("Widgets/Order")).toStringList()) {
+            if (knownWidget(id) && !out.contains(id)) {
+                out << id;
+            }
+        }
+        return out;
+    }
+    QVariantList widgetCatalog() const { return m_widgetCatalog; }
+    Q_INVOKABLE void setWidgets(const QStringList &ids)
+    {
+        QStringList clean;
+        for (const QString &id : ids) {
+            if (knownWidget(id) && !clean.contains(id)) {
+                clean << id;
+            }
+        }
+        if (clean == widgets()) {
+            return;
+        }
+        m_settings.setValue(QStringLiteral("Widgets/Configured"), true);
+        if (clean.isEmpty()) {
+            m_settings.remove(QStringLiteral("Widgets/Order"));
+        } else {
+            m_settings.setValue(QStringLiteral("Widgets/Order"), clean);
+        }
+        m_settings.sync();
+        Q_EMIT widgetsChanged();
+    }
     QStringList order() const { return m_order; }
     QVariantList catalog() const { return m_catalog; }
     QString language() const { return m_settings.value(QStringLiteral("Interface/Language"), QStringLiteral("en")).toString(); }
@@ -120,11 +157,21 @@ public:
 
 Q_SIGNALS:
     void orderChanged();
+    void widgetsChanged();
     void hebrewDatesChanged();
     void languageChanged();
     void stateChanged();
 
 private:
+    bool knownWidget(const QString &id) const
+    {
+        for (const QVariant &c : m_widgetCatalog) {
+            if (c.toMap().value(QStringLiteral("id")).toString() == id) {
+                return true;
+            }
+        }
+        return false;
+    }
     bool known(const QString &id) const
     {
         for (const QVariant &c : m_catalog) {
@@ -175,6 +222,7 @@ private:
         tile("nightlight", "Night Light", "moon"), tile("darktheme", "Dark theme", "contrast"), tile("airplane", "Airplane mode", "plane"),
         tile("keepawake", "Keep awake", "coffee"), tile("micmute", "Microphone", "mic"), tile("powersaver", "Power saver", "leaf"),
         tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record")};
+    const QVariantList m_widgetCatalog = {tile("media", "YouTube Music", "logo")};
     QSettings m_settings;
     QStringList m_order;
     uint m_cookie = 0;

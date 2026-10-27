@@ -21,6 +21,13 @@ Item {
     // Interface language (saved in aetherislandrc). Right-to-left languages mirror every
     // layout below; the media card and the battery icon opt out (they stay left-to-right).
     Binding { target: I18n; property: "lang"; value: tiles.language }
+    // The YouTube Music widget: on = the card, the "bar becomes the app" mode and the app itself;
+    // off = none of it exists (no card, no mode, no app process, no tray icon, no autostart).
+    readonly property bool mediaOn: tiles.widgets.indexOf("media") >= 0
+    onMediaOnChanged: {
+        if (!mediaOn && mode === "media") setMode("large")
+        media.setEnabled(mediaOn, true)
+    }
     LayoutMirroring.enabled: I18n.rtl
     LayoutMirroring.childrenInherit: true
     readonly property real screenW: island.screenWidth
@@ -121,7 +128,7 @@ Item {
     // in YouTube Music almost every card click starts playback, so the old
     // auto-collapse kept shutting the bar mid-browsing. Closing is deliberate -
     // handle, wheel, outside click, Win+N, or pointer-leave when idle.
-    Component.onCompleted: { refreshApp(); island.setWindowSize(curWin.width, curWin.height); syncLayout() }
+    Component.onCompleted: { media.setEnabled(mediaOn); refreshApp(); island.setWindowSize(curWin.width, curWin.height); syncLayout() }
 
     // ---- window sizing: grow before the shape animates, shrink after ----------------
     property size curWin: Qt.size(screenW, 10)
@@ -213,6 +220,7 @@ Item {
 
     // ---- state changes ---------------------------------------------------------------
     function setMode(next) {
+        if (next === "media" && !mediaOn) return
         if (next === "toggle") next = (root.big || mode === "media") ? "bar" : "large"
         if (mediaCovering) {
             // Already frosting over to leave: a second request only changes the destination.
