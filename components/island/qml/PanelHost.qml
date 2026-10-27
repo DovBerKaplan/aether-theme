@@ -41,14 +41,33 @@ Item {
         }
     }
 
-    PlaceholderPanel {
+    // The page for the current panel. Real panels are loaded on demand and torn down shortly
+    // after the island closes (their destructor stops scanning/polling).
+    property bool open: false
+    signal closeRequested()
+    onOpenChanged: if (open) closeDelay.stop(); else closeDelay.restart()
+    Timer { id: closeDelay; interval: 900 }
+    Item {
         id: current
         width: parent.width; height: parent.height
-        panelId: root.panelId
-        title: root.titles[root.panelId] || root.panelId
-        page: root.page
-        maxHeight: root.maxHeight
-        onBackRequested: root.backRequested()
+        readonly property real contentHeight: stage.item ? stage.item.contentHeight : 170
+        Loader {
+            id: stage
+            anchors.fill: parent
+            active: root.open || closeDelay.running
+            source: root.panelId === "wifi" ? "WifiPanel.qml" : "PlaceholderPanel.qml"
+        }
+        Binding { target: stage.item; property: "panelId"; value: root.panelId; when: stage.item && stage.item.panelId !== undefined }
+        Binding { target: stage.item; property: "title"; value: root.titles[root.panelId] || root.panelId; when: stage.item && root.panelId !== "wifi" }
+        Binding { target: stage.item; property: "page"; value: root.page; when: stage.item }
+        Binding { target: stage.item; property: "maxHeight"; value: root.maxHeight; when: stage.item }
+        Connections {
+            target: stage.item
+            ignoreUnknownSignals: true
+            function onBackRequested() { root.backRequested() }
+            function onPageRequested(p) { root.page = p }
+            function onCloseRequested() { root.closeRequested() }
+        }
     }
 
     // Handle: tap goes back one level, pulling it drives the island's curtain.
