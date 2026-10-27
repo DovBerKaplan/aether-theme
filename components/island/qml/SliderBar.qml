@@ -19,7 +19,7 @@ Item {
         height: 8; radius: Tokens.radius.xs
         color: Qt.rgba(1, 1, 1, Tokens.tint.soft)
         Rectangle {
-            anchors.right: I18n.rtl ? parent.right : undefined
+            anchors.left: parent.left
             width: Math.max(track.height, track.width * root.shown)
             height: parent.height; radius: Tokens.radius.xs
             color: root.fillColor

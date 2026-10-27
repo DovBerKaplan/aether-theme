@@ -59,6 +59,7 @@ PanelScaffold {
                 width: parent.width - 2 * Tokens.space.lg; height: 6; radius: 3
                 color: Qt.rgba(1, 1, 1, Tokens.tint.soft)
                 Rectangle {
+                    anchors.left: parent.left
                     width: Math.max(parent.height, parent.width * power.percent / 100); height: parent.height; radius: 3
                     color: power.state === "charging" ? Theme.accent : Theme.text
                     Behavior on width { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }

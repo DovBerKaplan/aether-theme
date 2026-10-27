@@ -53,6 +53,7 @@ Item {
         }
         Text {
             width: parent.width; text: root.title; textFormat: Text.PlainText
+            horizontalAlignment: Text.AlignLeft
             elide: Text.ElideRight
             font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
             color: Theme.text
@@ -60,6 +61,7 @@ Item {
         Text {
             visible: root.subtitle.length > 0
             width: parent.width; text: root.subtitle; textFormat: Text.PlainText
+            horizontalAlignment: Text.AlignLeft
             elide: Text.ElideRight
             font { family: Theme.font; pixelSize: Tokens.type.label }
             color: Theme.subtext

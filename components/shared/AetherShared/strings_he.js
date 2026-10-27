@@ -3,9 +3,9 @@
 // Hebrew for every string the island shows. Key = the English text exactly as written in the QML.
 var dict = {
     // tiles
-    "Wi‑Fi": "Wi‑Fi", "Bluetooth": "בלוטות׳", "Night": "לילה", "Dark": "כהה", "Airplane": "טיסה", "Awake": "ער",
+    "Wi‑Fi": "Wi‑Fi", "Bluetooth": "Bluetooth", "Night": "לילה", "Dark": "כהה", "Airplane": "טיסה", "Awake": "מסך דולק",
     "Mic": "מיקרופון", "Saver": "חיסכון", "Capture": "צילום", "Record": "הקלטה", "Area": "אזור",
-    "Night Light": "תאורת לילה", "Dark theme": "ערכה כהה", "Airplane mode": "מצב טיסה", "Keep awake": "השארת המסך ער",
+    "Night Light": "תאורת לילה", "Dark theme": "ערכה כהה", "Airplane mode": "מצב טיסה", "Keep awake": "השארת המסך דולק",
     "Microphone": "מיקרופון", "Power saver": "חיסכון בחשמל", "Screenshot": "צילום מסך", "Screen record": "הקלטת מסך",
     "Off": "כבוי", "On": "פועל", "Muted": "מושתק", "Not connected": "לא מחובר", "%1 connected": "%1 מחוברים",
     "Available": "זמינות", "Done": "סיום", "Reset": "איפוס",
@@ -33,10 +33,10 @@ var dict = {
     "Security": "אבטחה", "Signal": "עוצמת אות", "Frequency": "תדר", "Link speed": "מהירות חיבור", "IP address": "כתובת IP",
     "Gateway": "שער", "DNS": "DNS", "MAC address": "כתובת MAC",
     // Bluetooth
-    "Device": "מכשיר", "Device details": "פרטי המכשיר", "No Bluetooth adapter": "אין מתאם בלוטות׳",
-    "Visible as “%1” while this panel is open": "גלוי בשם “%1” כל עוד החלון פתוח", "Bluetooth settings ↗": "הגדרות בלוטות׳ ↗",
-    "Pairing…": "מצמיד…", "Battery %1%": "סוללה %1%", "Tap to pair": "הקש כדי להצמיד", "Bluetooth is off": "הבלוטות׳ כבוי",
-    "No Bluetooth adapter found": "לא נמצא מתאם בלוטות׳", "Confirm that %1 shows this code": "ודא ש‑%1 מציג את הקוד הזה",
+    "Device": "מכשיר", "Device details": "פרטי המכשיר", "No Bluetooth adapter": "אין מתאם Bluetooth",
+    "Visible as “%1” while this panel is open": "גלוי בשם “%1” כל עוד החלון פתוח", "Bluetooth settings ↗": "הגדרות Bluetooth ↗",
+    "Pairing…": "מצמיד…", "Battery %1%": "סוללה %1%", "Tap to pair": "הקש כדי להצמיד", "Bluetooth is off": "הBluetooth כבוי",
+    "No Bluetooth adapter found": "לא נמצא מתאם Bluetooth", "Confirm that %1 shows this code": "ודא ש‑%1 מציג את הקוד הזה",
     "Type %1 on %2, then press Enter": "הקלד %1 ב‑%2 ולחץ Enter", "%1 wants to connect": "%1 מבקש להתחבר",
     "Enter the code for %1": "הזן את הקוד של %1", "Code": "קוד", "Pair": "הצמד", "Allow": "אפשר",
     "Saved devices": "מכשירים שמורים", "Pair new device": "הצמדת מכשיר חדש", "Looking for devices…": "מחפש מכשירים…",
@@ -59,7 +59,7 @@ var dict = {
     // Calendar
     "Hebrew dates: %1": "תאריך עברי: %1",
     // Power
-    "Power": "כיבוי", "Tap twice to restart, shut down or log out": "הקש פעמיים כדי להפעיל מחדש, לכבות או להתנתק",
+    "Power": "אפשרויות כיבוי", "Tap twice to restart, shut down or log out": "הקש פעמיים כדי להפעיל מחדש, לכבות או להתנתק",
     "Lock": "נעילה", "Sleep": "שינה", "Restart": "הפעלה מחדש", "Tap to restart": "הקש להפעלה מחדש", "Shut down": "כיבוי",
     "Tap to shut down": "הקש לכיבוי", "Log out": "התנתקות", "Tap to log out": "הקש להתנתקות", "Firmware setup": "הגדרות קושחה"
 }

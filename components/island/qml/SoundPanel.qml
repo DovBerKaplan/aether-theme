@@ -61,7 +61,7 @@ PanelScaffold {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width - 22 - 44 - 2 * Tokens.space.md
-                        text: root.out ? root.out.description : ""; textFormat: Text.PlainText; elide: Text.ElideRight
+                        text: root.out ? root.out.description : ""; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
                         font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.DemiBold }
                         color: Theme.text
                     }
@@ -105,7 +105,7 @@ PanelScaffold {
                 Text {
                     anchors.left: parent.left; anchors.leftMargin: Tokens.space.md; y: 6
                     width: parent.width - 100
-                    text: root.mic ? root.mic.description : ""; textFormat: Text.PlainText; elide: Text.ElideRight
+                    text: root.mic ? root.mic.description : ""; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
                     font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
                     color: Theme.text
                 }
@@ -133,7 +133,7 @@ PanelScaffold {
                     Text {
                         anchors.left: parent.left; anchors.leftMargin: Tokens.space.md; y: 6
                         width: parent.width - 100
-                        text: modelData.paused ? I18n.f("%1 · paused", modelData.name) : modelData.name; textFormat: Text.PlainText; elide: Text.ElideRight
+                        text: modelData.paused ? I18n.f("%1 · paused", modelData.name) : modelData.name; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
                         font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
                         color: Theme.text
                     }

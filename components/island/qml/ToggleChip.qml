@@ -52,13 +52,13 @@ Item {
         Column {
             anchors { left: parent.left; right: parent.right; rightMargin: Tokens.space.xs; verticalCenter: parent.verticalCenter }
             Text {
-                width: parent.width; text: root.label; textFormat: Text.PlainText; elide: Text.ElideRight
+                width: parent.width; text: root.label; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
                 font { family: Theme.font; pixelSize: Tokens.type.label; weight: Font.Medium }
                 color: Theme.text
             }
             Text {
                 visible: root.sublabel.length > 0
-                width: parent.width; text: root.sublabel; textFormat: Text.PlainText; elide: Text.ElideRight
+                width: parent.width; text: root.sublabel; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
                 font { family: Theme.font; pixelSize: Tokens.type.caption }
                 color: Theme.subtext
             }

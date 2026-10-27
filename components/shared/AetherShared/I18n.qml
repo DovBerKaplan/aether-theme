@@ -24,6 +24,8 @@ QtObject {
         for (let i = 1; i < arguments.length; ++i) t = t.split("%" + i).join(arguments[i])
         return t
     }
+    // In right-to-left text, keep a Latin/number run (an address, "2.4 GHz") in its own order.
+    function ltr(s) { return rtl && /^[\x00-\x7F]+$/.test(s) ? "\u2066" + s + "\u2069" : s }
     function next() {
         for (let i = 0; i < languages.length; ++i)
             if (languages[i].code === lang) return languages[(i + 1) % languages.length].code
