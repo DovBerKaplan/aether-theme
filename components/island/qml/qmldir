@@ -30,3 +30,5 @@ SignalBars 1.0 SignalBars.qml
 ConnectCard 1.0 ConnectCard.qml
 ConnectPanel 1.0 ConnectPanel.qml
 NotifRow 1.0 NotifRow.qml
+DropTarget 1.0 DropTarget.qml
+ActivityHost 1.0 ActivityHost.qml

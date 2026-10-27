@@ -25,11 +25,12 @@ Item {
         anchors.fill: parent
         radius: Tokens.radius.xl
         color: Qt.rgba(1, 1, 1, tap.pressed ? Tokens.tint.subtle : hover.hovered ? Tokens.tint.faint * 1.6 : Tokens.tint.faint)
-        border.color: Theme.rim
+        border { width: drop.dragging ? 2 : 1; color: drop.dragging ? Theme.accent : Theme.rim }
         Behavior on color { ColorAnimation { duration: Tokens.motion.duration.micro } }
     }
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
     TapHandler { id: tap; onTapped: root.openRequested("connect") }
+    DropTarget { id: drop; deviceId: root.online && root.d.pluginState["kdeconnect_share"] === true ? root.d.id : "" }
 
     // ---- a device is selected ------------------------------------------------------------
     Item {
