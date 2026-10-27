@@ -32,3 +32,6 @@ ConnectPanel 1.0 ConnectPanel.qml
 NotifRow 1.0 NotifRow.qml
 DropTarget 1.0 DropTarget.qml
 ActivityHost 1.0 ActivityHost.qml
+ConnectMediaPage 1.0 ConnectMediaPage.qml
+ConnectMessagesPage 1.0 ConnectMessagesPage.qml
+ConnectKeyboardPage 1.0 ConnectKeyboardPage.qml

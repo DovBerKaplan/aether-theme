@@ -39,6 +39,9 @@ Item {
                 color: root.error ? Tokens.role.island.negative : input.activeFocus ? Theme.accent : Theme.rim
             }
         }
+        // the whole box is the target, not just the text line inside it
+        TapHandler { onTapped: input.forceActiveFocus() }
+        HoverHandler { cursorShape: Qt.IBeamCursor }
         Text {
             visible: input.text.length === 0 && !input.activeFocus
             anchors { left: parent.left; leftMargin: Tokens.space.md; verticalCenter: parent.verticalCenter }

@@ -55,6 +55,11 @@ var dict = {
     "Missed call · %1": "שיחה שלא נענתה · %1", "Dismiss": "סגור", "Phone battery low": "סוללת הטלפון נמוכה", "%1 · %2%": "%1 · %2%",
     "Phone media": "מדיה בטלפון", "Control what your phone plays": "שלוט במה שהטלפון מנגן", "Nothing is playing on %1": "שום דבר לא מושמע ב‑%1",
     "Alert when the phone battery is low": "התראה כשסוללת הטלפון נמוכה", "At 20 % or less, at most every 6 hours": "ב‑20% ומטה, לכל היותר אחת ל‑6 שעות",
+    "Messages need the phone to be connected with Messages switched on": "כדי לשלוח הודעות הטלפון צריך להיות מחובר וההודעות מופעלות",
+    "To (name or number)": "אל (שם או מספר)", "Message": "הודעה", "Message sent via %1": "ההודעה נשלחה דרך %1", "Write a text message from your phone": "כתוב הודעת SMS מהטלפון",
+    "The keyboard needs the phone to be connected with Keyboard switched on": "כדי להקליד הטלפון צריך להיות מחובר והמקלדת מופעלת",
+    "Ready: what you type goes to %1": "מוכן: מה שתקליד יישלח אל %1", "Switch to the KDE Connect keyboard on your phone to type from here": "עבור למקלדת KDE Connect בטלפון כדי להקליד מכאן",
+    "Type to send to the phone": "הקלד כדי לשלוח לטלפון", "Typed on %1": "הוקלד ב‑%1", "Type on your phone from here": "הקלד בטלפון מכאן",
     // Bluetooth
     "Device": "מכשיר", "Device details": "פרטי המכשיר", "No Bluetooth adapter": "אין מתאם Bluetooth",
     "Visible as “%1” while this panel is open": "גלוי בשם “%1” כל עוד החלון פתוח", "Bluetooth settings ↗": "הגדרות Bluetooth ↗",
