@@ -47,6 +47,10 @@ var dict = {
     "Pairing request sent to %1": "בקשת צימוד נשלחה אל %1", "Paired with %1": "מצומד עם %1", "Pairing cancelled": "הצימוד בוטל", "Unpaired from %1": "הצימוד עם %1 בוטל",
     "%1h": "לפני %1 שע׳", "%1d": "לפני %1 ימים", "Clear all": "נקה הכל", "Reply": "השב", "Write a reply…": "כתוב תשובה…",
     "Reply sent": "התשובה נשלחה", "Action sent": "הפעולה נשלחה", "Notifications cleared": "ההתראות נוקו",
+    "Files": "קבצים", "Files sent to %1": "הקבצים נשלחו אל %1", "Opening files on %1": "פותח את הקבצים של %1", "Phone files disconnected": "קבצי הטלפון נותקו",
+    "Drop files here to send them": "גרור לכאן קבצים כדי לשלוח", "Choose files…": "בחר קבצים…", "Browse phone files": "עיון בקבצי הטלפון",
+    "Open in your file manager": "פתוח במנהל הקבצים", "Opens in your file manager": "נפתח במנהל הקבצים", "Received": "התקבלו", "Send, receive and browse": "שליחה, קבלה ועיון",
+    "File received from %1": "התקבל קובץ מ‑%1", "Open file": "פתח קובץ", "Show in folder": "הצג בתיקייה",
     // Bluetooth
     "Device": "מכשיר", "Device details": "פרטי המכשיר", "No Bluetooth adapter": "אין מתאם Bluetooth",
     "Visible as “%1” while this panel is open": "גלוי בשם “%1” כל עוד החלון פתוח", "Bluetooth settings ↗": "הגדרות Bluetooth ↗",

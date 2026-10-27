@@ -15,7 +15,12 @@
 #include <QDBusConnectionInterface>
 #include <QDBusMessage>
 #include <QDBusReply>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 #include <QDBusServiceWatcher>
+#include <QDesktopServices>
+#include <QFileInfo>
+#include <QUrl>
 #include <QDateTime>
 #include <QFile>
 #include <QHash>
@@ -36,6 +41,9 @@ class ConnectModel : public QObject
     Q_PROPERTY(QString selectedId READ selectedId NOTIFY changed)
     Q_PROPERTY(QVariantMap selected READ selected NOTIFY changed)        // the device the card shows, or {}
     Q_PROPERTY(QVariantList notifications READ notifications NOTIFY notificationsChanged)   // the selected phone's, newest first; filled only while watched
+    Q_PROPERTY(QVariantMap files READ files NOTIFY filesChanged)                 // {mounted, mountPoint, busy} of the selected phone's storage
+    Q_PROPERTY(QVariantList received READ received NOTIFY receivedChanged)       // the last few files that arrived: {name, url, device, ts}
+    Q_PROPERTY(bool canChooseFiles READ canChooseFiles CONSTANT)
     Q_PROPERTY(QVariantMap lastAction READ lastAction NOTIFY lastActionChanged)   // {kind, device} of the latest action
 
 public:
@@ -57,11 +65,28 @@ public:
             for (const char *sig : {"notificationPosted", "notificationRemoved", "notificationUpdated", "allNotificationsRemoved"}) {
                 bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.notifications"), QLatin1String(sig), this, SLOT(onAny(QDBusMessage)));
             }
+            bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.share"), QStringLiteral("shareReceived"), this, SLOT(onShareReceived(QDBusMessage)));
+            bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.sftp"), QStringLiteral("mounted"), this, SLOT(onSftpChanged(QDBusMessage)));
+            bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.sftp"), QStringLiteral("unmounted"), this, SLOT(onSftpChanged(QDBusMessage)));
             // the daemon may start after us (or restart)
             auto *w = new QDBusServiceWatcher(Service, bus, QDBusServiceWatcher::WatchForOwnerChange, this);
             connect(w, &QDBusServiceWatcher::serviceOwnerChanged, this, [this] { m_debounce.start(); });
         }
         QTimer::singleShot(0, this, [this] { refresh(); });
+        if (m_fake) {   // test hook: `touch /tmp/aether-connect-fake-receive` makes a fake file arrive (no restart needed)
+            auto *t = new QTimer(this);
+            t->setInterval(1000);
+            connect(t, &QTimer::timeout, this, [this] {
+                if (QFile::remove(QStringLiteral("/tmp/aether-connect-fake-receive"))) {
+                    debugReceive();
+                }
+            });
+            t->start();
+        }
+        const int fakeIn = qEnvironmentVariableIntValue("AETHER_CONNECT_FAKE_RECEIVE");   // test hook: a fake file arrives after N seconds
+        if (m_fake && fakeIn > 0) {
+            QTimer::singleShot(fakeIn * 1000, this, [this] { debugReceive(); });
+        }
     }
 
     bool available() const { return m_available; }
@@ -70,6 +95,104 @@ public:
     QVariantMap selected() const { return find(m_selectedId); }
     QVariantMap lastAction() const { return m_lastAction; }
     QVariantList notifications() const { return m_notifs; }
+    QVariantMap files() const { return m_files; }
+    QVariantList received() const { return m_received; }
+    bool canChooseFiles() const { return !QStandardPaths::findExecutable(QStringLiteral("kdialog")).isEmpty(); }
+
+    // The Files page is open: know whether the phone's storage is mounted (the daemon tells us when that changes).
+    Q_INVOKABLE void watchFiles(bool on)
+    {
+        m_watchFiles = on;
+        if (on) {
+            readFiles();
+        }
+    }
+    // Mount the phone's storage and open it in the file manager (the daemon does both).
+    Q_INVOKABLE void browseFiles(const QString &id)
+    {
+        record(QStringLiteral("browse"), id);
+        if (m_fake) {
+            m_files = {{QStringLiteral("mounted"), true}, {QStringLiteral("mountPoint"), QStringLiteral("/run/user/1000/kdeconnect/fake")}, {QStringLiteral("busy"), false}};
+            Q_EMIT filesChanged();
+            return;
+        }
+        m_files[QStringLiteral("busy")] = true;
+        Q_EMIT filesChanged();
+        QDBusMessage m = QDBusMessage::createMethodCall(Service, devPath(id) + QStringLiteral("/sftp"), QStringLiteral("org.kde.kdeconnect.device.sftp"), QStringLiteral("startBrowsing"));
+        auto *w = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(m, 30000), this);
+        connect(w, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *self) {
+            self->deleteLater();
+            readFiles();
+        });
+    }
+    Q_INVOKABLE void unmountFiles(const QString &id)
+    {
+        record(QStringLiteral("unmount"), id);
+        if (m_fake) {
+            m_files = {{QStringLiteral("mounted"), false}, {QStringLiteral("mountPoint"), QString()}, {QStringLiteral("busy"), false}};
+            Q_EMIT filesChanged();
+            return;
+        }
+        plugin(id, QStringLiteral("sftp"), QStringLiteral("unmount"), {}, QStringLiteral("unmount"));
+        QTimer::singleShot(600, this, [this] { readFiles(); });
+    }
+    // Send files (file:// urls or plain paths) to the phone. The daemon streams them itself.
+    Q_INVOKABLE void sendFiles(const QString &id, const QStringList &urls)
+    {
+        QStringList clean;
+        for (const QString &u : urls) {
+            const QUrl q = QUrl::fromUserInput(u);
+            if (q.isLocalFile() && QFileInfo(q.toLocalFile()).isFile()) {   // files only: no folders, no remote urls through this door
+                clean << q.toString();
+            }
+        }
+        if (clean.isEmpty()) {
+            return;
+        }
+        QVariantMap a{{QStringLiteral("kind"), QStringLiteral("files")}, {QStringLiteral("device"), find(id).value(QStringLiteral("name")).toString()}, {QStringLiteral("count"), clean.size()}};
+        m_lastAction = a;
+        qInfo().noquote() << "kdeconnect: send" << clean.size() << "file(s) to" << a.value(QStringLiteral("device")).toString() << (m_fake ? "(fake: nothing sent)" : "");
+        Q_EMIT lastActionChanged();
+        if (!m_fake) {
+            QDBusMessage m = QDBusMessage::createMethodCall(Service, devPath(id) + QStringLiteral("/share"), QStringLiteral("org.kde.kdeconnect.device.share"), QStringLiteral("shareUrls"));
+            m << clean;
+            QDBusConnection::sessionBus().asyncCall(m);
+        }
+    }
+    // A text or link dropped on the card goes through the same door as the field in the panel.
+    Q_INVOKABLE void sendDropped(const QString &id, const QString &text)
+    {
+        const QString t = text.trimmed();
+        if (QUrl::fromUserInput(t).scheme().startsWith(QLatin1String("http")) && !t.contains(QLatin1Char(' '))) {
+            shareUrl(id, t);
+        } else {
+            shareText(id, t);
+        }
+    }
+    // The system file chooser (kdialog); whatever is picked is sent. Nothing happens if it is cancelled.
+    Q_INVOKABLE void chooseFiles(const QString &id)
+    {
+        auto *p = new QProcess(this);
+        connect(p, &QProcess::finished, this, [this, p, id] {
+            const QStringList paths = QString::fromUtf8(p->readAllStandardOutput()).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+            p->deleteLater();
+            sendFiles(id, paths);
+        });
+        p->start(QStringLiteral("kdialog"), {QStringLiteral("--multiple"), QStringLiteral("--separate-output"), QStringLiteral("--getopenfilename"), QDir::homePath(), QStringLiteral("*|All files")});
+    }
+    Q_INVOKABLE void openReceived(const QString &url) { QDesktopServices::openUrl(QUrl(url)); }
+    Q_INVOKABLE void showReceived(const QString &url)
+    {
+        const QUrl q(url);
+        QProcess::startDetached(QStringLiteral("xdg-open"), {q.isLocalFile() ? QFileInfo(q.toLocalFile()).absolutePath() : url});
+    }
+    // Fake mode only: pretend a file arrived (the island's file-received card can then be seen).
+    Q_INVOKABLE void debugReceive()
+    {
+        if (m_fake) {
+            noteReceived(QStringLiteral("fake-phone"), QUrl::fromLocalFile(QDir::homePath() + QStringLiteral("/Downloads/holiday-photo-2026.jpg")).toString());
+        }
+    }
 
     // The Notifications page is open: read the full list (and keep it fresh from the daemon's signals).
     // Closed, only the count is read - a phone can hold dozens of notifications.
@@ -207,10 +330,23 @@ public:
 Q_SIGNALS:
     void changed();
     void lastActionChanged();
+    void filesChanged();
+    void receivedChanged();
+    void fileReceived(const QString &device, const QString &name, const QString &url);
     void notificationsChanged();
 
 private Q_SLOTS:
     void onAny(const QDBusMessage &) { m_debounce.start(); }
+    void onShareReceived(const QDBusMessage &msg)
+    {
+        const QString url = msg.arguments().isEmpty() ? QString() : msg.arguments().first().toString();
+        const QStringList parts = msg.path().split(QLatin1Char('/'));
+        const int i = parts.indexOf(QStringLiteral("devices"));
+        if (i >= 0 && i + 1 < parts.size()) {
+            noteReceived(parts.at(i + 1), url);
+        }
+    }
+    void onSftpChanged(const QDBusMessage &) { if (m_watchFiles) { QTimer::singleShot(300, this, [this] { readFiles(); }); } }
 
 private:
     static inline const QString Service = QStringLiteral("org.kde.kdeconnect");
@@ -271,6 +407,43 @@ private:
         m.setArguments(args);
         QDBusConnection::sessionBus().asyncCall(m);
         m_debounce.start();
+    }
+    void noteReceived(const QString &deviceId, const QString &url)
+    {
+        const QUrl q(url);
+        if (!q.isLocalFile()) {   // links and text are not files
+            return;
+        }
+        const QString name = QFileInfo(q.toLocalFile()).fileName();
+        const QString device = find(deviceId).value(QStringLiteral("name")).toString();
+        m_received.prepend(QVariantMap{{QStringLiteral("name"), name}, {QStringLiteral("url"), url}, {QStringLiteral("device"), device}, {QStringLiteral("ts"), double(QDateTime::currentMSecsSinceEpoch())}});
+        while (m_received.size() > 5) {
+            m_received.removeLast();
+        }
+        qInfo().noquote() << "kdeconnect: file received from" << device;   // never the name: file names can be private
+        Q_EMIT receivedChanged();
+        Q_EMIT fileReceived(device, name, url);
+    }
+    void readFiles()
+    {
+        QVariantMap f{{QStringLiteral("mounted"), false}, {QStringLiteral("mountPoint"), QString()}, {QStringLiteral("busy"), false}};
+        if (!m_fake && !m_selectedId.isEmpty() && find(m_selectedId).value(QStringLiteral("reachable")).toBool()) {
+            const QString p = devPath(m_selectedId) + QStringLiteral("/sftp");
+            QDBusMessage q = QDBusMessage::createMethodCall(Service, p, QStringLiteral("org.kde.kdeconnect.device.sftp"), QStringLiteral("isMounted"));
+            const QDBusReply<bool> r = QDBusConnection::sessionBus().call(q, QDBus::Block, 1000);
+            if (r.isValid() && r.value()) {
+                QDBusMessage mp = QDBusMessage::createMethodCall(Service, p, QStringLiteral("org.kde.kdeconnect.device.sftp"), QStringLiteral("mountPoint"));
+                const QDBusReply<QString> mr = QDBusConnection::sessionBus().call(mp, QDBus::Block, 1000);
+                f[QStringLiteral("mounted")] = true;
+                f[QStringLiteral("mountPoint")] = mr.isValid() ? mr.value() : QString();
+            }
+        } else if (m_fake) {
+            f = m_files.isEmpty() ? f : m_files;
+        }
+        if (f != m_files) {
+            m_files = f;
+            Q_EMIT filesChanged();
+        }
     }
     void pickSelected()
     {
@@ -488,7 +661,9 @@ private:
     QVariantList m_devices;
     QString m_selectedId;
     QVariantMap m_lastAction;
-    QVariantList m_notifs;
+    QVariantList m_notifs, m_received;
+    QVariantMap m_files;
+    bool m_watchFiles = false;
     QHash<QString, qint64> m_firstSeen;
     bool m_watchNotifs = false, m_fakeNotifsServed = false;
 };

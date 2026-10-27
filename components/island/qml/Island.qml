@@ -35,7 +35,7 @@ Item {
     LayoutMirroring.childrenInherit: true
     readonly property real screenW: island.screenWidth
     readonly property real screenH: island.screenHeight
-    readonly property bool big: mode === "large" || mode === "expanded" || mode === "panel"
+    readonly property bool big: mode === "large" || mode === "expanded" || mode === "panel" || mode === "activity"
     // Media mode: the whole bar becomes YouTube Music - nothing above the app but a
     // thin uniform glass bezel. It closes only deliberately: click outside, the handle,
     // wheel up, Win+N, or another window taking focus - never on pointer-leave.
@@ -65,6 +65,7 @@ Item {
         "bar":       { sw: 0, sh: 0, nw: Math.max(124, Math.round(tabRow.implicitWidth) + 34), nb: 42, r: 15, win: Qt.size(screenW, 42) },
         "large":     { sw: 0, sh: 0, nw: 480, nb: Math.max(170, largeContent.contentHeight), r: 30, win: Qt.size(screenW, screenH) },
         "expanded":  { sw: 0, sh: 0, nw: 480, nb: Math.min(largeContent.expandedHeight, screenH - 80), r: 30, win: Qt.size(screenW, screenH) },
+        "activity":  { sw: 0, sh: 0, nw: 440, nb: 112, r: 26, win: Qt.size(screenW, screenH) },
         "panel":     { sw: 0, sh: 0, nw: 480, nb: Math.max(170, largeContent.contentHeight, Math.min(panelHost.contentHeight, screenH - 120)), r: 30, win: Qt.size(screenW, screenH) },
         "media":     { sw: 0, sh: 0, nw: mediaAppW + 2 * mediaBezel, nb: mediaBezel + mediaAppH + mediaGrip, r: 30, win: Qt.size(screenW, screenH) }
     })
@@ -72,12 +73,42 @@ Item {
     property string mode: "hidden"
     // Panels: which one is open, and where Back returns to ("large", or "bar" when opened from the bar).
     property string panelFrom: "large"
+    // Activities: a compact card for something that just happened (a file arrived). Only while the island is
+    // out of the way (hidden or the small bar); if you are already in it, the panels show the news.
+    property var activity: ({})
+    property string activityFrom: "hidden"
+    function showActivity(a) {
+        if (mode !== "hidden" && mode !== "bar") return
+        activity = a
+        activityFrom = mode
+        setMode("activity")
+        activityTimer.restart()
+    }
+    function dismissActivity() {
+        activityTimer.stop()
+        if (mode === "activity") setMode(activityFrom)
+    }
+    Timer { id: activityTimer; interval: 9000; onTriggered: if (activityHost.hovered) restart(); else root.dismissActivity() }
+    function activityAction(what) {
+        const a = activity
+        dismissActivity()
+        if (what === "open" && a.url) connectModel.openReceived(a.url)
+        else if (what === "folder" && a.url) connectModel.showReceived(a.url)
+        else if (what === "tap" && a.panel) openPanel(a.panel)
+    }
+    Connections {
+        target: connectModel
+        function onFileReceived(device, name, url) {
+            root.showActivity({ glyph: "folder", title: I18n.f("File received from %1", device), text: name, url: url, panel: "connect:files",
+                                buttons: [{ id: "open", label: I18n.tr("Open file") }, { id: "folder", glyph: "folder" }] })
+        }
+    }
     function openPanel(id) {
         if (!id) return
         const parts = id.split(":")          // "connect:notifications" opens that page directly
         panelHost.panelId = parts[0]
         panelHost.page = parts.length > 1 ? parts[1] : ""
-        panelFrom = (mode === "bar" || mode === "hidden") ? "bar" : "large"
+        panelFrom = (mode === "bar" || mode === "hidden" || mode === "activity") ? "bar" : "large"
         setMode("panel")
     }
     function panelBack() {
@@ -91,6 +122,7 @@ Item {
     // the width keeps its own spring during those transitions (in the curtain modes it
     // otherwise rides on the height and must not oscillate separately).
     property bool mediaWidth: mode === "media"
+    property bool activityWidth: mode === "activity"      // keeps its own width spring a moment after leaving, like media
 
     // How far the curtain stands between the bar stop and the large stop (0..1). Every
     // interior fade derives from it, so the content always animates *with* the glass's
@@ -241,7 +273,7 @@ Item {
             return
         }
         mode = next
-        island.setKeyboard(root.big)
+        island.setKeyboard(root.big && mode !== "activity")
         leaveTimer.stop()
         if (next !== "hidden") now = new Date()
         // Fully (or mostly) closed: reset the panel so the next open starts fresh.
@@ -432,7 +464,7 @@ Item {
         onTriggered: {
             if (root.mode === "media") {
                 // never closes by itself: the user is working inside the app
-            } else if (root.mode === "panel") {
+            } else if (root.mode === "panel" || root.mode === "activity") {
                 // never closes by itself: someone may be typing a password
             } else if (root.big) {
                 root.setMode("bar")
@@ -443,7 +475,8 @@ Item {
     }
 
     focus: true
-    Keys.onEscapePressed: root.mode === "panel" ? root.panelBack()
+    Keys.onEscapePressed: root.mode === "activity" ? root.dismissActivity()
+                          : root.mode === "panel" ? root.panelBack()
                           : root.setMode(root.mode === "expanded" ? "large" : root.mode === "large" ? "bar" : "hidden")
 
     // Click outside the island (only reachable while the window covers the screen).
@@ -467,11 +500,11 @@ Item {
         // spring would oscillate out of phase with the height and the glass would shear
         // horizontally mid-animation. Media mode keeps its own geometry.
         notchW: root.interactiveW >= 0 ? root.interactiveW
-               : root.mode === "media" ? root.shape.nw
+               : root.mode === "media" || root.mode === "activity" ? root.shape.nw
                : root.shapes.bar.nw + (480 - root.shapes.bar.nw) * root.openT
         notchBottom: root.interactiveBottom >= 0 ? root.interactiveBottom : root.shape.nb
         cornerR: root.interactiveR >= 0 ? root.interactiveR
-                : root.mode === "media" ? root.shape.r
+                : root.mode === "media" || root.mode === "activity" ? root.shape.r
                 : 15 + 15 * root.openT
         shoulder: root.shoulder
         holeX: (root.width - root.mediaAppW) / 2
@@ -500,8 +533,8 @@ Item {
         }
         // Only the media panel springs its own width/corners; in the curtain modes they
         // ride on the height (see the bindings above) and must not animate separately.
-        Behavior on notchW { enabled: root.mediaWidth && !root.dragging; SpringAnimation { id: widthSpring; spring: 3.6; damping: 0.22; epsilon: 3.0 } }
-        Behavior on cornerR { enabled: root.mediaWidth && !root.dragging; SpringAnimation { spring: 3.6; damping: 0.22; epsilon: 3.0 } }
+        Behavior on notchW { enabled: (root.mediaWidth || root.activityWidth) && !root.dragging; SpringAnimation { id: widthSpring; spring: 3.6; damping: 0.22; epsilon: 3.0 } }
+        Behavior on cornerR { enabled: (root.mediaWidth || root.activityWidth) && !root.dragging; SpringAnimation { spring: 3.6; damping: 0.22; epsilon: 3.0 } }
         onSegmentsChanged: root.syncLayout()
         onOpacityChanged: root.syncLayout()
     }
@@ -555,7 +588,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             y: (parent.height - height) / 2 - 3
             spacing: 12
-            opacity: (root.mode === "media" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
+            opacity: (root.mode === "media" || root.mode === "activity" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
             visible: opacity > 0
             NotchButton {
                 glyph: "search"
@@ -621,7 +654,7 @@ Item {
         height: resting ? 2 : 4
         radius: height / 2
         color: resting ? "white" : Theme.subtext
-        opacity: resting ? 0.22 : 0.7 * (root.mode === "media" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
+        opacity: resting ? 0.22 : 0.7 * (root.mode === "media" || root.mode === "activity" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
         visible: opacity > 0
         Behavior on width { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
         Behavior on height { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
@@ -653,7 +686,7 @@ Item {
         appName: root.appName
         // Folding from the media panel straight to the tab passes through the large
         // island's height: its content must not flash up on the way.
-        opacity: (root.mediaWidth && !root.big ? 0 : Math.max(0, Math.min(1, (root.openT - 0.2) / 0.5))) * surface.opacity * (1 - root.panelSlide)
+        opacity: (root.mode === "activity" || (root.mediaWidth && !root.big) ? 0 : Math.max(0, Math.min(1, (root.openT - 0.2) / 0.5))) * surface.opacity * (1 - root.panelSlide)
         // Stay mounted while the curtain moves: the handle must keep its grab even after
         // its visuals fade out (the island passing below the fade band while dragged shut).
         // Hidden entirely in media mode - the app window owns the panel's middle.
@@ -665,6 +698,19 @@ Item {
         onPullMoved: (dy, vy) => root.pullMove(dy, vy)
         onPullEnded: root.pullEnd()
         onHoldDetected: root.setMode("expanded")
+    }
+
+    ActivityHost {
+        id: activityHost
+        x: (root.width - surface.notchW) / 2
+        y: 0
+        width: surface.notchW
+        height: surface.notchBottom
+        a: root.activity
+        opacity: root.mode === "activity" ? Math.max(0, Math.min(1, (surface.notchBottom - 50) / 50)) * surface.opacity : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
+        onActivated: (what) => root.activityAction(what)
     }
 
     PanelHost {
@@ -759,7 +805,10 @@ Item {
         syncLayout()
         if (mode === "media") mediaWidth = true
         else mediaExitTimer.restart()
+        if (mode === "activity") activityWidth = true
+        else activityExitTimer.restart()
     }
+    Timer { id: activityExitTimer; interval: 800; onTriggered: root.activityWidth = false }
     Timer { id: mediaExitTimer; interval: 800; onTriggered: root.mediaWidth = false }
     onWidthChanged: syncLayout()
 }
