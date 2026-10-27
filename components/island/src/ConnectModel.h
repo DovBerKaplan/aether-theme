@@ -44,6 +44,9 @@ class ConnectModel : public QObject
     Q_PROPERTY(QVariantMap files READ files NOTIFY filesChanged)                 // {mounted, mountPoint, busy} of the selected phone's storage
     Q_PROPERTY(QVariantList received READ received NOTIFY receivedChanged)       // the last few files that arrived: {name, url, device, ts}
     Q_PROPERTY(bool canChooseFiles READ canChooseFiles CONSTANT)
+    Q_PROPERTY(QVariantMap call READ call NOTIFY callChanged)                     // {event, name, device} while a call is ringing/going/just missed, else {}
+    Q_PROPERTY(QVariantMap phoneMedia READ phoneMedia NOTIFY phoneMediaChanged)   // what the selected phone plays; filled only while the Media page is open
+    Q_PROPERTY(bool lowBatteryAlert READ lowBatteryAlert WRITE setLowBatteryAlert NOTIFY lowBatteryAlertChanged)   // opt-in: tell me when a phone is below 20 %
     Q_PROPERTY(QVariantMap lastAction READ lastAction NOTIFY lastActionChanged)   // {kind, device} of the latest action
 
 public:
@@ -53,6 +56,8 @@ public:
     {
         m_debounce.setSingleShot(true);
         m_debounce.setInterval(300);
+        m_callClear.setSingleShot(true);
+        connect(&m_callClear, &QTimer::timeout, this, [this] { m_call.clear(); Q_EMIT callChanged(); });
         connect(&m_debounce, &QTimer::timeout, this, [this] { refresh(); });
         if (!m_fake) {
             auto bus = QDBusConnection::sessionBus();
@@ -65,6 +70,8 @@ public:
             for (const char *sig : {"notificationPosted", "notificationRemoved", "notificationUpdated", "allNotificationsRemoved"}) {
                 bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.notifications"), QLatin1String(sig), this, SLOT(onAny(QDBusMessage)));
             }
+            bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.telephony"), QStringLiteral("callReceived"), this, SLOT(onCall(QDBusMessage)));
+            bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.mprisremote"), QStringLiteral("propertiesChanged"), this, SLOT(onMediaChanged(QDBusMessage)));
             bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.share"), QStringLiteral("shareReceived"), this, SLOT(onShareReceived(QDBusMessage)));
             bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.sftp"), QStringLiteral("mounted"), this, SLOT(onSftpChanged(QDBusMessage)));
             bus.connect(Service, QString(), QStringLiteral("org.kde.kdeconnect.device.sftp"), QStringLiteral("unmounted"), this, SLOT(onSftpChanged(QDBusMessage)));
@@ -73,6 +80,21 @@ public:
             connect(w, &QDBusServiceWatcher::serviceOwnerChanged, this, [this] { m_debounce.start(); });
         }
         QTimer::singleShot(0, this, [this] { refresh(); });
+        if (m_fake) {   // test hook: `touch /tmp/aether-connect-fake-<ringing|talking|missedCall|lowbattery>` acts that out (no restart needed)
+            auto *c = new QTimer(this);
+            c->setInterval(1000);
+            connect(c, &QTimer::timeout, this, [this] {
+                for (const char *e : {"ringing", "talking", "missedCall"}) {
+                    if (QFile::remove(QStringLiteral("/tmp/aether-connect-fake-") + QLatin1String(e))) {
+                        debugCall(QLatin1String(e));
+                    }
+                }
+                if (QFile::remove(QStringLiteral("/tmp/aether-connect-fake-lowbattery"))) {
+                    debugLowBattery();
+                }
+            });
+            c->start();
+        }
         if (m_fake) {   // test hook: `touch /tmp/aether-connect-fake-receive` makes a fake file arrive (no restart needed)
             auto *t = new QTimer(this);
             t->setInterval(1000);
@@ -96,6 +118,89 @@ public:
     QVariantMap lastAction() const { return m_lastAction; }
     QVariantList notifications() const { return m_notifs; }
     QVariantMap files() const { return m_files; }
+    QVariantMap call() const { return m_call; }
+    QVariantMap phoneMedia() const { return m_media; }
+    bool lowBatteryAlert() const { return m_prefs.value(QStringLiteral("Connect/LowBatteryAlert"), false).toBool(); }
+    void setLowBatteryAlert(bool on)
+    {
+        if (on == lowBatteryAlert()) {
+            return;
+        }
+        m_prefs.setValue(QStringLiteral("Connect/LowBatteryAlert"), on);
+        m_prefs.sync();
+        Q_EMIT lowBatteryAlertChanged();
+    }
+
+    // The Media page is open: read what the phone plays, and keep it fresh from the daemon's signal.
+    Q_INVOKABLE void watchMedia(bool on)
+    {
+        m_watchMedia = on;
+        if (on) {
+            if (!m_fake && !m_selectedId.isEmpty()) {
+                plugin(m_selectedId, QStringLiteral("mprisremote"), QStringLiteral("requestPlayerList"), {}, QString());   // asks the phone, no side effect
+            }
+            readMedia();
+        } else {
+            m_media.clear();
+            Q_EMIT phoneMediaChanged();
+        }
+    }
+    // Play, Pause, PlayPause, Stop, Next, Previous.
+    Q_INVOKABLE void mediaAction(const QString &id, const QString &action)
+    {
+        record(QStringLiteral("media"), id);
+        if (m_fake) {
+            if (action == QLatin1String("PlayPause") || action == QLatin1String("Play") || action == QLatin1String("Pause")) {
+                m_media[QStringLiteral("playing")] = action == QLatin1String("Play") ? true : action == QLatin1String("Pause") ? false : !m_media.value(QStringLiteral("playing")).toBool();
+                Q_EMIT phoneMediaChanged();
+            }
+            return;
+        }
+        plugin(id, QStringLiteral("mprisremote"), QStringLiteral("sendAction"), {action}, QString());
+        QTimer::singleShot(400, this, [this] { readMedia(); });
+    }
+    // fraction 0..1 of the track
+    Q_INVOKABLE void mediaSeek(const QString &id, qreal fraction)
+    {
+        const int len = m_media.value(QStringLiteral("length")).toInt();
+        if (len <= 0) {
+            return;
+        }
+        const int pos = int(qBound<qreal>(0, fraction, 1) * len);
+        m_media[QStringLiteral("position")] = pos;
+        Q_EMIT phoneMediaChanged();
+        if (!m_fake) {
+            setRemoteProp(id, QStringLiteral("position"), pos);
+        }
+    }
+    Q_INVOKABLE void mediaVolume(const QString &id, int percent)
+    {
+        m_media[QStringLiteral("volume")] = qBound(0, percent, 100);
+        Q_EMIT phoneMediaChanged();
+        if (!m_fake) {
+            setRemoteProp(id, QStringLiteral("volume"), qBound(0, percent, 100));
+        }
+    }
+    Q_INVOKABLE void mediaPlayer(const QString &id, const QString &player)
+    {
+        if (!m_fake) {
+            setRemoteProp(id, QStringLiteral("player"), player);
+            QTimer::singleShot(500, this, [this] { readMedia(); });
+        }
+    }
+    // Fake mode only: act out a call event (ringing, talking, missedCall) or a low battery.
+    Q_INVOKABLE void debugCall(const QString &event)
+    {
+        if (m_fake) {
+            noteCall(QStringLiteral("fake-phone"), event, QStringLiteral("+1 555 0100"), QStringLiteral("Dana Levi"));
+        }
+    }
+    Q_INVOKABLE void debugLowBattery()
+    {
+        if (m_fake) {
+            Q_EMIT lowBattery(find(QStringLiteral("fake-phone")).value(QStringLiteral("name")).toString(), 14);
+        }
+    }
     QVariantList received() const { return m_received; }
     bool canChooseFiles() const { return !QStandardPaths::findExecutable(QStringLiteral("kdialog")).isEmpty(); }
 
@@ -330,6 +435,11 @@ public:
 Q_SIGNALS:
     void changed();
     void lastActionChanged();
+    void callChanged();
+    void phoneMediaChanged();
+    void lowBatteryAlertChanged();
+    void callEvent(const QString &device, const QString &event, const QString &who);   // who: contact name, or the number
+    void lowBattery(const QString &device, int percent);
     void filesChanged();
     void receivedChanged();
     void fileReceived(const QString &device, const QString &name, const QString &url);
@@ -337,6 +447,16 @@ Q_SIGNALS:
 
 private Q_SLOTS:
     void onAny(const QDBusMessage &) { m_debounce.start(); }
+    void onMediaChanged(const QDBusMessage &) { if (m_watchMedia) { QTimer::singleShot(150, this, [this] { readMedia(); }); } }
+    void onCall(const QDBusMessage &msg)
+    {
+        const QVariantList a = msg.arguments();
+        const QStringList parts = msg.path().split(QLatin1Char('/'));
+        const int i = parts.indexOf(QStringLiteral("devices"));
+        if (a.size() >= 3 && i >= 0 && i + 1 < parts.size()) {
+            noteCall(parts.at(i + 1), a.at(0).toString(), a.at(1).toString(), a.at(2).toString());
+        }
+    }
     void onShareReceived(const QDBusMessage &msg)
     {
         const QString url = msg.arguments().isEmpty() ? QString() : msg.arguments().first().toString();
@@ -386,7 +506,9 @@ private:
     }
     void plugin(const QString &id, const QString &object, const QString &method, const QVariantList &args, const QString &kind)
     {
-        record(kind, id);
+        if (!kind.isEmpty()) {
+            record(kind, id);
+        }
         if (m_fake) {
             return;
         }
@@ -407,6 +529,71 @@ private:
         m.setArguments(args);
         QDBusConnection::sessionBus().asyncCall(m);
         m_debounce.start();
+    }
+    void setRemoteProp(const QString &id, const QString &name, const QVariant &v)
+    {
+        QDBusMessage m = QDBusMessage::createMethodCall(Service, devPath(id) + QStringLiteral("/mprisremote"), QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Set"));
+        m << QStringLiteral("org.kde.kdeconnect.device.mprisremote") << name << QVariant::fromValue(QDBusVariant(v));
+        QDBusConnection::sessionBus().asyncCall(m);
+    }
+    void readMedia()
+    {
+        QVariantMap out;
+        if (m_fake) {
+            if (m_media.isEmpty()) {
+                m_media = {{QStringLiteral("title"), QStringLiteral("Blue in Green")}, {QStringLiteral("artist"), QStringLiteral("Miles Davis")}, {QStringLiteral("album"), QStringLiteral("Kind of Blue")},
+                           {QStringLiteral("playing"), true}, {QStringLiteral("position"), 84000}, {QStringLiteral("length"), 337000}, {QStringLiteral("volume"), 60}, {QStringLiteral("canSeek"), true},
+                           {QStringLiteral("player"), QStringLiteral("Music")}, {QStringLiteral("players"), QStringList{QStringLiteral("Music"), QStringLiteral("Podcasts")}}, {QStringLiteral("available"), true}};
+                Q_EMIT phoneMediaChanged();
+            }
+            return;
+        }
+        const QVariantMap d = find(m_selectedId);
+        if (!d.isEmpty() && d.value(QStringLiteral("reachable")).toBool() && d.value(QStringLiteral("pluginState")).toMap().value(QStringLiteral("kdeconnect_mprisremote")).toBool()) {
+            const QVariantMap p = getAll(devPath(m_selectedId) + QStringLiteral("/mprisremote"), QStringLiteral("org.kde.kdeconnect.device.mprisremote"));
+            const QString title = p.value(QStringLiteral("title")).toString();
+            out = {{QStringLiteral("title"), title}, {QStringLiteral("artist"), p.value(QStringLiteral("artist")).toString()}, {QStringLiteral("album"), p.value(QStringLiteral("album")).toString()},
+                   {QStringLiteral("playing"), p.value(QStringLiteral("isPlaying")).toBool()}, {QStringLiteral("position"), p.value(QStringLiteral("position")).toInt()},   // ms
+                   {QStringLiteral("length"), p.value(QStringLiteral("length")).toInt()}, {QStringLiteral("volume"), p.value(QStringLiteral("volume")).toInt()},
+                   {QStringLiteral("canSeek"), p.value(QStringLiteral("canSeek")).toBool()}, {QStringLiteral("player"), p.value(QStringLiteral("player")).toString()},
+                   {QStringLiteral("players"), p.value(QStringLiteral("playerList")).toStringList()}, {QStringLiteral("available"), !title.isEmpty()}};
+        }
+        if (out != m_media) {
+            m_media = out;
+            Q_EMIT phoneMediaChanged();
+        }
+    }
+    // A call changed state. The card shows it; nothing about it is logged (names and numbers are private).
+    void noteCall(const QString &deviceId, const QString &event, const QString &number, const QString &name)
+    {
+        if (event != QLatin1String("ringing") && event != QLatin1String("talking") && event != QLatin1String("missedCall")) {
+            return;   // "sms" is a message: the Notifications page has it
+        }
+        const QString device = find(deviceId).value(QStringLiteral("name")).toString();
+        const QString who = name.isEmpty() || name == number ? number : name;
+        m_call = {{QStringLiteral("event"), event}, {QStringLiteral("who"), who}, {QStringLiteral("device"), device}, {QStringLiteral("id"), deviceId}};
+        m_callClear.start(event == QLatin1String("ringing") ? 45000 : event == QLatin1String("talking") ? 8000 : 15000);   // the daemon sends no "ended"
+        Q_EMIT callChanged();
+        Q_EMIT callEvent(device, event, who);
+    }
+    // Phones below 20 % and not charging, at most once every 6 hours each; only when the owner opted in.
+    void checkLowBattery()
+    {
+        if (!lowBatteryAlert()) {
+            return;
+        }
+        const qint64 now = QDateTime::currentSecsSinceEpoch();
+        for (const QVariant &v : std::as_const(m_devices)) {
+            const QVariantMap d = v.toMap();
+            const int b = d.value(QStringLiteral("battery")).toInt();
+            const QString key = QStringLiteral("Connect/LowAlert/") + d.value(QStringLiteral("id")).toString();
+            if (d.value(QStringLiteral("paired")).toBool() && d.value(QStringLiteral("reachable")).toBool() && b >= 0 && b <= 20 && !d.value(QStringLiteral("charging")).toBool()
+                && now - m_prefs.value(key, 0).toLongLong() > 6 * 3600) {
+                m_prefs.setValue(key, now);
+                m_prefs.sync();
+                Q_EMIT lowBattery(d.value(QStringLiteral("name")).toString(), b);
+            }
+        }
     }
     void noteReceived(const QString &deviceId, const QString &url)
     {
@@ -563,6 +750,7 @@ private:
         pickSelected();
         Q_EMIT changed();
         loadNotifications();
+        checkLowBattery();
     }
 
     void bumpCount(const QString &id, int n)
@@ -662,7 +850,9 @@ private:
     QString m_selectedId;
     QVariantMap m_lastAction;
     QVariantList m_notifs, m_received;
-    QVariantMap m_files;
+    QVariantMap m_files, m_call, m_media;
+    QTimer m_callClear;
+    bool m_watchMedia = false;
     bool m_watchFiles = false;
     QHash<QString, qint64> m_firstSeen;
     bool m_watchNotifs = false, m_fakeNotifsServed = false;

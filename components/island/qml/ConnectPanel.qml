@@ -13,6 +13,8 @@ PanelScaffold {
 
     readonly property bool onNotifs: page === "notifications"
     readonly property bool onFiles: page === "files"
+    readonly property bool onMedia: page === "media"
+    readonly property var pm: connectModel.phoneMedia
     readonly property var d: connectModel.selected
     readonly property bool has: d.id !== undefined
     readonly property bool online: has && d.reachable
@@ -39,14 +41,15 @@ PanelScaffold {
              : a.kind === "pairing-cancelled" ? I18n.tr("Pairing cancelled") : a.kind === "unpaired" ? I18n.f("Unpaired from %1", n) : ""
     }
 
+    onOnMediaChanged: connectModel.watchMedia(onMedia)
     onOnFilesChanged: connectModel.watchFiles(onFiles)
     onOnNotifsChanged: connectModel.watchNotifications(onNotifs)
     Component.onCompleted: connectModel.watchNotifications(onNotifs)
-    Component.onDestruction: { connectModel.watchNotifications(false); connectModel.watchFiles(false) }
+    Component.onDestruction: { connectModel.watchNotifications(false); connectModel.watchFiles(false); connectModel.watchMedia(false) }
     headerTrailing: [ Button { visible: root.onNotifs && connectModel.notifications.length > 0; kind: "text"; text: I18n.tr("Clear all"); onClicked: connectModel.clearNotifications(root.d.id) } ]
 
-    title: onFiles ? I18n.tr("Files") : onNotifs ? I18n.tr("Notifications") : has ? d.name : I18n.tr("KDE Connect")
-    subtitle: onNotifs || onFiles ? (has ? d.name : "") : !connectModel.available ? I18n.tr("KDE Connect isn't running")
+    title: onMedia ? I18n.tr("Phone media") : onFiles ? I18n.tr("Files") : onNotifs ? I18n.tr("Notifications") : has ? d.name : I18n.tr("KDE Connect")
+    subtitle: onNotifs || onFiles || onMedia ? (has ? d.name : "") : !connectModel.available ? I18n.tr("KDE Connect isn't running")
             : !has ? I18n.tr("No paired device")
             : online ? I18n.f("Connected · %1", linkName(d.link)) : I18n.tr("Offline")
     footerHeight: 44
@@ -87,6 +90,115 @@ PanelScaffold {
             text: root.feedback; textFormat: Text.PlainText
             font { family: Theme.font; pixelSize: Tokens.type.label }
             color: Theme.subtext
+        }
+        Item { width: 1; height: Tokens.space.sm }
+    }
+
+    Column {      // ---- Phone media page ----------------------------------------------------------
+        visible: root.onMedia
+        x: 22; width: parent.width - 44
+        spacing: Tokens.space.md
+        property int pos: 0
+        Connections { target: connectModel; function onPhoneMediaChanged() { mediaCol.pos = root.pm.position || 0 } }
+        id: mediaCol
+        Timer { running: root.onMedia && root.pm.playing === true; interval: 1000; repeat: true; onTriggered: mediaCol.pos = Math.min(root.pm.length || 0, mediaCol.pos + 1000) }
+        Item {
+            visible: root.pm.available !== true
+            width: parent.width; height: 150
+            Column {
+                anchors.centerIn: parent
+                spacing: Tokens.space.md
+                Glyph { anchors.horizontalCenter: parent.horizontalCenter; name: "play"; size: 32; color: Theme.subtext }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: root.has ? I18n.f("Nothing is playing on %1", root.d.name) : ""; textFormat: Text.PlainText
+                    font { family: Theme.font; pixelSize: Tokens.type.body }
+                    color: Theme.subtext
+                }
+            }
+        }
+        Rectangle {
+            visible: root.pm.available === true
+            width: parent.width; height: mcol.height + 2 * Tokens.space.lg
+            radius: Tokens.radius.lg
+            color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+            Column {
+                id: mcol
+                x: Tokens.space.lg; y: Tokens.space.lg
+                width: parent.width - 2 * Tokens.space.lg
+                spacing: Tokens.space.md
+                Column {
+                    width: parent.width
+                    spacing: 2
+                    Text {
+                        width: parent.width; text: root.pm.title || ""; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
+                        font { family: Theme.font; pixelSize: Tokens.type.title; weight: Font.DemiBold }
+                        color: Theme.text
+                    }
+                    Text {
+                        width: parent.width; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
+                        text: [root.pm.artist, root.pm.album].filter(x => x && x.length > 0).join("  ·  ")
+                        font { family: Theme.font; pixelSize: Tokens.type.label }
+                        color: Theme.subtext
+                    }
+                }
+                Column {
+                    visible: (root.pm.length || 0) > 0
+                    width: parent.width
+                    spacing: 2
+                    LayoutMirroring.enabled: false      // progress and its times keep their direction, as on the media card
+                    LayoutMirroring.childrenInherit: true
+                    SliderBar {
+                        mirrored: false
+                        width: parent.width
+                        enabled: root.pm.canSeek === true
+                        value: (root.pm.length || 0) > 0 ? mediaCol.pos / root.pm.length : 0
+                        onMoved: (v) => connectModel.mediaSeek(root.d.id, v)
+                    }
+                    Item {
+                        width: parent.width; height: 16
+                        function mmss(ms) { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60) }
+                        Text { anchors.left: parent.left; text: parent.mmss(mediaCol.pos); font { family: Theme.mono; pixelSize: Tokens.type.caption } color: Theme.subtext }
+                        Text { anchors.right: parent.right; text: parent.mmss(root.pm.length || 0); font { family: Theme.mono; pixelSize: Tokens.type.caption } color: Theme.subtext }
+                    }
+                }
+                Row {      // transport: previous, play/pause, next (these stay left-to-right, as on the media card)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: Tokens.space.xl
+                    LayoutMirroring.enabled: false
+                    Repeater {
+                        model: [{ g: "prev", a: "Previous" }, { g: root.pm.playing ? "pause" : "play", a: "PlayPause" }, { g: "next", a: "Next" }]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: index === 1 ? 56 : 44; height: width; radius: width / 2
+                            color: index === 1 ? Tokens.role.island.hero : Qt.rgba(1, 1, 1, tTap.pressed ? Tokens.tint.strong : tHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                            anchors.verticalCenter: parent.verticalCenter
+                            Glyph { anchors.centerIn: parent; name: modelData.g; size: index === 1 ? 22 : 18; color: index === 1 ? Tokens.role.dark.surfaceSunken : Theme.text }
+                            HoverHandler { id: tHover; cursorShape: Qt.PointingHandCursor }
+                            TapHandler { id: tTap; onTapped: connectModel.mediaAction(root.d.id, modelData.a) }
+                        }
+                    }
+                }
+                Row {
+                    width: parent.width
+                    spacing: Tokens.space.md
+                    Glyph { name: "volume-2"; size: 18; anchors.verticalCenter: parent.verticalCenter }
+                    SliderBar {
+                        width: parent.width - 18 - Tokens.space.md
+                        anchors.verticalCenter: parent.verticalCenter
+                        value: (root.pm.volume || 0) / 100
+                        onMoved: (v) => connectModel.mediaVolume(root.d.id, Math.round(v * 100))
+                    }
+                }
+                SegmentedControl {
+                    visible: (root.pm.players || []).length > 1
+                    width: parent.width
+                    model: root.pm.players || []
+                    currentIndex: Math.max(0, (root.pm.players || []).indexOf(root.pm.player))
+                    onActivated: (i) => connectModel.mediaPlayer(root.d.id, root.pm.players[i])
+                }
+            }
         }
         Item { width: 1; height: Tokens.space.sm }
     }
@@ -159,7 +271,7 @@ PanelScaffold {
     }
 
     Column {      // ---- Overview -------------------------------------------------------------------
-        visible: !root.onNotifs && !root.onFiles
+        visible: !root.onNotifs && !root.onFiles && !root.onMedia
         x: 22; width: parent.width - 44
         spacing: Tokens.space.xs
 
@@ -244,6 +356,14 @@ PanelScaffold {
             }
         }
 
+        ListRow {      // what the phone is playing
+            visible: root.online && root.on("kdeconnect_mprisremote")
+            width: parent.width
+            title: I18n.tr("Phone media")
+            subtitle: I18n.tr("Control what your phone plays")
+            showChevron: true
+            onClicked: root.pageRequested("media")
+        }
         ListRow {      // files: send, receive, browse
             visible: root.online && (root.on("kdeconnect_share") || root.on("kdeconnect_sftp"))
             width: parent.width
@@ -351,6 +471,13 @@ PanelScaffold {
         }
 
         // what the daemon may do with this device
+        ListRow {
+            visible: root.has
+            width: parent.width
+            title: I18n.tr("Alert when the phone battery is low")
+            subtitle: I18n.tr("At 20 % or less, at most every 6 hours")
+            Switch { checked: connectModel.lowBatteryAlert; onToggled: (c) => connectModel.lowBatteryAlert = c }
+        }
         SectionLabel { visible: root.has; width: parent.width; text: I18n.tr("Features") }
         Repeater {
             model: root.has ? connectModel.plugins(root.d.id).concat([]) : []
