@@ -35,6 +35,7 @@
 #include "MediaController.h"
 #include "NotificationStore.h"
 #include "AudioModel.h"
+#include "ConnectModel.h"
 #include "BluetoothModel.h"
 #include "NetworkModel.h"
 #include "SystemPanels.h"
@@ -403,6 +404,8 @@ int main(int argc, char **argv)
     view.rootContext()->setContextProperty(QStringLiteral("session"), &session);
     TileStore tiles;
     view.rootContext()->setContextProperty(QStringLiteral("tiles"), &tiles);
+    ConnectModel connectModel;
+    view.rootContext()->setContextProperty(QStringLiteral("connectModel"), &connectModel);
     IslandController controller(&view);
     view.rootContext()->setContextProperty(QStringLiteral("island"), &controller);
     NotificationSink sink;

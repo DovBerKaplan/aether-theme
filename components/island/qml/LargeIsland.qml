@@ -156,6 +156,7 @@ Item {
             width: parent.width
             editing: root.editing
             onMediaRequested: root.openMediaSearch()
+            onPanelRequested: (id) => root.panelRequested(id)
         }
 
         TileGrid {

@@ -34,6 +34,17 @@ var dict = {
     "Gateway": "שער", "DNS": "DNS", "MAC address": "כתובת MAC",
     "Back on %1": "חזרה אל %1", "Connect automatically": "התחבר אוטומטית", "Reconnects by itself when it is in range": "מתחבר מחדש מעצמו כשהוא בטווח",
     "Password needed": "נדרשת סיסמה", "Paused until you connect it again": "מושהה עד שתחבר אותו שוב", "Saved · manual": "שמור · ידני",
+    // KDE Connect
+    "KDE Connect": "KDE Connect", "Connect your phone": "חבר את הטלפון", "Open KDE Connect on your phone to pair it": "פתח את KDE Connect בטלפון כדי לצמד אותו",
+    "KDE Connect isn't running": "KDE Connect לא פועל", "Pair with %1": "צימוד עם %1", "No paired device": "אין מכשיר מצומד", "Offline": "לא מחובר",
+    "Connected · %1": "מחובר · %1", "Pairing request": "בקשת צימוד", "%1 notifications": "%1 התראות",
+    "%1 wants to pair. Confirm that it shows this key": "%1 מבקש להתחבר. ודא שהוא מציג את המפתח הזה", "Waiting for %1 to accept": "ממתין ש‑%1 יאשר",
+    "%1 can be paired": "אפשר לצמד את %1", "Decline": "דחה", "Ring": "צלצול", "Tap to ring": "הקש לצלצול", "Ping": "פינג", "Clipboard": "לוח גזירים",
+    "Send a link or text": "שלח קישור או טקסט", "Send": "שלח", "Features": "תכונות", "Unpair": "בטל צימוד", "Tap again to unpair": "הקש שוב לביטול צימוד",
+    "KDE Connect settings ↗": "הגדרות KDE Connect ↗", "Notifications": "התראות", "Sharing": "שיתוף", "Files": "קבצים", "Find my phone": "איתור הטלפון",
+    "Messages": "הודעות", "Phone media": "מדיה בטלפון", "Calls": "שיחות", "Contacts": "אנשי קשר", "Keyboard": "מקלדת",
+    "Ringing %1": "מצלצל ב‑%1", "Ping sent to %1": "פינג נשלח אל %1", "Clipboard sent to %1": "לוח הגזירים נשלח אל %1", "Sent to %1": "נשלח אל %1",
+    "Pairing request sent to %1": "בקשת צימוד נשלחה אל %1", "Paired with %1": "מצומד עם %1", "Pairing cancelled": "הצימוד בוטל", "Unpaired from %1": "הצימוד עם %1 בוטל",
     // Bluetooth
     "Device": "מכשיר", "Device details": "פרטי המכשיר", "No Bluetooth adapter": "אין מתאם Bluetooth",
     "Visible as “%1” while this panel is open": "גלוי בשם “%1” כל עוד החלון פתוח", "Bluetooth settings ↗": "הגדרות Bluetooth ↗",

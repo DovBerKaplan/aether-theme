@@ -11,6 +11,7 @@
 #include <QObject>
 #include <QProcess>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
@@ -50,7 +51,7 @@ public:
     {
         // Never configured: today's behavior (the YouTube Music card). Configured (even to nothing): as saved.
         if (!m_settings.contains(QStringLiteral("Widgets/Configured"))) {
-            return {QStringLiteral("media")};
+            return connectInstalled() ? QStringList{QStringLiteral("media"), QStringLiteral("connect")} : QStringList{QStringLiteral("media")};
         }
         QStringList out;
         for (const QString &id : m_settings.value(QStringLiteral("Widgets/Order")).toStringList()) {
@@ -163,8 +164,15 @@ Q_SIGNALS:
     void stateChanged();
 
 private:
+    static bool connectInstalled()
+    {
+        return qEnvironmentVariableIntValue("AETHER_CONNECT_FAKE") != 0 || !QStandardPaths::findExecutable(QStringLiteral("kdeconnect-cli")).isEmpty();
+    }
     bool knownWidget(const QString &id) const
     {
+        if (id == QLatin1String("connect")) {
+            return connectInstalled();
+        }
         for (const QVariant &c : m_widgetCatalog) {
             if (c.toMap().value(QStringLiteral("id")).toString() == id) {
                 return true;
@@ -222,7 +230,7 @@ private:
         tile("nightlight", "Night Light", "moon"), tile("darktheme", "Dark theme", "contrast"), tile("airplane", "Airplane mode", "plane"),
         tile("keepawake", "Keep awake", "coffee"), tile("micmute", "Microphone", "mic"), tile("powersaver", "Power saver", "leaf"),
         tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record")};
-    const QVariantList m_widgetCatalog = {tile("media", "YouTube Music", "logo")};
+    const QVariantList m_widgetCatalog = connectInstalled() ? QVariantList{tile("media", "YouTube Music", "logo"), tile("connect", "KDE Connect", "phone")} : QVariantList{tile("media", "YouTube Music", "logo")};
     QSettings m_settings;
     QStringList m_order;
     uint m_cookie = 0;
