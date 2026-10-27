@@ -35,7 +35,7 @@ Item {
         "bar":       { sw: 0, sh: 0, nw: Math.max(124, Math.round(tabRow.implicitWidth) + 34), nb: 42, r: 15, win: Qt.size(screenW, 42) },
         "large":     { sw: 0, sh: 0, nw: 480, nb: Math.max(170, largeContent.contentHeight), r: 30, win: Qt.size(screenW, screenH) },
         "expanded":  { sw: 0, sh: 0, nw: 480, nb: Math.min(largeContent.expandedHeight, screenH - 80), r: 30, win: Qt.size(screenW, screenH) },
-        "panel":     { sw: 0, sh: 0, nw: 480, nb: Math.max(170, Math.min(panelHost.contentHeight, screenH - 120)), r: 30, win: Qt.size(screenW, screenH) },
+        "panel":     { sw: 0, sh: 0, nw: 480, nb: Math.max(170, largeContent.contentHeight, Math.min(panelHost.contentHeight, screenH - 120)), r: 30, win: Qt.size(screenW, screenH) },
         "media":     { sw: 0, sh: 0, nw: mediaAppW + 2 * mediaBezel, nb: mediaBezel + mediaAppH + mediaGrip, r: 30, win: Qt.size(screenW, screenH) }
     })
 
@@ -571,7 +571,9 @@ Item {
         opacity: root.mode === "panel" ? Math.max(0, Math.min(1, (root.openT - 0.5) / 0.4)) * surface.opacity : 0
         visible: opacity > 0 || root.dragging && root.mode === "panel"
         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
+        open: root.mode === "panel"
         onBackRequested: root.panelBack()
+        onCloseRequested: root.setMode("bar")
         onPullStarted: root.pullBegin()
         onPullMoved: (dy, vy) => root.pullMove(dy, vy)
         onPullEnded: root.pullEnd()

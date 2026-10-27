@@ -32,6 +32,7 @@
 #include "AudioLevels.h"
 #include "MediaController.h"
 #include "NotificationStore.h"
+#include "NetworkModel.h"
 #include "SystemInfo.h"
 
 #include <KWindowEffects>
@@ -489,6 +490,8 @@ int main(int argc, char **argv)
     view.rootContext()->setContextProperty(QStringLiteral("notifStore"), &notifStore);
     SystemInfo system;
     view.rootContext()->setContextProperty(QStringLiteral("system"), &system);
+    NetworkModel network;
+    view.rootContext()->setContextProperty(QStringLiteral("network"), &network);
     IslandController controller(&view);
     view.rootContext()->setContextProperty(QStringLiteral("island"), &controller);
     NotificationSink sink;
