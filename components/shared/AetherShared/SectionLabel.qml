@@ -11,6 +11,7 @@ Item {
         id: label
         width: parent.width
         textFormat: Text.PlainText
+        horizontalAlignment: Text.AlignLeft
         elide: Text.ElideRight
         font { family: Theme.font; pixelSize: Tokens.type.caption; weight: Font.Medium; letterSpacing: 0.4 }
         color: Theme.subtext

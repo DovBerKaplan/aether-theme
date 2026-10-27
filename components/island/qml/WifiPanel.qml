@@ -129,15 +129,18 @@ PanelScaffold {
                             Glyph { name: modelData.level >= 3 ? "wifi-3" : modelData.level === 2 ? "wifi-2" : "wifi-1"; size: 22; anchors.verticalCenter: parent.verticalCenter }
                             Column {
                                 anchors.verticalCenter: parent.verticalCenter
+                                width: heroCol.width - 22 - Tokens.space.md
                                 Text {
+                                    width: parent.width; horizontalAlignment: Text.AlignLeft; elide: Text.ElideRight
                                     text: modelData.ssid; textFormat: Text.PlainText
                                     font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.DemiBold }
                                     color: Theme.text
                                 }
                                 Text {
+                                    width: parent.width; horizontalAlignment: Text.AlignLeft
                                     text: network.connectivity === "portal" ? I18n.tr("Sign in to network")
                                         : network.connectivity === "limited" ? I18n.tr("Connected, no internet")
-                                        : I18n.tr("Connected") + (modelData.band ? " · " + modelData.band + " GHz" : "")
+                                        : I18n.tr("Connected") + (modelData.band ? " · " + I18n.ltr(modelData.band + " GHz") : "")
                                     font { family: Theme.font; pixelSize: Tokens.type.label }
                                     color: network.connectivity === "full" ? Theme.subtext : Tokens.role.island.negative
                                 }
