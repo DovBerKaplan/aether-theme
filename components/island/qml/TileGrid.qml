@@ -10,6 +10,7 @@ Item {
     property bool editing: false
     signal panelRequested(string id)
     signal closeRequested()
+    signal doneRequested()
 
     readonly property int cols: 4
     readonly property int gap: 10
@@ -43,6 +44,8 @@ Item {
         for (let i = 0; i < work.count; ++i) ids.push(work.get(i).tid)
         tiles.setOrder(ids)
     }
+    function removeAt(i) { work.remove(i); save() }
+    function addId(id) { work.append({ tid: id }); save() }   // see WidgetStack: the delegate dies with its row
     Component.onCompleted: load()
     Connections { target: tiles; function onOrderChanged() { if (!root.editing) root.load() } }
     onEditingChanged: if (!editing) load()
@@ -168,7 +171,7 @@ Item {
                         border { width: 1; color: Theme.rim }
                         Glyph { anchors.centerIn: parent; name: "minus"; size: 12 }
                         HoverHandler { cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: { work.remove(slotItem.index); root.save() } }
+                        TapHandler { onTapped: root.removeAt(slotItem.index) }
                     }
                 }
             }
@@ -197,13 +200,13 @@ Item {
                         }
                     }
                     HoverHandler { id: addHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { id: addTap; onTapped: { work.append({ tid: modelData.id }); root.save() } }
+                    TapHandler { id: addTap; onTapped: root.addId(modelData.id) }
                 }
             }
         }
         Row {
             spacing: Tokens.space.sm
-            Button { kind: "filled"; text: I18n.tr("Done"); onClicked: root.editing = false }
+            Button { kind: "filled"; text: I18n.tr("Done"); onClicked: root.doneRequested() }
             Button { kind: "text"; text: I18n.tr("Reset"); onClicked: { tiles.reset(); root.load() } }
         }
     }

@@ -34,6 +34,7 @@ Item {
     readonly property real notifFade: Math.max(0, Math.min(1,
         (height - contentHeight - 8) / Math.max(1, expandedHeight - contentHeight - 8)))
     property bool timerOpen: false
+    property bool editing: false          // one edit mode for the widget stack and the tile set
     property bool holdConsumed: false
 
     // Called by Island.qml whenever the island drops below the large stop: the next open
@@ -47,7 +48,7 @@ Item {
         onTriggered: {
             notifList.resetScroll()
             timerOpen = false
-            tileGrid.editing = false
+            root.editing = false
             holdConsumed = false
         }
     }
@@ -103,11 +104,11 @@ Item {
                 width: 26; height: 26
                 Rectangle {
                     anchors.fill: parent; radius: height / 2
-                    color: Qt.rgba(1, 1, 1, editTap.pressed ? Tokens.tint.strong : editHover.hovered || tileGrid.editing ? Tokens.tint.soft : 0)
+                    color: Qt.rgba(1, 1, 1, editTap.pressed ? Tokens.tint.strong : editHover.hovered || root.editing ? Tokens.tint.soft : 0)
                 }
-                Glyph { anchors.centerIn: parent; name: "edit"; size: 14; color: tileGrid.editing ? Theme.accent : Theme.text }
+                Glyph { anchors.centerIn: parent; name: "edit"; size: 14; color: root.editing ? Theme.accent : Theme.text }
                 HoverHandler { id: editHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { id: editTap; onTapped: tileGrid.editing = !tileGrid.editing }
+                TapHandler { id: editTap; onTapped: root.editing = !root.editing }
             }
             // The active app (it used to live in the bar's left corner)
             Text {
@@ -150,16 +151,18 @@ Item {
 
         // The song card is permanent - playing, paused or resting (no player yet);
         // it is also the way into the media view (the app inside the bar).
-        MediaCard {
+        WidgetStack {
+            id: widgetStack
             width: parent.width
-            LayoutMirroring.enabled: false      // player controls and the progress bar keep their direction
-            LayoutMirroring.childrenInherit: true
-            onSearchRequested: root.openMediaSearch()
+            editing: root.editing
+            onMediaRequested: root.openMediaSearch()
         }
 
         TileGrid {
             id: tileGrid
             width: parent.width
+            editing: root.editing
+            onDoneRequested: root.editing = false
             onPanelRequested: (id) => root.panelRequested(id)
             onCloseRequested: root.closeRequested()
         }

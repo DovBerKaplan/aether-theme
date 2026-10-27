@@ -8,7 +8,7 @@ var dict = {
     "Night Light": "תאורת לילה", "Dark theme": "ערכה כהה", "Airplane mode": "מצב טיסה", "Keep awake": "השארת המסך דולק",
     "Microphone": "מיקרופון", "Power saver": "חיסכון בחשמל", "Screenshot": "צילום מסך", "Screen record": "הקלטת מסך",
     "Off": "כבוי", "On": "פועל", "Muted": "מושתק", "Not connected": "לא מחובר", "%1 connected": "%1 מחוברים",
-    "Available": "זמינות", "Done": "סיום", "Reset": "איפוס",
+    "Available": "זמינות", "Available widgets": "ווידג'טים זמינים", "Done": "סיום", "Reset": "איפוס",
     // island
     "Time's up": "הזמן נגמר", "Desktop": "שולחן עבודה", "%1 min": "%1 דק׳",
     "NOTIFICATIONS": "התראות", "Clear": "נקה", "No notifications": "אין התראות",

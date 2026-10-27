@@ -12,6 +12,7 @@
 #include <QDBusObjectPath>
 #include <QDBusReply>
 #include <QDBusVariant>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QObject>
@@ -36,16 +37,44 @@ class MediaController : public QObject
     Q_PROPERTY(bool canSeek READ canSeek NOTIFY changed)
     Q_PROPERTY(QString playerName READ playerName NOTIFY changed)
     Q_PROPERTY(QString playerIcon READ playerIcon NOTIFY changed)   // absolute path or empty
+    Q_PROPERTY(bool enabled READ enabled NOTIFY enabledChanged)     // false = the widget was removed: nothing runs
 
 public:
     explicit MediaController(QObject *parent = nullptr)
         : QObject(parent)
     {
-        auto *t = new QTimer(this);
-        t->setInterval(1000);
-        connect(t, &QTimer::timeout, this, &MediaController::poll);
-        t->start();
+        m_pollTimer.setInterval(1000);
+        connect(&m_pollTimer, &QTimer::timeout, this, &MediaController::poll);
+        m_pollTimer.start();
         QTimer::singleShot(200, this, &MediaController::poll);
+    }
+
+    bool enabled() const { return m_enabled; }
+    // The YouTube Music widget on/off. Off means invisible AND not running: polling and audio capture
+    // stop, the app is asked to quit and then stopped (whole process tree, so no window and no tray
+    // icon is left), and its autostart is disabled. On brings the autostart back; `start` also launches
+    // the app now (a user adding the widget back), while the startup call passes false because the
+    // session's own autostart already did that.
+    Q_INVOKABLE void setEnabled(bool on, bool start = false)
+    {
+        if (m_enabled == on && !start) {
+            return;
+        }
+        m_enabled = on;
+        setAutostart(on);
+        if (on) {
+            m_pollTimer.start();
+            QTimer::singleShot(200, this, &MediaController::poll);
+            if (start) {
+                launch();
+            }
+        } else {
+            m_pollTimer.stop();
+            const QString svc = m_service;
+            apply(QString(), QVariantMap());   // forget the player: the card and the bars see "no player"
+            stopPear(svc);
+        }
+        Q_EMIT enabledChanged();
     }
 
     bool hasPlayer() const { return !m_service.isEmpty(); }
@@ -100,6 +129,9 @@ public:
     // CHECK crashes (SIGILL). The log itself points to --ozone-platform=x11.
     Q_INVOKABLE void launch()
     {
+        if (!m_enabled || !qEnvironmentVariable("AETHER_PEAR_PATTERN").isEmpty()) {   // the second is the test hook: never start the real app
+            return;
+        }
         const QString bin = pearPath("opt/YouTube Music/youtube-music");
         if (QFile::exists(bin)) {
             QProcess::startDetached(bin, { QStringLiteral("--no-sandbox"), QStringLiteral("--ozone-platform=x11") });
@@ -110,10 +142,55 @@ public:
 
 Q_SIGNALS:
     void changed();
+    void enabledChanged();
     void progressChanged();
     void playbackStarted();   // rising edge: a track began playing
 
 private:
+    // The processes that belong to the app: every Chromium child carries the install path.
+    static QString pearPattern()
+    {
+        const QString o = qEnvironmentVariable("AETHER_PEAR_PATTERN");   // test hook: aim the stop at a stand-in process
+        return o.isEmpty() ? QStringLiteral("/.local/opt/pear-desktop/opt/YouTube Music/") : o;
+    }
+    void stopPear(const QString &service)
+    {
+        if (!service.isEmpty()) {   // polite first: MPRIS Quit
+            QDBusConnection::sessionBus().asyncCall(mpris(service, QStringLiteral("org.mpris.MediaPlayer2"), QStringLiteral("Quit")));
+        }
+        QTimer::singleShot(700, this, [] { QProcess::execute(QStringLiteral("pkill"), {QStringLiteral("-TERM"), QStringLiteral("-f"), pearPattern()}); });
+        QTimer::singleShot(3700, this, [] { QProcess::execute(QStringLiteral("pkill"), {QStringLiteral("-KILL"), QStringLiteral("-f"), pearPattern()}); });
+    }
+    // XDG autostart: Hidden=true disables an entry without deleting it, so adding the widget back is one write.
+    static void setAutostart(bool on)
+    {
+        const QString o = qEnvironmentVariable("AETHER_PEAR_AUTOSTART");   // test hook
+        const QString path = o.isEmpty() ? QDir::homePath() + QStringLiteral("/.config/autostart/pear-desktop.desktop") : o;
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly)) {
+            return;
+        }
+        QStringList out;
+        for (const QString &line : QString::fromUtf8(f.readAll()).split(QLatin1Char('\n'))) {
+            if (line.startsWith(QLatin1String("Hidden="))) {
+                continue;
+            }
+            out << (line.startsWith(QLatin1String("X-GNOME-Autostart-enabled=")) ? QStringLiteral("X-GNOME-Autostart-enabled=") + (on ? QStringLiteral("true") : QStringLiteral("false")) : line);
+        }
+        f.close();
+        while (!out.isEmpty() && out.last().isEmpty()) {
+            out.removeLast();
+        }
+        if (!on) {
+            out << QStringLiteral("Hidden=true");
+        }
+        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            f.write(out.join(QLatin1Char('\n')).toUtf8() + '\n');
+        }
+    }
+    QTimer m_pollTimer;
+    bool m_enabled = true;
+
     static QString pearPath(const char *rel)
     {
         return QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
@@ -161,7 +238,7 @@ private:
     }
     void poll()
     {
-        if (m_polling) {
+        if (!m_enabled || m_polling) {
             return;   // the previous round is still waiting on a slow player
         }
         const QStringList names = QDBusConnection::sessionBus().interface()->registeredServiceNames().value();

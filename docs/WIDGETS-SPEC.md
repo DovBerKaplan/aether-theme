@@ -1,6 +1,6 @@
 # Widgets Spec — removable YouTube Music, and a KDE Connect widget
 
-Status: **plan** (2026-10-28). Nothing here is built yet.
+Status: **W1 built** (2026-10-28): widget stack, widget edit mode, removable YouTube Music (closes Pear, disables autostart). Everything after W1 is still a plan.
 
 Two requests, one mechanism:
 
