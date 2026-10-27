@@ -5,6 +5,12 @@ TimerState 1.0 TimerState.qml
 SliderBar 1.0 SliderBar.qml
 ToggleChip 1.0 ToggleChip.qml
 MediaCard 1.0 MediaCard.qml
+EqBars 1.0 EqBars.qml
+MediaProgress 1.0 MediaProgress.qml
 TimerRow 1.0 TimerRow.qml
 LargeIsland 1.0 LargeIsland.qml
 NotchButton 1.0 NotchButton.qml
+NotificationList 1.0 NotificationList.qml
+NotificationCard 1.0 NotificationCard.qml
+PanelHost 1.0 PanelHost.qml
+PlaceholderPanel 1.0 PlaceholderPanel.qml

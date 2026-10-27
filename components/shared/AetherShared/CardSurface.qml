@@ -4,7 +4,7 @@ import QtQuick.Effects
 // Same dark grain material as the notch, as a rounded card (toasts).
 Item {
     id: root
-    property real radius: 24
+    property real radius: Tokens.radius.card
 
     Rectangle {
         anchors.fill: parent
@@ -35,6 +35,6 @@ Item {
         source: grain
         maskEnabled: true
         maskSource: mask
-        opacity: 0.022
+        opacity: Tokens.material.grainOpacity
     }
 }
