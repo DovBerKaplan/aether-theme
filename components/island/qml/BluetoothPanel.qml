@@ -156,6 +156,17 @@ PanelScaffold {
             leadingGlyphSource: Qt.resolvedUrl("assets/glyphs/bluetooth.svg")
             enabled: bluetooth.busy.length === 0 || bluetooth.busy === modelData.path
             onClicked: modelData.paired ? bluetooth.toggleConnect(modelData.path) : bluetooth.pair(modelData.path)
+            Item {      // disconnect: an icon, never forgets the pairing
+                visible: modelData.connected
+                width: 32; height: 32
+                Rectangle {
+                    anchors.fill: parent; radius: 16
+                    color: Qt.rgba(1, 1, 1, dTap.pressed ? Tokens.tint.strong : dHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                }
+                Glyph { anchors.centerIn: parent; name: "disconnect"; size: 15 }
+                HoverHandler { id: dHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { id: dTap; onTapped: bluetooth.toggleConnect(modelData.path) }
+            }
             Text {
                 visible: modelData.paired
                 text: "ⓘ"
@@ -176,6 +187,13 @@ PanelScaffold {
             id: detailCol
             x: 22; width: parent.width - 44
             spacing: Tokens.space.xs
+            ListRow {
+                visible: root.detailDev !== null
+                width: parent.width
+                title: I18n.tr("Connect automatically")
+                subtitle: root.detailDev && root.detailDev.paused ? I18n.tr("Paused until you connect it again") : I18n.tr("Reconnects by itself when it is in range")
+                Switch { checked: root.detailDev ? root.detailDev.auto : true; onToggled: (c) => bluetooth.setAutoConnect(root.detailPath, c) }
+            }
             KeyValueRow { width: parent.width; key: I18n.tr("Status"); copyable: false
                 value: root.detailDev ? (root.detailDev.connected ? I18n.tr("Connected") : I18n.tr("Not connected")) : "" }
             KeyValueRow { visible: root.detailDev && root.detailDev.battery >= 0; width: parent.width; key: I18n.tr("Battery"); copyable: false
