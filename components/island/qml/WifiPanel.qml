@@ -19,6 +19,7 @@ PanelScaffold {
     subtitle: onDetail ? I18n.tr("Network details")
             : !network.available ? I18n.tr("No Wi‑Fi adapter")
             : !network.wifiEnabled ? I18n.tr("Off")
+            : network.restoring ? I18n.f("Back on %1", network.restoringTo)
             : network.connecting.length > 0 ? I18n.f("Connecting to %1", network.connecting)
             : network.activeSsid.length > 0 ? I18n.f(network.connectivity === "portal" ? "Sign in required · %1" : "Connected · %1", network.activeSsid)
             : I18n.tr("Not connected")
@@ -119,6 +120,22 @@ PanelScaffold {
                     height: heroCol.height + 2 * Tokens.space.lg
                     radius: Tokens.radius.lg
                     color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+                    Item {      // disconnect: an icon next to the network you are on. Nothing is forgotten.
+                        id: disc
+                        anchors { right: parent.right; top: parent.top; rightMargin: Tokens.space.md; topMargin: Tokens.space.md }
+                        width: 36; height: 36
+                        Rectangle {
+                            anchors.fill: parent; radius: 18
+                            color: Qt.rgba(1, 1, 1, discTap.pressed ? Tokens.tint.strong : discHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                            Behavior on color { ColorAnimation { duration: Tokens.motion.duration.micro } }
+                        }
+                        Glyph { anchors.centerIn: parent; name: "disconnect"; size: 16 }
+                        HoverHandler { id: discHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { id: discTap; onTapped: network.disconnectActive() }
+                        activeFocusOnTab: true
+                        Keys.onReturnPressed: network.disconnectActive()
+                        Keys.onSpacePressed: network.disconnectActive()
+                    }
                     Column {
                         id: heroCol
                         x: Tokens.space.lg; y: Tokens.space.lg
@@ -129,7 +146,7 @@ PanelScaffold {
                             Glyph { name: modelData.level >= 3 ? "wifi-3" : modelData.level === 2 ? "wifi-2" : "wifi-1"; size: 22; anchors.verticalCenter: parent.verticalCenter }
                             Column {
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: heroCol.width - 22 - Tokens.space.md
+                                width: heroCol.width - 22 - Tokens.space.md - 44
                                 Text {
                                     width: parent.width; horizontalAlignment: Text.AlignLeft; elide: Text.ElideRight
                                     text: modelData.ssid; textFormat: Text.PlainText
@@ -151,7 +168,6 @@ PanelScaffold {
                             Button { visible: network.connectivity === "portal"; kind: "filled"; text: I18n.tr("Sign in")
                                 onClicked: { network.openPortal(); root.closeRequested() } }
                             Button { kind: "tonal"; text: I18n.tr("Details"); onClicked: root.pageRequested("detail:" + modelData.ssid) }
-                            Button { kind: "text"; text: I18n.tr("Disconnect"); onClicked: network.disconnectActive() }
                         }
                     }
                 }
@@ -209,6 +225,14 @@ PanelScaffold {
             id: detailCol
             x: 22; width: parent.width - 44
             spacing: Tokens.space.xs
+            ListRow {
+                readonly property var net: root.shown.find(n => n.ssid === root.detailSsid) || null
+                visible: net !== null && net.saved
+                width: detailCol.width
+                title: I18n.tr("Connect automatically")
+                subtitle: I18n.tr("Reconnects by itself when it is in range")
+                Switch { checked: parent.net ? parent.net.autoconnect : true; onToggled: (c) => network.setAutoconnect(root.detailSsid, c) }
+            }
             Repeater {
                 model: detailPage.rows
                 delegate: KeyValueRow { required property var modelData; width: detailCol.width; key: I18n.tr(modelData.key); value: modelData.value }

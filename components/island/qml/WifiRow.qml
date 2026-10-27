@@ -40,9 +40,10 @@ Item {
         title: root.net.ssid
         subtitle: root.joining ? I18n.tr(network.step)
                 : root.errorKind.length > 0 && root.errorKind !== "password" ? I18n.tr(root.errorText)
+                : root.net.needsPassword ? I18n.tr("Password needed")
                 : !root.net.supported ? I18n.tr("Needs system settings")
                 : !root.net.inRange ? I18n.tr("Out of range")
-                : root.net.saved ? I18n.tr("Saved")
+                : root.net.saved ? (root.net.autoconnect ? I18n.tr("Saved") : I18n.tr("Saved · manual"))
                 : !root.net.secure ? I18n.tr("Open")
                 : ""
         highlighted: root.expanded
@@ -50,6 +51,7 @@ Item {
         onClicked: {
             root.errorKind = ""
             if (root.net.connected) root.detailsRequested()
+            else if (root.net.needsPassword) root.expandRequested()
             else if (!root.net.supported) network.openSettings()
             else if (root.net.saved || !root.net.secure) network.connectTo(root.net.ssid, "", true)
             else root.expanded ? root.collapseRequested() : root.expandRequested()
