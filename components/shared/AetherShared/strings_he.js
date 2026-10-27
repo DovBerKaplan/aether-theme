@@ -33,7 +33,7 @@ var dict = {
     "Security": "אבטחה", "Signal": "עוצמת אות", "Frequency": "תדר", "Link speed": "מהירות חיבור", "IP address": "כתובת IP",
     "Gateway": "שער", "DNS": "DNS", "MAC address": "כתובת MAC",
     "Back on %1": "חזרה אל %1", "Connect automatically": "התחבר אוטומטית", "Reconnects by itself when it is in range": "מתחבר מחדש מעצמו כשהוא בטווח",
-    "Password needed": "נדרשת סיסמה", "Saved · manual": "שמור · ידני",
+    "Password needed": "נדרשת סיסמה", "Paused until you connect it again": "מושהה עד שתחבר אותו שוב", "Saved · manual": "שמור · ידני",
     // Bluetooth
     "Device": "מכשיר", "Device details": "פרטי המכשיר", "No Bluetooth adapter": "אין מתאם Bluetooth",
     "Visible as “%1” while this panel is open": "גלוי בשם “%1” כל עוד החלון פתוח", "Bluetooth settings ↗": "הגדרות Bluetooth ↗",

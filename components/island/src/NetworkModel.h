@@ -243,7 +243,11 @@ public:
             if (on) { manual.removeAll(p.uuid); } else if (!manual.contains(p.uuid)) { manual << p.uuid; }
             setProfileAutoconnect(p.uuid, on);
         }
-        prefs.setValue(QStringLiteral("Network/ManualUuids"), manual);
+        if (manual.isEmpty()) {
+            prefs.remove(QStringLiteral("Network/ManualUuids"));
+        } else {
+            prefs.setValue(QStringLiteral("Network/ManualUuids"), manual);
+        }
         prefs.sync();
         m_savedDirty = true;
         QTimer::singleShot(700, this, [this] { refresh(true); });
