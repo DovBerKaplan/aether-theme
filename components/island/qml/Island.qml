@@ -398,16 +398,6 @@ Item {
     }
 
     // ---- the shape ----------------------------------------------------------------------
-    // Edge hint, like a phone's home indicator: a tiny, very faint line where the bar lives,
-    // gone the moment the notch appears.
-    Rectangle {
-        width: 22; height: 2; radius: 1
-        x: (root.width - width) / 2; y: 6      // inset from the edge; input stays on the 2px strip
-        color: "white"
-        opacity: root.mode === "hidden" ? 0.22 : 0
-        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base } }
-    }
-
     NotchSurface {
         id: surface
         x: 0; y: 0
@@ -540,16 +530,6 @@ Item {
             }
             NotchButton { glyph: "power"; onTapped: root.openPanel("power") }
         }
-        // The pull handle, also on the small bar: it fades out as the curtain opens (the large
-        // island's own handle takes over at the bottom edge). Dragging or tapping the tab - this
-        // included - is handled by the gestures above.
-        Rectangle {
-            visible: opacity > 0
-            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 8 }
-            width: 32; height: 4; radius: Tokens.radius.hair
-            color: Theme.subtext
-            opacity: 0.7 * (root.mode === "media" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
-        }
         WheelHandler {
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             onWheel: (e) => {
@@ -563,6 +543,26 @@ Item {
                 }
             }
         }
+    }
+
+    // The pull handle. One pill for every state of the bar: a faint hint on the top edge while the
+    // bar is hidden, then the same line slides down with the tab's bottom edge and grows into the
+    // handle; it fades out as the curtain opens (the large island's own handle takes over).
+    Rectangle {
+        id: edgeHint
+        readonly property bool resting: root.mode === "hidden"
+        x: (root.width - width) / 2
+        y: resting ? 6 : Math.max(6, surface.notchBottom - 12)    // 6 = inset from the edge; input stays on the 2 px strip
+        width: resting ? 22 : 32
+        height: resting ? 2 : 4
+        radius: height / 2
+        color: resting ? "white" : Theme.subtext
+        opacity: resting ? 0.22 : 0.7 * (root.mode === "media" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
+        visible: opacity > 0
+        Behavior on width { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
+        Behavior on height { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
+        Behavior on color { ColorAnimation { duration: Tokens.motion.duration.base } }
+        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
     }
 
     // Scrolling down anywhere over the tab also opens the large island.
