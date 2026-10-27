@@ -32,6 +32,8 @@
 #include "AudioLevels.h"
 #include "MediaController.h"
 #include "NotificationStore.h"
+#include "AudioModel.h"
+#include "BluetoothModel.h"
 #include "NetworkModel.h"
 #include "SystemInfo.h"
 
@@ -275,7 +277,7 @@ public Q_SLOTS:
     void Toggle() { Q_EMIT stateRequested(QStringLiteral("toggle")); }
     // Detail panels: wifi, bluetooth, sound, display, battery, calendar, power.
     void OpenPanel(const QString &id) { Q_EMIT panelRequested(id); }
-    void ClosePanel() { Q_EMIT stateRequested(QStringLiteral("bar")); }
+    void ClosePanel() { Q_EMIT stateRequested(QStringLiteral("close")); }
     // Where the island's glass currently ends, and in which mode - aether-toasts asks this
     // for every notification: cards drop just below the glass, and while the double bar
     // (expanded) is open no card is shown at all (the history list takes it).
@@ -492,6 +494,10 @@ int main(int argc, char **argv)
     view.rootContext()->setContextProperty(QStringLiteral("system"), &system);
     NetworkModel network;
     view.rootContext()->setContextProperty(QStringLiteral("network"), &network);
+    BluetoothModel bluetooth;
+    view.rootContext()->setContextProperty(QStringLiteral("bluetooth"), &bluetooth);
+    AudioModel audio_;
+    view.rootContext()->setContextProperty(QStringLiteral("sound"), &audio_);
     IslandController controller(&view);
     view.rootContext()->setContextProperty(QStringLiteral("island"), &controller);
     NotificationSink sink;

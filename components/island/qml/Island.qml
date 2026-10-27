@@ -191,6 +191,7 @@ Item {
         target: island
         function onPanelRequested(id) { root.openPanel(id) }
         function onStateRequested(state) {
+            if (state === "close") { if (root.mode !== "hidden") root.setMode("bar"); return }
             if (state === "small") state = "bar"
             if (state === "bar" && root.big) return
             root.setMode(state)
