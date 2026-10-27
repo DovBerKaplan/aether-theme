@@ -1,13 +1,13 @@
 import QtQuick
 import AetherShared
 import "."
+import "HebrewCalendar.js" as Heb
 
-// Calendar & timer (docs/PANELS-SPEC.md section 10): a month grid with today ringed in accent
-// (a ring, not a fill), and the island's countdown timer. Events and world clocks are later.
+// Calendar (docs/PANELS-SPEC.md section 10): a month grid with today ringed in accent
+// (a ring, not a fill). Events and world clocks are later.
 PanelScaffold {
     id: root
     property string page: ""
-    property var timer: null
     signal pageRequested(string page)
     signal closeRequested()
 
@@ -20,7 +20,22 @@ PanelScaffold {
     function step(d) { const n = new Date(year, month + d, 1); year = n.getFullYear(); month = n.getMonth() }
 
     title: Qt.formatDate(today, "dddd, MMMM d")
-    subtitle: Qt.formatDate(today, "yyyy")
+    readonly property bool heb: tiles.hebrewDates
+    // Hebrew months this Gregorian month touches, e.g. "חשוון – כסלו תשפ״ז"
+    readonly property string hebMonth: {
+        const a = Heb.fromGregorian(year, month, 1), b = Heb.fromGregorian(year, month, days)
+        const na = Heb.monthName(a.year, a.month), nb = Heb.monthName(b.year, b.month)
+        return (na === nb ? na : na + " – " + nb) + " " + Heb.yearLetters(b.year)
+    }
+    subtitle: heb ? Heb.format(Heb.fromGregorian(today.getFullYear(), today.getMonth(), today.getDate())) : Qt.formatDate(today, "yyyy")
+    footerHeight: 44
+    footer: [
+        Item {
+            anchors.fill: parent
+            Button { kind: "text"; text: "Hebrew dates: " + (root.heb ? "On" : "Off"); x: 14; anchors.verticalCenter: parent.verticalCenter
+                onClicked: tiles.hebrewDates = !tiles.hebrewDates }
+        }
+    ]
     Timer { interval: 60000; running: true; repeat: true; onTriggered: root.today = new Date() }
 
     Column {
@@ -34,12 +49,24 @@ PanelScaffold {
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: root.step(-1) }
             }
-            Text {
+            Column {
                 width: parent.width - 80; height: 40
-                horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                text: Qt.locale().monthName(root.month) + " " + root.year
-                font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.DemiBold }
-                color: Theme.text
+                anchors.verticalCenter: undefined
+                Text {
+                    width: parent.width; height: root.heb ? 22 : 40
+                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: root.heb ? Text.AlignBottom : Text.AlignVCenter
+                    text: Qt.locale().monthName(root.month) + " " + root.year
+                    font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.DemiBold }
+                    color: Theme.text
+                }
+                Text {
+                    visible: root.heb
+                    width: parent.width; height: 18
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.hebMonth
+                    font { family: Theme.font; pixelSize: Tokens.type.caption }
+                    color: Theme.subtext
+                }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: { root.year = root.today.getFullYear(); root.month = root.today.getMonth() } }
             }
@@ -73,16 +100,24 @@ PanelScaffold {
                     readonly property int day: index - root.lead + 1
                     readonly property bool valid: day >= 1 && day <= root.days
                     readonly property bool isToday: valid && day === root.today.getDate() && root.month === root.today.getMonth() && root.year === root.today.getFullYear()
-                    width: grid.cell; height: 36
+                    readonly property var h: valid && root.heb ? Heb.fromGregorian(root.year, root.month, day) : null
+                    width: grid.cell; height: root.heb ? 46 : 36
                     visible: index < root.lead + root.days || index < 35
                     Rectangle {
-                        anchors.centerIn: parent
+                        anchors { horizontalCenter: parent.horizontalCenter; verticalCenter: parent.verticalCenter; verticalCenterOffset: root.heb ? -6 : 0 }
                         width: 32; height: 32; radius: 16
                         color: "transparent"
                         border { width: isToday ? 1.5 : 0; color: Theme.accent }
                     }
+                    Text {   // Hebrew day under the number; the first of a Hebrew month shows its name
+                        visible: valid && root.heb
+                        anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 1 }
+                        text: h ? (h.day === 1 ? Heb.monthName(h.year, h.month) : Heb.dayLetters(h.day)) : ""
+                        font { family: Theme.font; pixelSize: Tokens.type.caption }
+                        color: h && h.day === 1 ? Theme.accent : Theme.subtext
+                    }
                     Text {
-                        anchors.centerIn: parent
+                        anchors { horizontalCenter: parent.horizontalCenter; verticalCenter: parent.verticalCenter; verticalCenterOffset: root.heb ? -6 : 0 }
                         text: valid ? day : ""
                         font { family: Theme.mono; pixelSize: Tokens.type.label; weight: isToday ? Font.DemiBold : Font.Normal }
                         color: isToday ? Theme.accent : Theme.text
@@ -90,8 +125,6 @@ PanelScaffold {
                 }
             }
         }
-        SectionLabel { width: parent.width; text: "Timer" }
-        TimerRow { visible: root.timer !== null; width: parent.width; timer: root.timer }
         Item { width: 1; height: Tokens.space.sm }
     }
 }

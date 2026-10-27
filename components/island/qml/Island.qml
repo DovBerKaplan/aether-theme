@@ -575,7 +575,6 @@ Item {
         visible: opacity > 0 || root.dragging && root.mode === "panel"
         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
         open: root.mode === "panel"
-        timer: timerState
         onBackRequested: root.panelBack()
         onCloseRequested: root.setMode("bar")
         onPullStarted: root.pullBegin()

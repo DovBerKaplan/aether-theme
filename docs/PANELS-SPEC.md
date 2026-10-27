@@ -1,6 +1,6 @@
 # Panels Spec — dedicated windows for the island's buttons
 
-Status: **Phases 1-4 built** (2026-10-27): panel mode and frame, Wi-Fi, Bluetooth, Sound, Battery, Display, Power and Calendar panels, all opened from the chips, the bar's clock and power button, or `OpenPanel` over D-Bus. Not yet: tiles (phase 5), the items listed as skipped in each phase's commit.
+Status: **Phases 1-5 built** (2026-10-27): panel mode and frame, Wi-Fi, Bluetooth, Sound, Battery, Display, Power and Calendar (with Hebrew dates) panels, and the tile set with edit mode (`~/.config/aetherislandrc`). Changed from the plan after review: no timer in the Calendar, no Sound tile (the slider is enough), the timer is a small icon in the island header. Not built: Do Not Disturb and Hotspot tiles, interface language switching (next).
 
 The goal, in one sentence: every control in the island (Wi‑Fi, Bluetooth,
 sound, brightness, battery, clock, power) opens its **own detail panel**. The

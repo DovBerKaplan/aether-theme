@@ -54,13 +54,13 @@ Item {
                 verticalCenter: parent.verticalCenter
             }
             Text {
-                width: parent.width; text: root.title; textFormat: Text.PlainText; elide: Text.ElideRight
+                width: parent.width; text: root.title; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
                 font { family: Theme.font; pixelSize: Tokens.type.title; weight: Font.DemiBold }
                 color: Theme.text
             }
             Text {
                 visible: root.subtitle.length > 0
-                width: parent.width; text: root.subtitle; textFormat: Text.PlainText; elide: Text.ElideRight
+                width: parent.width; text: root.subtitle; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
                 font { family: Theme.font; pixelSize: Tokens.type.label }
                 color: Theme.subtext
             }
