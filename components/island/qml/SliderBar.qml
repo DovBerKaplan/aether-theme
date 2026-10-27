@@ -5,6 +5,7 @@ import AetherShared
 Item {
     id: root
     property real value: 0
+    property bool mirrored: I18n.rtl      // fills from the start edge; media progress sets this false and stays left-to-right
     property color fillColor: Theme.text
     signal moved(real v)
 
@@ -27,7 +28,7 @@ Item {
         }
     }
     Rectangle {                       // knob, only while hovered or dragged
-        x: Math.max(0, Math.min(track.width - width, track.width * (I18n.rtl ? 1 - root.shown : root.shown) - width / 2))
+        x: Math.max(0, Math.min(track.width - width, track.width * (mirrored ? 1 - root.shown : root.shown) - width / 2))
         anchors.verticalCenter: parent.verticalCenter
         width: 16; height: 16; radius: Tokens.radius.sm
         color: "white"
@@ -40,7 +41,7 @@ Item {
         hoverEnabled: true
         preventStealing: true
         function setFrom(mx) {
-            root.dragValue = Math.max(0, Math.min(1, I18n.rtl ? 1 - mx / width : mx / width))
+            root.dragValue = Math.max(0, Math.min(1, mirrored ? 1 - mx / width : mx / width))
             throttle.pending = root.dragValue
             if (!throttle.running) { root.moved(root.dragValue); throttle.start() }
         }

@@ -12,6 +12,7 @@ Item {
     readonly property var d: connectModel.selected
     readonly property bool has: d.id !== undefined
     readonly property bool online: has && d.reachable
+    readonly property bool inCall: has && connectModel.call.event !== undefined && connectModel.call.id === d.id
     readonly property var strangers: connectModel.devices.filter(x => !x.paired)
     readonly property int pairedCount: connectModel.devices.filter(x => x.paired).length
     function glyphFor(type) { return type === "phone" ? "phone" : type === "tablet" ? "tablet" : "desktop" }
@@ -55,10 +56,11 @@ Item {
             Text {
                 width: parent.width; textFormat: Text.PlainText; elide: Text.ElideRight
                 horizontalAlignment: Text.AlignLeft
-                text: root.d.pairRequestedByPeer ? I18n.tr("Pairing request")
+                text: root.inCall ? (connectModel.call.event === "ringing" ? I18n.tr("Incoming call") : connectModel.call.event === "talking" ? I18n.tr("In a call") : I18n.tr("Missed call"))
+                    : root.d.pairRequestedByPeer ? I18n.tr("Pairing request")
                     : root.online ? I18n.f("Connected · %1", root.linkName(root.d.link)) : I18n.tr("Offline")
                 font { family: Theme.font; pixelSize: Tokens.type.label }
-                color: root.d.pairRequestedByPeer ? Theme.accent : Theme.subtext
+                color: root.d.pairRequestedByPeer || (root.inCall && connectModel.call.event !== "missedCall") ? Theme.accent : Theme.subtext
             }
         }
         Row {

@@ -78,10 +78,15 @@ Item {
     property var activity: ({})
     property string activityFrom: "hidden"
     function showActivity(a) {
-        if (mode !== "hidden" && mode !== "bar") return
+        // the same activity again (a call going from ringing to talking) just updates the card
+        const same = mode === "activity" && a.key !== undefined && activity.key === a.key
+        if (!same && mode !== "hidden" && mode !== "bar") return
         activity = a
-        activityFrom = mode
-        setMode("activity")
+        if (!same) {
+            activityFrom = mode
+            setMode("activity")
+        }
+        activityTimer.interval = a.duration || 9000
         activityTimer.restart()
     }
     function dismissActivity() {
@@ -95,6 +100,24 @@ Item {
         if (what === "open" && a.url) connectModel.openReceived(a.url)
         else if (what === "folder" && a.url) connectModel.showReceived(a.url)
         else if (what === "tap" && a.panel) openPanel(a.panel)
+    }
+    Connections {
+        target: connectModel
+        // The daemon sends no "call ended": each state has its own time on screen, and the Connect card shows it too.
+        function onCallEvent(device, event, who) {
+            if (event === "ringing")
+                root.showActivity({ key: "call", glyph: "phone", accent: true, pulse: true, title: I18n.f("Incoming call · %1", device), text: who, panel: "connect", duration: 45000,
+                                    buttons: [{ id: "dismiss", label: I18n.tr("Dismiss"), kind: "tonal" }] })
+            else if (event === "talking")
+                root.showActivity({ key: "call", glyph: "phone", accent: true, title: I18n.f("In a call · %1", device), text: who, panel: "connect", duration: 6000,
+                                    buttons: [{ id: "dismiss", label: I18n.tr("Dismiss"), kind: "tonal" }] })
+            else
+                root.showActivity({ key: "call", glyph: "phone", title: I18n.f("Missed call · %1", device), text: who, panel: "connect:notifications", duration: 12000,
+                                    buttons: [{ id: "dismiss", label: I18n.tr("Dismiss"), kind: "tonal" }] })
+        }
+        function onLowBattery(device, percent) {
+            root.showActivity({ glyph: "bolt", title: I18n.tr("Phone battery low"), text: I18n.f("%1 · %2%", device, percent), panel: "connect", duration: 8000 })
+        }
     }
     Connections {
         target: connectModel

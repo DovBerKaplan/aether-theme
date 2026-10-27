@@ -51,6 +51,10 @@ var dict = {
     "Drop files here to send them": "גרור לכאן קבצים כדי לשלוח", "Choose files…": "בחר קבצים…", "Browse phone files": "עיון בקבצי הטלפון",
     "Open in your file manager": "פתוח במנהל הקבצים", "Opens in your file manager": "נפתח במנהל הקבצים", "Received": "התקבלו", "Send, receive and browse": "שליחה, קבלה ועיון",
     "File received from %1": "התקבל קובץ מ‑%1", "Open file": "פתח קובץ", "Show in folder": "הצג בתיקייה",
+    "Incoming call": "שיחה נכנסת", "In a call": "בשיחה", "Missed call": "שיחה שלא נענתה", "Incoming call · %1": "שיחה נכנסת · %1", "In a call · %1": "בשיחה · %1",
+    "Missed call · %1": "שיחה שלא נענתה · %1", "Dismiss": "סגור", "Phone battery low": "סוללת הטלפון נמוכה", "%1 · %2%": "%1 · %2%",
+    "Phone media": "מדיה בטלפון", "Control what your phone plays": "שלוט במה שהטלפון מנגן", "Nothing is playing on %1": "שום דבר לא מושמע ב‑%1",
+    "Alert when the phone battery is low": "התראה כשסוללת הטלפון נמוכה", "At 20 % or less, at most every 6 hours": "ב‑20% ומטה, לכל היותר אחת ל‑6 שעות",
     // Bluetooth
     "Device": "מכשיר", "Device details": "פרטי המכשיר", "No Bluetooth adapter": "אין מתאם Bluetooth",
     "Visible as “%1” while this panel is open": "גלוי בשם “%1” כל עוד החלון פתוח", "Bluetooth settings ↗": "הגדרות Bluetooth ↗",

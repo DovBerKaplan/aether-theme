@@ -20,6 +20,13 @@ Item {
         anchors { left: parent.left; leftMargin: Tokens.space.xl; verticalCenter: parent.verticalCenter; verticalCenterOffset: -2 }
         width: 48; height: 48; radius: 24
         color: Theme.chip
+        border { width: root.a.accent ? 2 : 0; color: Theme.accent }
+        SequentialAnimation on scale {      // a ringing call breathes
+            running: root.a.pulse === true
+            loops: Animation.Infinite
+            NumberAnimation { to: 1.08; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
+            NumberAnimation { to: 1.0; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
+        }
         Glyph { anchors.centerIn: parent; name: root.a.glyph || "phone"; size: 22 }
     }
     Column {
@@ -53,7 +60,7 @@ Item {
                 Button {      // a labelled button; the first one is the main action
                     id: txt
                     visible: !parent.iconOnly
-                    kind: parent.index === 0 ? "filled" : "tonal"
+                    kind: parent.modelData.kind || (parent.index === 0 ? "filled" : "tonal")
                     text: parent.modelData.label || ""
                     onClicked: root.activated(parent.modelData.id)
                 }
