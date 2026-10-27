@@ -27,12 +27,27 @@ Item {
     readonly property real screenH: island.screenHeight
     readonly property bool big: mode === "large" || mode === "expanded" || mode === "panel"
     // Media mode: the whole bar becomes YouTube Music - nothing above the app but a
-    // thin uniform glass bezel. Leaving: click outside, wheel up, Win+N, or picking a
-    // song (auto-collapses). One set of numbers feeds surface, input mask and placement.
+    // thin uniform glass bezel. It closes only deliberately: click outside, the handle,
+    // wheel up, Win+N, or another window taking focus - never on pointer-leave.
+    // One set of numbers feeds surface, input mask and the app's seat.
     readonly property int mediaAppW: Math.floor(Math.min(800, screenW - 160))
     readonly property int mediaAppH: Math.floor(Math.min(600, screenH - 220))
     readonly property int mediaBezel: 20      // top + sides
-    property bool mediaClosing: false         // the glass is folding over the app window
+    // The app window never moves: it sits still in the seat (the aether-media KWin script
+    // holds it there) while the glass does all the motion. The seat opens as solid frosted
+    // glass and clears only once the window is really there AND the spring has landed;
+    // leaving, the frost covers the app before anything folds.
+    property bool mediaReady: false           // the script reported the window seated and visible
+    property bool mediaSeated: false          // the glass reached the media stop since it opened
+    property bool mediaCovered: true          // the app window is hidden (no hole needed)
+    property string mediaPending: ""          // where to go once the frost has covered the app
+    property bool mediaCovering: false
+    readonly property bool mediaSettled: mode === "media" && interactiveBottom < 0 && !bottomSpring.running && !widthSpring.running
+        && Math.abs(surface.notchBottom - shapes.media.nb) < 4 && Math.abs(surface.notchW - shapes.media.nw) < 4
+    onMediaSettledChanged: if (mediaSettled) mediaSeated = true
+    readonly property bool mediaClear: mode === "media" && mediaReady && mediaSeated && !dragging && !mediaCovering
+    property real frost: mediaClear ? 0 : 1
+    Behavior on frost { NumberAnimation { duration: root.mediaClear ? 260 : 140; easing.type: Easing.OutCubic } }
     readonly property int mediaGrip: 34       // bottom: room for the pull handle
     property var shapes: ({
         // sw = strip width, sh = strip height, nw = notch width, nb = notch bottom, r = notch corner radius
@@ -159,21 +174,59 @@ Item {
         }
     }
 
+    // Frost first, then hide the app, then fold: by the time the glass moves, the seat is
+    // solid glass with nothing behind it.
+    function coverMedia(then) {
+        mediaPending = then
+        if (mediaCovering) return
+        mediaCovering = true
+        coverTimer.restart()
+    }
+    function seatMedia() {
+        mediaCovered = false
+        mediaReady = false
+        mediaSeated = mediaSettled
+        island.showMediaWindow((screenW - mediaAppW) / 2, mediaBezel, mediaAppW, mediaAppH)
+    }
     Timer {
-        id: mediaClosingTimer
-        interval: 1400
-        onTriggered: root.mediaClosing = false
+        id: coverTimer
+        interval: 150   // the frost's 140 ms rise
+        onTriggered: {
+            island.hideMediaWindow()
+            root.mediaCovered = true
+            root.mediaReady = false
+            root.mediaCovering = false
+            const next = root.mediaPending
+            root.mediaPending = ""
+            if (next !== "") root.setMode(next)
+        }
+    }
+    Connections {
+        target: island
+        function onMediaWindowReady() { if (root.mode === "media" && !root.mediaCovered) root.mediaReady = true }
+        // Nothing to seat: the app isn't running, or sits hidden in the tray. Launching it
+        // starts it - or, as a second instance, makes it map its window, which the script
+        // then seats and reports ready.
+        function onMediaWindowMissing() { if (root.mode === "media") media.launch() }
+        function onMediaFocusLost() { if (root.mode === "media" && !root.dragging) root.setMode("bar") }
     }
 
     // ---- state changes ---------------------------------------------------------------
     function setMode(next) {
         if (next === "toggle") next = (root.big || mode === "media") ? "bar" : "large"
+        if (mediaCovering) {
+            // Already frosting over to leave: a second request only changes the destination.
+            if (next === "media") { coverTimer.stop(); mediaCovering = false; mediaPending = "" }
+            else mediaPending = next
+            return
+        }
         if (next === mode) return
         const wasMedia = mode === "media"
         const wasBig = root.big
-        if (wasMedia && next !== "media") {
-            mediaClosing = true
-            mediaClosingTimer.restart()
+        // The app window exists only inside the media panel - never as a floating window.
+        if (wasMedia && next !== "media" && !mediaCovered) {
+            coverMedia(next)
+            return
         }
         mode = next
         island.setKeyboard(root.big)
@@ -181,15 +234,7 @@ Item {
         if (next !== "hidden") now = new Date()
         // Fully (or mostly) closed: reset the panel so the next open starts fresh.
         if (next === "bar" || next === "hidden") largeContent.resetUi()
-        // The app window exists only inside the media panel - never as a floating window.
-        if (wasMedia && next !== "media") island.hideMediaWindow()
-        if (next === "media") {
-            media.launch()
-            island.showMediaWindow((screenW - mediaAppW) / 2, mediaBezel, mediaAppW, mediaAppH)
-            // The leave countdown keys off pointer transitions; if the pointer is
-            // already elsewhere when the view opens, start it right away.
-            if (!pointerIn && !dragging) leaveTimer.restart()
-        }
+        if (next === "media") seatMedia()
         applyWindow()
     }
     Connections {
@@ -297,15 +342,17 @@ Item {
 
     // ---- the media panel's own pull ----------------------------------------------------
     // The handle at the panel's bottom edge folds the app back into the regular (large)
-    // island: the window hides with the first move, the glass then tracks the pointer
-    // between the media and large stops and snaps on release, velocity permitting.
+    // island: the frost covers the app with the first move (the glass holds still until
+    // it has), then tracks the pointer between the media and large stops and snaps on
+    // release, velocity permitting.
     function mediaPullBegin() {
         pullBegin()
-        island.hideMediaWindow()
+        if (!mediaCovered) coverMedia("")
     }
     function mediaPullMove(dy, vy) {
         pullDy = dy
         pullVy = vy
+        if (!mediaCovered) { interactiveBottom = shapes.media.nb; interactiveW = shapes.media.nw; interactiveR = 30; return }
         const h = Math.max(shapes.large.nb, Math.min(shapes.media.nb, pullFrom + dy))
         interactiveBottom = h
         const t = Math.max(0, Math.min(1, (h - shapes.large.nb) / Math.max(1, shapes.media.nb - shapes.large.nb)))
@@ -316,9 +363,14 @@ Item {
         const up = pullDy < -50 || pullVy < -300
         if (up) {
             setMode("large")
-        } else {
-            // settled back into media mode: seat the app window in the panel again
-            island.showMediaWindow((screenW - mediaAppW) / 2, mediaBezel, mediaAppW, mediaAppH)
+        } else if (mediaCovering) {
+            // Let go before the frost finished covering: nothing was hidden yet, keep it.
+            coverTimer.stop()
+            mediaCovering = false
+            mediaPending = ""
+        } else if (mediaCovered) {
+            // Settled back into media mode: seat the app window in the panel again.
+            seatMedia()
             applyWindow()
         }
         dragging = false
@@ -353,7 +405,7 @@ Item {
             if (mode === "hidden") peekTimer.restart()
         } else {
             peekTimer.stop()
-            if (mode === "bar" || mode === "media") leaveTimer.restart()
+            if (mode === "bar") leaveTimer.restart()
         }
     }
     // Reveal needs a deliberate touch (240 ms): a fast swipe across the top edge on the
@@ -364,16 +416,10 @@ Item {
         // The revealed tab lingers 1.5 s after the pointer leaves its mask: travelling
         // from the top edge down to the tab briefly exits the input area, and a short
         // timeout made the tab collapse and re-open - the flicker.
-        interval: root.big || root.mode === "media" ? 2000 : 1500
+        interval: root.big ? 2000 : 1500
         onTriggered: {
             if (root.mode === "media") {
-                    // The media view is a regular bar: the pointer leaving folds it -
-                // unless the user is actively working inside the app (typing a search).
-                if (root.appName.toLowerCase().indexOf("youtube") >= 0) {
-                    leaveTimer.restart()
-                    return
-                }
-                root.setMode("bar")
+                // never closes by itself: the user is working inside the app
             } else if (root.mode === "panel") {
                 // never closes by itself: someone may be typing a password
             } else if (root.big) {
@@ -418,10 +464,11 @@ Item {
         shoulder: root.shoulder
         holeX: (root.width - root.mediaAppW) / 2
         holeY: root.mediaBezel
-        // The hole closes with the first pull of the handle: the glass must be solid
-        // while it shrinks from the media height towards the regular island.
-        holeW: root.mode === "media" && !root.dragging ? root.mediaAppW : 0
-        holeH: root.mode === "media" && !root.dragging ? root.mediaAppH : 0
+        // The seat exists as long as the app window may be behind it; frost fills it while
+        // the app loads or is being covered, so the glass never shrinks with a hole in it.
+        holeW: root.mode === "media" && !root.mediaCovered ? root.mediaAppW : 0
+        holeH: root.mode === "media" && !root.mediaCovered ? root.mediaAppH : 0
+        holeFrost: root.frost
         opacity: root.mode === "hidden" ? 0 : 1
         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
         Behavior on stripW { SpringAnimation { spring: 3.0; damping: 0.34; epsilon: 0.5 } }
@@ -437,11 +484,11 @@ Item {
             // travel - from the large island that dives off-screen and reads as a
             // flicker. Damp harder while far above the target; the last stretch keeps
             // the wobble.
-            SpringAnimation { spring: 3.6; damping: shapes[mode].nb < surface.notchBottom - 200 ? 0.36 : 0.22; epsilon: 3.0 }
+            SpringAnimation { id: bottomSpring; spring: 3.6; damping: shapes[mode].nb < surface.notchBottom - 200 ? 0.36 : 0.22; epsilon: 3.0 }
         }
         // Only the media panel springs its own width/corners; in the curtain modes they
         // ride on the height (see the bindings above) and must not animate separately.
-        Behavior on notchW { enabled: root.mediaWidth && !root.dragging; SpringAnimation { spring: 3.6; damping: 0.22; epsilon: 3.0 } }
+        Behavior on notchW { enabled: root.mediaWidth && !root.dragging; SpringAnimation { id: widthSpring; spring: 3.6; damping: 0.22; epsilon: 3.0 } }
         Behavior on cornerR { enabled: root.mediaWidth && !root.dragging; SpringAnimation { spring: 3.6; damping: 0.22; epsilon: 3.0 } }
         onSegmentsChanged: root.syncLayout()
         onOpacityChanged: root.syncLayout()
@@ -460,7 +507,7 @@ Item {
         // Leaving the notch while the island is open starts the close countdown.
         // Entering it again cancels; opening with the pointer elsewhere leaves it alone.
         onHoveredChanged: {
-            if ((root.big || root.mode === "media") && !root.dragging)
+            if (root.big && !root.dragging)
                 hovered ? leaveTimer.stop() : leaveTimer.restart()
         }
         // Clicking the tab (outside its buttons) opens the large island; in media mode
@@ -472,7 +519,12 @@ Item {
                 const p = tabRow.mapFromItem(notchArea, point.position)
                 if (tabRow.visible && tabRow.childAt(p.x, p.y)) return
                 if (root.mode === "bar") root.setMode("large")
-                else if (root.mode === "media") root.setMode("bar")
+                // The bezel folds the media view; the seat itself (frosted while the app
+                // loads) is not a close target.
+                else if (root.mode === "media" && !(surface.hasHole
+                         && point.position.x + notchArea.x >= surface.holeX && point.position.x + notchArea.x <= surface.holeX + surface.holeW
+                         && point.position.y >= surface.holeY && point.position.y <= surface.holeY + surface.holeH))
+                    root.setMode("bar")
             }
         }
         DragHandler {
@@ -587,7 +639,9 @@ Item {
         timer: timerState
         now: root.now
         appName: root.appName
-        opacity: Math.max(0, Math.min(1, (root.openT - 0.2) / 0.5)) * surface.opacity * (1 - root.panelSlide)
+        // Folding from the media panel straight to the tab passes through the large
+        // island's height: its content must not flash up on the way.
+        opacity: (root.mediaWidth && !root.big ? 0 : Math.max(0, Math.min(1, (root.openT - 0.2) / 0.5))) * surface.opacity * (1 - root.panelSlide)
         // Stay mounted while the curtain moves: the handle must keep its grab even after
         // its visuals fade out (the island passing below the fade band while dragged shut).
         // Hidden entirely in media mode - the app window owns the panel's middle.
@@ -619,6 +673,27 @@ Item {
         onPullEnded: root.pullEnd()
     }
 
+    // The frosted seat while the app is on its way (cold start, or the window mapping):
+    // its icon breathes in the middle until the window reports ready.
+    Image {
+        id: mediaLoading
+        readonly property bool waiting: root.mode === "media" && !root.mediaReady && !root.mediaCovering
+        source: media.playerIcon !== "" ? "file://" + media.playerIcon : ""
+        visible: source !== "" && opacity > 0
+        width: 56; height: 56
+        sourceSize: Qt.size(112, 112)
+        x: surface.holeX + (root.mediaAppW - width) / 2
+        y: surface.holeY + (root.mediaAppH - height) / 2
+        opacity: waiting && root.mediaSeated ? 0.55 * root.frost : 0
+        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base } }
+        SequentialAnimation on scale {
+            running: mediaLoading.visible
+            loops: Animation.Infinite
+            NumberAnimation { to: 1.06; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
+            NumberAnimation { to: 1.0; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
+        }
+    }
+
     // Media panel handle: pull up (or click) to fold the app back into the regular island.
     Item {
         id: mediaHandle
@@ -648,7 +723,7 @@ Item {
     // no polling timer, so an idle island costs nothing.
     property string lastKey: ""
     function syncLayout() {
-        const key = [surface.sw, surface.stripH, surface.notchW, surface.notchBottom, surface.rb, surface.hasHole, surface.opacity > 0.05, root.mode, root.width]
+        const key = [surface.sw, surface.stripH, surface.notchW, surface.notchBottom, surface.rb, surface.hasHole, root.mediaClear, surface.opacity > 0.05, root.mode, root.width]
                     .map(function (v) { return typeof v === "number" ? Math.round(v) : v }).join("|")
         if (key === lastKey) return
         lastKey = key
@@ -661,18 +736,13 @@ Item {
         // edge keeps the tab around instead of oscillating between hidden and bar.
         // Media mode takes input over the whole window too (minus the hole): a click
         // anywhere outside the panel must reach the island's close area, not fall
-        // through to the desktop.
+        // through to the desktop. The seat is cut out of blur and input only once it is
+        // clear: frosted, it is glass like the rest and takes the pointer itself.
         island.setLayout(visible ? surface.segments : [], root.big || root.mode === "media",
                          Qt.rect(0, 0, root.width, 2),
-                         surface.hasHole ? Qt.rect(surface.holeX, surface.holeY, surface.holeW, surface.holeH) : Qt.rect(0, 0, 0, 0))
-        // The app window rides the glass's spring in both axes while the media
-        // panel opens or folds - one shape, one motion.
-        if (root.mode === "media" || (root.mediaClosing && (surface.notchBottom > 46 || surface.notchW > 250))) {
-            island.syncMediaWindow(Math.round((root.width - surface.notchW) / 2),
-                                   Math.round(surface.notchW),
-                                   Math.round(surface.notchBottom))
-        }
+                         surface.hasHole && root.mediaClear ? Qt.rect(surface.holeX, surface.holeY, surface.holeW, surface.holeH) : Qt.rect(0, 0, 0, 0))
     }
+    onMediaClearChanged: syncLayout()
     onModeChanged: {
         syncLayout()
         if (mode === "media") mediaWidth = true

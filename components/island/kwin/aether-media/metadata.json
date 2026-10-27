@@ -1,0 +1,12 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [{ "Name": "Aether" }],
+        "Description": "Keeps the YouTube Music (Pear Desktop) window inside the Aether island",
+        "EnabledByDefault": false,
+        "Id": "aether-media",
+        "License": "GPL",
+        "Name": "Aether Media Seat"
+    },
+    "X-Plasma-API": "javascript"
+}

@@ -9,6 +9,25 @@ rm -f "$HOME/.config/systemd/user/aether-island.service" "$HOME/.config/systemd/
       "$HOME/.local/bin/aether-island" "$HOME/.local/bin/aether-toasts"
 rm -rf "$HOME/.local/share/aether-island" "$HOME/.local/share/aether-toasts"
 systemctl --user daemon-reload
+# The YouTube Music seat: KWin script and window rule
+qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript aether-media >/dev/null 2>&1 || true
+rm -rf "$HOME/.local/share/kwin/scripts/aether-media"
+kwriteconfig6 --file kwinrc --group Plugins --key aether-mediaEnabled --delete 2>/dev/null || true
+python3 - "$HOME/.config/kwinrulesrc" <<'PY' || true
+import configparser, sys
+path = sys.argv[1]
+cp = configparser.ConfigParser(interpolation=None, delimiters=("=",))
+cp.optionxform = str
+cp.read(path)
+if cp.has_section("aether-media"):
+    cp.remove_section("aether-media")
+if cp.has_option("General", "Order"):
+    order = [r for r in cp.get("General", "Order").split(",") if r and r != "aether-media"]
+    cp.set("General", "Order", ",".join(order))
+with open(path, "w") as f:
+    cp.write(f, space_around_delimiters=False)
+PY
+qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 # Global menu back
 kwriteconfig6 --file kded6rc --group Module-appmenu --key autoload --delete 2>/dev/null || true
 qdbus6 org.kde.kded6 /kded org.kde.kded6.loadModule appmenu >/dev/null 2>&1 || true

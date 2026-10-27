@@ -20,6 +20,7 @@ target_link_libraries(aether-island PRIVATE
 install(TARGETS aether-island RUNTIME DESTINATION bin)
 target_compile_definitions(aether-island PRIVATE
     AETHER_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
-    AETHER_SHARED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../shared")
-install(DIRECTORY qml DESTINATION share/aether-island)
+    AETHER_SHARED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../shared"
+    AETHER_KWIN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/kwin")
+install(DIRECTORY qml kwin DESTINATION share/aether-island)
 install(DIRECTORY ../shared/AetherShared DESTINATION share/aether/shared)

@@ -86,42 +86,64 @@ Item {
 
         Rectangle {
             id: art
-            width: 72; height: 72; radius: Tokens.radius.xl
+            width: 72; height: 72; radius: Tokens.radius.md
             color: Theme.chip
-            border.width: 1
-            border.color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
-            clip: true
             opacity: artTap.pressed ? 0.82 : 1
             Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
             // The poster is the one way into the media view - it should feel alive.
             scale: artHover.hovered ? 1.04 : 1
             Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.fast; easing.type: Tokens.motion.easing.enter } }
 
-            Image {
-                id: slotA
+            // clip only cuts the square bounds; the poster is masked to the rounded corners.
+            Rectangle {
+                id: artMask
                 anchors.fill: parent
-                source: root.artA
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
-                opacity: root.showA && status === Image.Ready ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.enter } }
-                onStatusChanged: if (status === Image.Ready && root.lastRequested === root.artA) {
-                    root.showA = true
-                    root.activeArtUrl = root.artA
+                radius: art.radius
+                visible: false
+                layer.enabled: true
+            }
+            Item {
+                anchors.fill: parent
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    maskEnabled: true
+                    maskSource: artMask
+                    maskThresholdMin: 0.5
+                    maskSpreadAtMin: 1.0
+                }
+                Image {
+                    id: slotA
+                    anchors.fill: parent
+                    source: root.artA
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    opacity: root.showA && status === Image.Ready ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.enter } }
+                    onStatusChanged: if (status === Image.Ready && root.lastRequested === root.artA) {
+                        root.showA = true
+                        root.activeArtUrl = root.artA
+                    }
+                }
+                Image {
+                    id: slotB
+                    anchors.fill: parent
+                    source: root.artB
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    opacity: !root.showA && status === Image.Ready ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.enter } }
+                    onStatusChanged: if (status === Image.Ready && root.lastRequested === root.artB) {
+                        root.showA = false
+                        root.activeArtUrl = root.artB
+                    }
                 }
             }
-            Image {
-                id: slotB
+            Rectangle {                         // the rim, above the artwork
                 anchors.fill: parent
-                source: root.artB
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
-                opacity: !root.showA && status === Image.Ready ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.enter } }
-                onStatusChanged: if (status === Image.Ready && root.lastRequested === root.artB) {
-                    root.showA = false
-                    root.activeArtUrl = root.artB
-                }
+                radius: art.radius
+                color: "transparent"
+                border.width: 1
+                border.color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
             }
             EqBars {                            // no artwork: the eq is the artwork
                 anchors.centerIn: parent
