@@ -499,7 +499,7 @@ Item {
         Row {
             id: tabRow
             anchors.horizontalCenter: parent.horizontalCenter
-            y: (parent.height - height) / 2 + 1
+            y: (parent.height - height) / 2 - 2
             spacing: 12
             opacity: (root.mode === "media" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
             visible: opacity > 0
@@ -539,6 +539,16 @@ Item {
                 TapHandler { id: langTap; onTapped: tiles.language = I18n.next() }
             }
             NotchButton { glyph: "power"; onTapped: root.openPanel("power") }
+        }
+        // The pull handle, also on the small bar: it fades out as the curtain opens (the large
+        // island's own handle takes over at the bottom edge). Dragging or tapping the tab - this
+        // included - is handled by the gestures above.
+        Rectangle {
+            visible: opacity > 0
+            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 4 }
+            width: 32; height: 4; radius: Tokens.radius.hair
+            color: Theme.subtext
+            opacity: 0.7 * (root.mode === "media" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
         }
         WheelHandler {
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
