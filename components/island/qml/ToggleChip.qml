@@ -28,7 +28,7 @@ Item {
     }
     Item {
         id: iconZone
-        x: 6; width: 36; height: parent.height
+        anchors.left: parent.left; anchors.leftMargin: 6; width: 36; height: parent.height
         Rectangle {
             id: circle
             anchors.centerIn: parent
@@ -70,7 +70,7 @@ Item {
             rightPadding: Tokens.space.sm
             Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
             anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-            text: "›"
+            text: I18n.rtl ? "‹" : "›"
             font { family: Theme.font; pixelSize: Tokens.type.title }
             color: Theme.subtext
         }

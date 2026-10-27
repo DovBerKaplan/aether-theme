@@ -14,12 +14,12 @@ PanelScaffold {
     property date today: new Date()
     property int year: today.getFullYear()
     property int month: today.getMonth()
-    readonly property int first: Qt.locale().firstDayOfWeek % 7   // Qt: 1 Mon..7 Sun -> 0 Sun..6 Sat
+    readonly property int first: I18n.locale.firstDayOfWeek % 7   // Qt: 1 Mon..7 Sun -> 0 Sun..6 Sat
     readonly property int lead: (new Date(year, month, 1).getDay() - first + 7) % 7
     readonly property int days: new Date(year, month + 1, 0).getDate()
     function step(d) { const n = new Date(year, month + d, 1); year = n.getFullYear(); month = n.getMonth() }
 
-    title: Qt.formatDate(today, "dddd, MMMM d")
+    title: I18n.lang === "he" ? I18n.locale.toString(today, "dddd, d MMMM") : Qt.formatDate(today, "dddd, MMMM d")
     readonly property bool heb: tiles.hebrewDates
     // Hebrew months this Gregorian month touches, e.g. "חשוון – כסלו תשפ״ז"
     readonly property string hebMonth: {
@@ -32,7 +32,7 @@ PanelScaffold {
     footer: [
         Item {
             anchors.fill: parent
-            Button { kind: "text"; text: "Hebrew dates: " + (root.heb ? "On" : "Off"); x: 14; anchors.verticalCenter: parent.verticalCenter
+            Button { kind: "text"; text: I18n.f("Hebrew dates: %1", root.heb ? I18n.tr("On") : I18n.tr("Off")); anchors { left: parent.left; leftMargin: 14; verticalCenter: parent.verticalCenter }
                 onClicked: tiles.hebrewDates = !tiles.hebrewDates }
         }
     ]
@@ -45,7 +45,7 @@ PanelScaffold {
             width: parent.width; height: 40
             Item {
                 width: 40; height: 40
-                Text { anchors.centerIn: parent; text: "‹"; font { family: Theme.font; pixelSize: Tokens.type.heading } color: Theme.text }
+                Text { anchors.centerIn: parent; text: I18n.rtl ? "›" : "‹"; font { family: Theme.font; pixelSize: Tokens.type.heading } color: Theme.text }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: root.step(-1) }
             }
@@ -55,7 +55,7 @@ PanelScaffold {
                 Text {
                     width: parent.width; height: root.heb ? 22 : 40
                     horizontalAlignment: Text.AlignHCenter; verticalAlignment: root.heb ? Text.AlignBottom : Text.AlignVCenter
-                    text: Qt.locale().monthName(root.month) + " " + root.year
+                    text: I18n.locale.monthName(root.month) + " " + root.year
                     font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.DemiBold }
                     color: Theme.text
                 }
@@ -72,7 +72,7 @@ PanelScaffold {
             }
             Item {
                 width: 40; height: 40
-                Text { anchors.centerIn: parent; text: "›"; font { family: Theme.font; pixelSize: Tokens.type.heading } color: Theme.text }
+                Text { anchors.centerIn: parent; text: I18n.rtl ? "‹" : "›"; font { family: Theme.font; pixelSize: Tokens.type.heading } color: Theme.text }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: root.step(1) }
             }
@@ -88,7 +88,7 @@ PanelScaffold {
                     required property int index
                     width: grid.cell; height: 28
                     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                    text: Qt.locale().dayName((root.first + index) % 7, Locale.NarrowFormat)
+                    text: I18n.locale.dayName((root.first + index) % 7, Locale.NarrowFormat)
                     font { family: Theme.font; pixelSize: Tokens.type.caption; weight: Font.Medium }
                     color: Theme.subtext
                 }

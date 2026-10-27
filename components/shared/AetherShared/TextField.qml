@@ -69,7 +69,7 @@ Item {
             id: reveal
             visible: root.password
             anchors { right: parent.right; rightMargin: Tokens.space.md; verticalCenter: parent.verticalCenter }
-            text: root.revealed ? "Hide" : "Show"
+            text: root.revealed ? I18n.tr("Hide") : I18n.tr("Show")
             font { family: Theme.font; pixelSize: Tokens.type.caption; weight: Font.Medium }
             color: Theme.subtext
             HoverHandler { cursorShape: Qt.PointingHandCursor }

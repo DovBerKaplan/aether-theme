@@ -71,7 +71,7 @@ Item {
             anchors { left: parent.left; verticalCenter: parent.verticalCenter; verticalCenterOffset: 4 }
             TapHandler { onTapped: root.panelRequested("calendar") }
             HoverHandler { cursorShape: Qt.PointingHandCursor }
-            text: Qt.formatDate(root.now, "dddd, MMMM d")
+            text: I18n.lang === "he" ? I18n.locale.toString(root.now, "dddd, d MMMM") : Qt.formatDate(root.now, "dddd, MMMM d")
             font { family: Theme.font; pixelSize: Tokens.type.title; weight: Font.DemiBold }
             color: Theme.text
         }
@@ -131,7 +131,7 @@ Item {
                     font { family: Theme.font; pixelSize: Tokens.type.label; weight: Font.Medium }
                     color: Theme.subtext
                 }
-                BatteryGlyph { percent: system.batteryPercent; charging: system.charging; anchors.verticalCenter: parent.verticalCenter }
+                BatteryGlyph { LayoutMirroring.enabled: false; percent: system.batteryPercent; charging: system.charging; anchors.verticalCenter: parent.verticalCenter }
             }
             Text {
                 text: Qt.formatTime(root.now, "H:mm")
@@ -150,7 +150,12 @@ Item {
 
         // The song card is permanent - playing, paused or resting (no player yet);
         // it is also the way into the media view (the app inside the bar).
-        MediaCard { width: parent.width; onSearchRequested: root.openMediaSearch() }
+        MediaCard {
+            width: parent.width
+            LayoutMirroring.enabled: false      // player controls and the progress bar keep their direction
+            LayoutMirroring.childrenInherit: true
+            onSearchRequested: root.openMediaSearch()
+        }
 
         TileGrid {
             id: tileGrid

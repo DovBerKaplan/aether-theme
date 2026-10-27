@@ -26,7 +26,7 @@ Item {
         border { width: root.activeFocus ? 2 : 0; color: Theme.accent }
     }
     Rectangle {
-        x: 3 + root.currentIndex * root.segW; y: 3
+        x: I18n.rtl ? root.width - 3 - (root.currentIndex + 1) * root.segW : 3 + root.currentIndex * root.segW; y: 3
         width: root.segW; height: parent.height - 6; radius: height / 2
         color: Theme.chip
         border { width: 1; color: Theme.rim }

@@ -22,19 +22,19 @@ PanelScaffold {
     property string errPath
     property string errText
 
-    title: onDetail ? (detailDev ? detailDev.name : "Device") : "Bluetooth"
-    subtitle: onDetail ? "Device details"
-            : !bluetooth.available ? "No Bluetooth adapter"
-            : !bluetooth.powered ? "Off"
-            : connected.length > 0 ? connected[0].name + (connected.length > 1 ? " +" + (connected.length - 1) : "") + " connected"
-            : "Visible as “" + bluetooth.adapterName + "” while this panel is open"
+    title: onDetail ? (detailDev ? detailDev.name : I18n.tr("Device")) : I18n.tr("Bluetooth")
+    subtitle: onDetail ? I18n.tr("Device details")
+            : !bluetooth.available ? I18n.tr("No Bluetooth adapter")
+            : !bluetooth.powered ? I18n.tr("Off")
+            : connected.length > 0 ? I18n.f("%1 connected", connected[0].name + (connected.length > 1 ? " +" + (connected.length - 1) : ""))
+            : I18n.f("Visible as “%1” while this panel is open", bluetooth.adapterName)
     busy: bluetooth.discovering || bluetooth.busy.length > 0
     headerTrailing: [ Switch { visible: !root.onDetail && bluetooth.available; checked: bluetooth.powered; onToggled: (c) => bluetooth.setPowered(c) } ]
     footerHeight: 44
     footer: [
         Item {
             anchors.fill: parent
-            Button { kind: "text"; text: "Bluetooth settings ↗"; x: 14; anchors.verticalCenter: parent.verticalCenter
+            Button { kind: "text"; text: I18n.tr("Bluetooth settings ↗"); anchors { left: parent.left; leftMargin: 14; verticalCenter: parent.verticalCenter }
                 onClicked: { bluetooth.openSettings(); root.closeRequested() } }
         }
     ]
@@ -48,10 +48,10 @@ PanelScaffold {
     Timer { id: errTimer; interval: 6000; onTriggered: root.errPath = "" }
 
     function stateOf(d) {
-        if (errPath === d.path) return errText
-        if (bluetooth.busy === d.path) return d.paired ? "Connecting…" : "Pairing…"
-        if (d.connected) return d.battery >= 0 ? "Battery " + d.battery + "%" : "Connected"
-        return d.paired ? "Not connected" : "Tap to pair"
+        if (errPath === d.path) return I18n.tr(errText)
+        if (bluetooth.busy === d.path) return d.paired ? I18n.tr("Connecting…") : I18n.tr("Pairing…")
+        if (d.connected) return d.battery >= 0 ? I18n.f("Battery %1%", d.battery) : I18n.tr("Connected")
+        return d.paired ? I18n.tr("Not connected") : I18n.tr("Tap to pair")
     }
 
     Item {   // list page
@@ -72,12 +72,12 @@ PanelScaffold {
                     Glyph { anchors.horizontalCenter: parent.horizontalCenter; name: "bluetooth-off"; size: 32; color: Theme.subtext }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: bluetooth.available ? "Bluetooth is off" : "No Bluetooth adapter found"
+                        text: bluetooth.available ? I18n.tr("Bluetooth is off") : I18n.tr("No Bluetooth adapter found")
                         font { family: Theme.font; pixelSize: Tokens.type.body }
                         color: Theme.subtext
                     }
                     Button { visible: bluetooth.available; anchors.horizontalCenter: parent.horizontalCenter
-                        kind: "filled"; text: "Turn on"; onClicked: bluetooth.setPowered(true) }
+                        kind: "filled"; text: I18n.tr("Turn on"); onClicked: bluetooth.setPowered(true) }
                 }
             }
 
@@ -100,10 +100,10 @@ PanelScaffold {
                     spacing: Tokens.space.md
                     Text {
                         width: parent.width; wrapMode: Text.Wrap; textFormat: Text.PlainText
-                        text: pairCard.pkind === "confirm" ? "Confirm that " + pairCard.pname + " shows this code"
-                            : pairCard.pkind === "display" ? "Type " + pairCard.pcode + " on " + pairCard.pname + ", then press Enter"
-                            : pairCard.pkind === "authorize" ? pairCard.pname + " wants to connect"
-                            : "Enter the code for " + pairCard.pname
+                        text: pairCard.pkind === "confirm" ? I18n.f("Confirm that %1 shows this code", pairCard.pname)
+                            : pairCard.pkind === "display" ? I18n.f("Type %1 on %2, then press Enter", pairCard.pcode, pairCard.pname)
+                            : pairCard.pkind === "authorize" ? I18n.f("%1 wants to connect", pairCard.pname)
+                            : I18n.f("Enter the code for %1", pairCard.pname)
                         font { family: Theme.font; pixelSize: Tokens.type.body }
                         color: Theme.text
                     }
@@ -117,30 +117,30 @@ PanelScaffold {
                         id: pinField
                         visible: pairCard.pkind === "pin" || pairCard.pkind === "passkey"
                         width: parent.width
-                        placeholder: "Code"
+                        placeholder: I18n.tr("Code")
                         onAccepted: if (text.length > 0) bluetooth.answerPin(text)
                     }
                     Row {
                         spacing: Tokens.space.sm
                         Button { visible: pairCard.pkind !== "display"; kind: "filled"
-                            text: pairCard.pkind === "pin" || pairCard.pkind === "passkey" ? "Pair" : pairCard.pkind === "authorize" ? "Allow" : "Pair"
+                            text: pairCard.pkind === "pin" || pairCard.pkind === "passkey" ? I18n.tr("Pair") : pairCard.pkind === "authorize" ? I18n.tr("Allow") : I18n.tr("Pair")
                             onClicked: pinField.visible ? bluetooth.answerPin(pinField.text) : bluetooth.answerConfirm(true) }
-                        Button { kind: "text"; text: "Cancel"; onClicked: bluetooth.cancelPairing() }
+                        Button { kind: "text"; text: I18n.tr("Cancel"); onClicked: bluetooth.cancelPairing() }
                     }
                 }
             }
 
-            SectionLabel { visible: bluetooth.powered && root.connected.length > 0; width: parent.width; text: "Connected" }
+            SectionLabel { visible: bluetooth.powered && root.connected.length > 0; width: parent.width; text: I18n.tr("Connected") }
             Repeater { model: bluetooth.powered ? root.connected : []; delegate: devRow }
-            SectionLabel { visible: bluetooth.powered && root.saved.length > 0; width: parent.width; text: "Saved devices" }
+            SectionLabel { visible: bluetooth.powered && root.saved.length > 0; width: parent.width; text: I18n.tr("Saved devices") }
             Repeater { model: bluetooth.powered ? root.saved : []; delegate: devRow }
-            SectionLabel { visible: bluetooth.powered && root.nearby.length > 0; width: parent.width; text: "Pair new device" }
+            SectionLabel { visible: bluetooth.powered && root.nearby.length > 0; width: parent.width; text: I18n.tr("Pair new device") }
             Repeater { model: bluetooth.powered ? root.nearby : []; delegate: devRow }
             Text {
                 visible: bluetooth.powered && root.nearby.length === 0 && bluetooth.discovering
                 width: parent.width; height: 48
                 verticalAlignment: Text.AlignVCenter
-                text: "Looking for devices…"
+                text: I18n.tr("Looking for devices…")
                 font { family: Theme.font; pixelSize: Tokens.type.label }
                 color: Theme.subtext
             }
@@ -176,19 +176,19 @@ PanelScaffold {
             id: detailCol
             x: 22; width: parent.width - 44
             spacing: Tokens.space.xs
-            KeyValueRow { width: parent.width; key: "Status"; copyable: false
-                value: root.detailDev ? (root.detailDev.connected ? "Connected" : "Not connected") : "" }
-            KeyValueRow { visible: root.detailDev && root.detailDev.battery >= 0; width: parent.width; key: "Battery"; copyable: false
+            KeyValueRow { width: parent.width; key: I18n.tr("Status"); copyable: false
+                value: root.detailDev ? (root.detailDev.connected ? I18n.tr("Connected") : I18n.tr("Not connected")) : "" }
+            KeyValueRow { visible: root.detailDev && root.detailDev.battery >= 0; width: parent.width; key: I18n.tr("Battery"); copyable: false
                 value: root.detailDev ? root.detailDev.battery + " %" : "" }
-            KeyValueRow { width: parent.width; key: "Type"; copyable: false; value: root.detailDev ? root.detailDev.icon.replace("audio-", "").replace("input-", "") : "" }
-            KeyValueRow { width: parent.width; key: "Address"; value: root.detailDev ? root.detailDev.address : "" }
+            KeyValueRow { width: parent.width; key: I18n.tr("Type"); copyable: false; value: root.detailDev ? root.detailDev.icon.replace("audio-", "").replace("input-", "") : "" }
+            KeyValueRow { width: parent.width; key: I18n.tr("Address"); value: root.detailDev ? root.detailDev.address : "" }
             Item { width: 1; height: Tokens.space.sm }
             Row {
                 width: parent.width
                 spacing: Tokens.space.sm
-                TextField { id: renameField; width: parent.width - renameBtn.width - Tokens.space.sm; placeholder: "Name"
+                TextField { id: renameField; width: parent.width - renameBtn.width - Tokens.space.sm; placeholder: I18n.tr("Name")
                     onAccepted: renameBtn.clicked() }
-                Button { id: renameBtn; kind: "tonal"; text: "Rename"; anchors.verticalCenter: parent.verticalCenter
+                Button { id: renameBtn; kind: "tonal"; text: I18n.tr("Rename"); anchors.verticalCenter: parent.verticalCenter
                     enabled: renameField.text.trim().length > 0
                     onClicked: bluetooth.rename(root.detailPath, renameField.text) }
             }
@@ -197,7 +197,7 @@ PanelScaffold {
                 id: forgetBtn
                 property bool armed: false
                 kind: "negative"
-                text: armed ? "Tap again to forget" : "Forget device"
+                text: armed ? I18n.tr("Tap again to forget") : I18n.tr("Forget device")
                 onClicked: {
                     if (!armed) { armed = true; disarm.restart(); return }
                     bluetooth.forget(root.detailPath)

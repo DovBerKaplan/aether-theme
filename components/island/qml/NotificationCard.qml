@@ -18,8 +18,8 @@ Item {
 
     function ago() {
         const s = Math.max(0, (root.now.getTime() - root.ts) / 1000)
-        if (s < 60) return "now"
-        if (s < 3600) return Math.floor(s / 60) + "m"
+        if (s < 60) return I18n.tr("now")
+        if (s < 3600) return I18n.f("%1m", Math.floor(s / 60))
         if (s < 86400) return Math.floor(s / 3600) + "h"
         return Math.floor(s / 86400) + "d"
     }
@@ -34,7 +34,7 @@ Item {
 
     Rectangle {
         id: appIcon
-        x: 12; anchors.verticalCenter: parent.verticalCenter
+        anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
         width: 38; height: 38; radius: Tokens.radius.md
         color: Theme.chip
         clip: true
@@ -89,7 +89,7 @@ Item {
     // Urgent notifications keep the accent line they had as toasts.
     Rectangle {
         visible: root.urgency >= 2
-        x: 0; y: 14; width: 3; height: root.height - 28; radius: Tokens.radius.hair
+        anchors.left: parent.left; y: 14; width: 3; height: root.height - 28; radius: Tokens.radius.hair
         color: Theme.accent
     }
     Rectangle {                          // dismiss, only while hovered

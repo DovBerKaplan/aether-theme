@@ -23,7 +23,7 @@ Item {
                 Behavior on color { ColorAnimation { duration: Tokens.motion.duration.micro } }
                 Text {
                     anchors.centerIn: parent
-                    text: modelData + " min"
+                    text: I18n.f("%1 min", modelData)
                     font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
                     color: presetTap.pressed ? Tokens.role.dark.textOnAccent : Theme.text
                 }
@@ -36,7 +36,7 @@ Item {
         visible: root.timer.active
         anchors.fill: parent
         Text {
-            x: 20; anchors.verticalCenter: parent.verticalCenter
+            anchors { left: parent.left; leftMargin: 20; verticalCenter: parent.verticalCenter }
             text: root.timer.text
             font { family: Theme.mono; pixelSize: Tokens.type.heading; weight: Font.Medium }
             color: root.timer.running ? Theme.accent : Theme.subtext

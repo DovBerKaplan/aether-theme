@@ -8,12 +8,12 @@ PanelScaffold {
     property string page: ""
     signal pageRequested(string page)
     signal closeRequested()
-    title: "Display"
+    title: I18n.tr("Display")
     footerHeight: 44
     footer: [
         Item {
             anchors.fill: parent
-            Button { kind: "text"; text: "Display settings ↗"; x: 14; anchors.verticalCenter: parent.verticalCenter
+            Button { kind: "text"; text: I18n.tr("Display settings ↗"); anchors { left: parent.left; leftMargin: 14; verticalCenter: parent.verticalCenter }
                 onClicked: { displaySettings.openSettings(); root.closeRequested() } }
         }
     ]
@@ -43,8 +43,8 @@ PanelScaffold {
         ListRow {
             visible: displaySettings.nightAvailable
             width: parent.width
-            title: "Night Light"
-            subtitle: displaySettings.nightEnabled ? "Warmer colors in the evening" : "Off"
+            title: I18n.tr("Night Light")
+            subtitle: displaySettings.nightEnabled ? I18n.tr("Warmer colors in the evening") : I18n.tr("Off")
             Switch { checked: displaySettings.nightEnabled; onToggled: (c) => displaySettings.setNightEnabled(c) }
         }
         Row {
@@ -54,7 +54,7 @@ PanelScaffold {
             leftPadding: Tokens.space.md
             Text {
                 width: 56; anchors.verticalCenter: parent.verticalCenter
-                text: "Warmth"
+                text: I18n.tr("Warmth")
                 font { family: Theme.font; pixelSize: Tokens.type.label }
                 color: Theme.subtext
             }
@@ -71,10 +71,10 @@ PanelScaffold {
                 color: Theme.subtext
             }
         }
-        SectionLabel { width: parent.width; text: "Theme" }
+        SectionLabel { width: parent.width; text: I18n.tr("Theme") }
         SegmentedControl {
             width: parent.width
-            model: ["Light", "Dark"]
+            model: [I18n.tr("Light"), I18n.tr("Dark")]
             currentIndex: displaySettings.dark ? 1 : 0
             onActivated: (i) => displaySettings.setDark(i === 1)
         }

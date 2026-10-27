@@ -12,3 +12,4 @@ LinearProgress 1.0 LinearProgress.qml
 KeyValueRow 1.0 KeyValueRow.qml
 ConfirmTile 1.0 ConfirmTile.qml
 PanelScaffold 1.0 PanelScaffold.qml
+singleton I18n 1.0 I18n.qml

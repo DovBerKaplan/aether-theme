@@ -28,7 +28,7 @@ Item {
     function focusField() { pw.forceFocus() }
     function showError(kind, text) {
         errorKind = kind; errorText = text
-        if (kind === "password") { expandRequested(); pw.error = true; pw.errorText = text; pw.shake() }
+        if (kind === "password") { expandRequested(); pw.error = true; pw.errorText = I18n.tr(text); pw.shake() }
     }
     onExpandedChanged: if (expanded) { pw.text = ""; pw.error = false; focusTimer.restart() }
     Timer { id: focusTimer; interval: 60; onTriggered: pw.forceFocus() }
@@ -38,12 +38,12 @@ Item {
         width: parent.width
         leadingGlyphSource: Qt.resolvedUrl("assets/glyphs/" + root.levelGlyph + ".svg")
         title: root.net.ssid
-        subtitle: root.joining ? network.step
-                : root.errorKind.length > 0 && root.errorKind !== "password" ? root.errorText
-                : !root.net.supported ? "Needs system settings"
-                : !root.net.inRange ? "Out of range"
-                : root.net.saved ? "Saved"
-                : !root.net.secure ? "Open"
+        subtitle: root.joining ? I18n.tr(network.step)
+                : root.errorKind.length > 0 && root.errorKind !== "password" ? I18n.tr(root.errorText)
+                : !root.net.supported ? I18n.tr("Needs system settings")
+                : !root.net.inRange ? I18n.tr("Out of range")
+                : root.net.saved ? I18n.tr("Saved")
+                : !root.net.secure ? I18n.tr("Open")
                 : ""
         highlighted: root.expanded
         enabled: !root.busy || root.joining
@@ -65,15 +65,14 @@ Item {
     Column {
         id: entry
         y: row.height
-        x: Tokens.space.md + 36 + Tokens.space.md
-        width: parent.width - x - Tokens.space.md
+        anchors { left: parent.left; leftMargin: Tokens.space.md + 36 + Tokens.space.md; right: parent.right; rightMargin: Tokens.space.md }
         spacing: Tokens.space.sm
         visible: root.expanded
         TextField {
             id: pw
             width: parent.width
             password: true
-            placeholder: "Password"
+            placeholder: I18n.tr("Password")
             enabled: !root.joining
             onAccepted: connectBtn.clicked()
             onTextChanged: error = false
@@ -85,13 +84,13 @@ Item {
             Button {
                 id: connectBtn
                 kind: "filled"
-                text: root.joining ? "Connecting…" : "Connect"
+                text: root.joining ? I18n.tr("Connecting…") : I18n.tr("Connect")
                 enabled: pw.text.length >= 8 && !root.joining
                 onClicked: if (enabled) network.connectTo(root.net.ssid, pw.text, true)
             }
             Button {
                 kind: "text"
-                text: "Cancel"
+                text: I18n.tr("Cancel")
                 onClicked: { if (root.joining) network.cancel(); root.collapseRequested() }
             }
         }

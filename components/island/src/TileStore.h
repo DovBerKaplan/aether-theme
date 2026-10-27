@@ -20,6 +20,7 @@ class TileStore : public QObject
     Q_OBJECT
     Q_PROPERTY(QStringList order READ order NOTIFY orderChanged)
     Q_PROPERTY(QVariantList catalog READ catalog CONSTANT)           // every tile that can be shown
+    Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)   // interface language: "en" | "he"
     Q_PROPERTY(bool hebrewDates READ hebrewDates WRITE setHebrewDates NOTIFY hebrewDatesChanged)   // Calendar panel
     Q_PROPERTY(bool keepAwake READ keepAwake NOTIFY stateChanged)
     Q_PROPERTY(bool micMuted READ micMuted NOTIFY stateChanged)
@@ -45,6 +46,16 @@ public:
 
     QStringList order() const { return m_order; }
     QVariantList catalog() const { return m_catalog; }
+    QString language() const { return m_settings.value(QStringLiteral("Interface/Language"), QStringLiteral("en")).toString(); }
+    void setLanguage(const QString &code)
+    {
+        if (code == language() || (code != QLatin1String("en") && code != QLatin1String("he"))) {
+            return;
+        }
+        m_settings.setValue(QStringLiteral("Interface/Language"), code);
+        m_settings.sync();
+        Q_EMIT languageChanged();
+    }
     bool hebrewDates() const { return m_settings.value(QStringLiteral("Calendar/Hebrew"), true).toBool(); }
     void setHebrewDates(bool on)
     {
@@ -110,6 +121,7 @@ public:
 Q_SIGNALS:
     void orderChanged();
     void hebrewDatesChanged();
+    void languageChanged();
     void stateChanged();
 
 private:

@@ -15,13 +15,13 @@ PanelScaffold {
     readonly property bool onDetail: page.indexOf("detail:") === 0
     readonly property string detailSsid: onDetail ? page.substring(7) : ""
 
-    title: onDetail ? detailSsid : "Wi‑Fi"
-    subtitle: onDetail ? "Network details"
-            : !network.available ? "No Wi‑Fi adapter"
-            : !network.wifiEnabled ? "Off"
-            : network.connecting.length > 0 ? "Connecting to " + network.connecting
-            : network.activeSsid.length > 0 ? (network.connectivity === "portal" ? "Sign in required · " : "Connected · ") + network.activeSsid
-            : "Not connected"
+    title: onDetail ? detailSsid : I18n.tr("Wi‑Fi")
+    subtitle: onDetail ? I18n.tr("Network details")
+            : !network.available ? I18n.tr("No Wi‑Fi adapter")
+            : !network.wifiEnabled ? I18n.tr("Off")
+            : network.connecting.length > 0 ? I18n.f("Connecting to %1", network.connecting)
+            : network.activeSsid.length > 0 ? I18n.f(network.connectivity === "portal" ? "Sign in required · %1" : "Connected · %1", network.activeSsid)
+            : I18n.tr("Not connected")
     busy: network.scanning || network.connecting.length > 0
     showBack: true
     headerTrailing: [ Switch { visible: !root.onDetail && network.available; checked: network.wifiEnabled; onToggled: (c) => network.setEnabled(c) } ]
@@ -29,9 +29,9 @@ PanelScaffold {
     footer: [
         Item {
             anchors.fill: parent
-            Button { kind: "text"; text: "Wi‑Fi settings ↗"; x: 14; anchors.verticalCenter: parent.verticalCenter
+            Button { kind: "text"; text: I18n.tr("Wi‑Fi settings ↗"); anchors { left: parent.left; leftMargin: 14; verticalCenter: parent.verticalCenter }
                 onClicked: { network.openSettings(); root.closeRequested() } }
-            Button { visible: root.on && !root.onDetail; kind: "text"; text: "Scan"
+            Button { visible: root.on && !root.onDetail; kind: "text"; text: I18n.tr("Scan")
                 anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
                 onClicked: network.requestScan() }
         }
@@ -101,12 +101,12 @@ PanelScaffold {
                     Glyph { anchors.horizontalCenter: parent.horizontalCenter; name: "wifi-off"; size: 32; color: Theme.subtext }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: network.available ? "Wi‑Fi is off" : "No Wi‑Fi adapter found"
+                        text: network.available ? I18n.tr("Wi‑Fi is off") : I18n.tr("No Wi‑Fi adapter found")
                         font { family: Theme.font; pixelSize: Tokens.type.body }
                         color: Theme.subtext
                     }
                     Button { visible: network.available; anchors.horizontalCenter: parent.horizontalCenter
-                        kind: "filled"; text: "Turn on"; onClicked: network.setEnabled(true) }
+                        kind: "filled"; text: I18n.tr("Turn on"); onClicked: network.setEnabled(true) }
                 }
             }
 
@@ -135,9 +135,9 @@ PanelScaffold {
                                     color: Theme.text
                                 }
                                 Text {
-                                    text: network.connectivity === "portal" ? "Sign in to network"
-                                        : network.connectivity === "limited" ? "Connected, no internet"
-                                        : "Connected" + (modelData.band ? " · " + modelData.band + " GHz" : "")
+                                    text: network.connectivity === "portal" ? I18n.tr("Sign in to network")
+                                        : network.connectivity === "limited" ? I18n.tr("Connected, no internet")
+                                        : I18n.tr("Connected") + (modelData.band ? " · " + modelData.band + " GHz" : "")
                                     font { family: Theme.font; pixelSize: Tokens.type.label }
                                     color: network.connectivity === "full" ? Theme.subtext : Tokens.role.island.negative
                                 }
@@ -145,30 +145,30 @@ PanelScaffold {
                         }
                         Row {
                             spacing: Tokens.space.sm
-                            Button { visible: network.connectivity === "portal"; kind: "filled"; text: "Sign in"
+                            Button { visible: network.connectivity === "portal"; kind: "filled"; text: I18n.tr("Sign in")
                                 onClicked: { network.openPortal(); root.closeRequested() } }
-                            Button { kind: "tonal"; text: "Details"; onClicked: root.pageRequested("detail:" + modelData.ssid) }
-                            Button { kind: "text"; text: "Disconnect"; onClicked: network.disconnectActive() }
+                            Button { kind: "tonal"; text: I18n.tr("Details"); onClicked: root.pageRequested("detail:" + modelData.ssid) }
+                            Button { kind: "text"; text: I18n.tr("Disconnect"); onClicked: network.disconnectActive() }
                         }
                     }
                 }
             }
 
-            SectionLabel { visible: root.on && root.saved.length > 0; width: parent.width; text: "Saved networks" }
+            SectionLabel { visible: root.on && root.saved.length > 0; width: parent.width; text: I18n.tr("Saved networks") }
             Repeater { model: root.on ? root.saved : []; delegate: netRow }
             ListRow {
                 visible: root.on && (root.hiddenSaved > 0 || root.showAllSaved && root.savedAll.some(n => !n.inRange))
                 width: parent.width; height: 44
-                title: root.showAllSaved ? "Show fewer" : "Show all saved (" + root.savedAll.length + ")"
+                title: root.showAllSaved ? I18n.tr("Show fewer") : I18n.f("Show all saved (%1)", root.savedAll.length)
                 onClicked: root.showAllSaved = !root.showAllSaved
             }
-            SectionLabel { visible: root.on && root.others.length > 0; width: parent.width; text: "Available" }
+            SectionLabel { visible: root.on && root.others.length > 0; width: parent.width; text: I18n.tr("Available") }
             Repeater { model: root.on ? root.others : []; delegate: netRow }
             Text {
                 visible: root.on && root.shown.length === 0
                 width: parent.width; height: 80
                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                text: network.scanning ? "Looking for networks…" : "No networks found"
+                text: network.scanning ? I18n.tr("Looking for networks…") : I18n.tr("No networks found")
                 font { family: Theme.font; pixelSize: Tokens.type.body }
                 color: Theme.subtext
             }
@@ -208,7 +208,7 @@ PanelScaffold {
             spacing: Tokens.space.xs
             Repeater {
                 model: detailPage.rows
-                delegate: KeyValueRow { required property var modelData; width: detailCol.width; key: modelData.key; value: modelData.value }
+                delegate: KeyValueRow { required property var modelData; width: detailCol.width; key: I18n.tr(modelData.key); value: modelData.value }
             }
             Item { width: 1; height: Tokens.space.md }
             Button {
@@ -216,7 +216,7 @@ PanelScaffold {
                 property bool armed: false
                 visible: root.shown.some(n => n.ssid === root.detailSsid && n.saved)
                 kind: "negative"
-                text: armed ? "Tap again to forget" : "Forget network"
+                text: armed ? I18n.tr("Tap again to forget") : I18n.tr("Forget network")
                 onClicked: {
                     if (!armed) { armed = true; disarm.restart(); return }
                     network.forget(root.detailSsid)

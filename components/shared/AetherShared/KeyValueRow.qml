@@ -32,7 +32,7 @@ Item {
             verticalCenter: parent.verticalCenter
         }
         horizontalAlignment: Text.AlignRight
-        text: copied.running ? "Copied" : root.value; textFormat: Text.PlainText
+        text: copied.running ? I18n.tr("Copied") : root.value; textFormat: Text.PlainText
         elide: Text.ElideMiddle
         font { family: Theme.mono; pixelSize: Tokens.type.label }
         color: copied.running ? Theme.accent : Theme.text

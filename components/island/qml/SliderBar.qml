@@ -19,6 +19,7 @@ Item {
         height: 8; radius: Tokens.radius.xs
         color: Qt.rgba(1, 1, 1, Tokens.tint.soft)
         Rectangle {
+            anchors.right: I18n.rtl ? parent.right : undefined
             width: Math.max(track.height, track.width * root.shown)
             height: parent.height; radius: Tokens.radius.xs
             color: root.fillColor
@@ -26,7 +27,7 @@ Item {
         }
     }
     Rectangle {                       // knob, only while hovered or dragged
-        x: Math.max(0, Math.min(track.width - width, track.width * root.shown - width / 2))
+        x: Math.max(0, Math.min(track.width - width, track.width * (I18n.rtl ? 1 - root.shown : root.shown) - width / 2))
         anchors.verticalCenter: parent.verticalCenter
         width: 16; height: 16; radius: Tokens.radius.sm
         color: "white"
@@ -39,7 +40,7 @@ Item {
         hoverEnabled: true
         preventStealing: true
         function setFrom(mx) {
-            root.dragValue = Math.max(0, Math.min(1, mx / width))
+            root.dragValue = Math.max(0, Math.min(1, I18n.rtl ? 1 - mx / width : mx / width))
             throttle.pending = root.dragValue
             if (!throttle.running) { root.moved(root.dragValue); throttle.start() }
         }
