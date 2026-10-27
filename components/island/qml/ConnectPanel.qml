@@ -11,6 +11,7 @@ PanelScaffold {
     signal pageRequested(string page)
     signal closeRequested()
 
+    readonly property bool onNotifs: page === "notifications"
     readonly property var d: connectModel.selected
     readonly property bool has: d.id !== undefined
     readonly property bool online: has && d.reachable
@@ -32,11 +33,17 @@ PanelScaffold {
         return a.kind === "ring" ? I18n.f("Ringing %1", n) : a.kind === "ping" ? I18n.f("Ping sent to %1", n)
              : a.kind === "clipboard" ? I18n.f("Clipboard sent to %1", n) : a.kind === "share" ? I18n.f("Sent to %1", n)
              : a.kind === "pairing" ? I18n.f("Pairing request sent to %1", n) : a.kind === "paired" ? I18n.f("Paired with %1", n)
+             : a.kind === "reply" ? I18n.tr("Reply sent") : a.kind === "action" ? I18n.tr("Action sent") : a.kind === "dismiss-all" ? I18n.tr("Notifications cleared")
              : a.kind === "pairing-cancelled" ? I18n.tr("Pairing cancelled") : a.kind === "unpaired" ? I18n.f("Unpaired from %1", n) : ""
     }
 
-    title: has ? d.name : I18n.tr("KDE Connect")
-    subtitle: !connectModel.available ? I18n.tr("KDE Connect isn't running")
+    onOnNotifsChanged: connectModel.watchNotifications(onNotifs)
+    Component.onCompleted: connectModel.watchNotifications(onNotifs)
+    Component.onDestruction: connectModel.watchNotifications(false)
+    headerTrailing: [ Button { visible: root.onNotifs && connectModel.notifications.length > 0; kind: "text"; text: I18n.tr("Clear all"); onClicked: connectModel.clearNotifications(root.d.id) } ]
+
+    title: onNotifs ? I18n.tr("Notifications") : has ? d.name : I18n.tr("KDE Connect")
+    subtitle: onNotifs ? (has ? d.name : "") : !connectModel.available ? I18n.tr("KDE Connect isn't running")
             : !has ? I18n.tr("No paired device")
             : online ? I18n.f("Connected · %1", linkName(d.link)) : I18n.tr("Offline")
     footerHeight: 44
@@ -48,7 +55,41 @@ PanelScaffold {
         }
     ]
 
-    Column {
+    Column {      // ---- Notifications page --------------------------------------------------------
+        visible: root.onNotifs
+        x: 22; width: parent.width - 44
+        spacing: Tokens.space.sm
+        Repeater {
+            model: root.onNotifs ? connectModel.notifications : []
+            delegate: NotifRow { required property var modelData; n: modelData; deviceId: root.d.id; width: parent.width }
+        }
+        Item {
+            visible: connectModel.notifications.length === 0
+            width: parent.width; height: 150
+            Column {
+                anchors.centerIn: parent
+                spacing: Tokens.space.md
+                Glyph { anchors.horizontalCenter: parent.horizontalCenter; name: "bell"; size: 32; color: Theme.subtext }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: I18n.tr("No notifications")
+                    font { family: Theme.font; pixelSize: Tokens.type.body }
+                    color: Theme.subtext
+                }
+            }
+        }
+        Text {
+            visible: root.feedback.length > 0
+            width: parent.width; horizontalAlignment: Text.AlignLeft; wrapMode: Text.Wrap
+            text: root.feedback; textFormat: Text.PlainText
+            font { family: Theme.font; pixelSize: Tokens.type.label }
+            color: Theme.subtext
+        }
+        Item { width: 1; height: Tokens.space.sm }
+    }
+
+    Column {      // ---- Overview -------------------------------------------------------------------
+        visible: !root.onNotifs
         x: 22; width: parent.width - 44
         spacing: Tokens.space.xs
 
@@ -130,6 +171,15 @@ PanelScaffold {
                 percent: root.d.battery === undefined ? -1 : root.d.battery
                 charging: root.d.charging === true
             }
+        }
+
+        ListRow {      // the phone's notifications
+            visible: root.online && root.on("kdeconnect_notifications")
+            width: parent.width
+            title: I18n.tr("Notifications")
+            subtitle: root.d.notifications > 0 ? I18n.f("%1 notifications", root.d.notifications) : I18n.tr("No notifications")
+            showChevron: true
+            onClicked: root.pageRequested("notifications")
         }
 
         // pairing: someone asked, or a device is waiting to be paired
