@@ -60,6 +60,7 @@ var dict = {
     "The keyboard needs the phone to be connected with Keyboard switched on": "כדי להקליד הטלפון צריך להיות מחובר והמקלדת מופעלת",
     "Ready: what you type goes to %1": "מוכן: מה שתקליד יישלח אל %1", "Switch to the KDE Connect keyboard on your phone to type from here": "עבור למקלדת KDE Connect בטלפון כדי להקליד מכאן",
     "Type to send to the phone": "הקלד כדי לשלוח לטלפון", "Typed on %1": "הוקלד ב‑%1", "Type on your phone from here": "הקלד בטלפון מכאן",
+    "Read conversations in KDE Connect ↗": "קריאת שיחות ב‑KDE Connect ↗",
     // Bluetooth
     "Device": "מכשיר", "Device details": "פרטי המכשיר", "No Bluetooth adapter": "אין מתאם Bluetooth",
     "Visible as “%1” while this panel is open": "גלוי בשם “%1” כל עוד החלון פתוח", "Bluetooth settings ↗": "הגדרות Bluetooth ↗",

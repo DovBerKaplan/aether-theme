@@ -69,6 +69,11 @@ Column {
         enabled: col.valid
         onClicked: if (connectInput.sendSms(col.d.id, col.d.name, to.text, body.text)) body.text = ""
     }
+    Button {
+        visible: col.online
+        kind: "text"; text: I18n.tr("Read conversations in KDE Connect ↗")
+        onClicked: connectInput.openMessagesApp(col.d.id, col.d.name)
+    }
     Text {
         visible: connectInput.lastAction.kind === "sms"
         width: parent.width; horizontalAlignment: Text.AlignLeft; wrapMode: Text.Wrap
