@@ -499,7 +499,7 @@ Item {
         Row {
             id: tabRow
             anchors.horizontalCenter: parent.horizontalCenter
-            y: (parent.height - height) / 2 - 2
+            y: (parent.height - height) / 2 - 3
             spacing: 12
             opacity: (root.mode === "media" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
             visible: opacity > 0
@@ -545,7 +545,7 @@ Item {
         // included - is handled by the gestures above.
         Rectangle {
             visible: opacity > 0
-            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 4 }
+            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 8 }
             width: 32; height: 4; radius: Tokens.radius.hair
             color: Theme.subtext
             opacity: 0.7 * (root.mode === "media" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
