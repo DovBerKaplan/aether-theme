@@ -45,7 +45,6 @@ Item {
     // after the island closes (their destructor stops scanning/polling).
     readonly property var realPanels: ({ wifi: "WifiPanel.qml", bluetooth: "BluetoothPanel.qml", sound: "SoundPanel.qml",
         power: "PowerPanel.qml", battery: "BatteryPanel.qml", display: "DisplayPanel.qml", calendar: "CalendarPanel.qml" })
-    property var timer: null
     property bool open: false
     signal closeRequested()
     onOpenChanged: if (open) closeDelay.stop(); else closeDelay.restart()
@@ -63,7 +62,6 @@ Item {
         Binding { target: stage.item; property: "panelId"; value: root.panelId; when: stage.item && stage.item.panelId !== undefined }
         Binding { target: stage.item; property: "title"; value: root.titles[root.panelId] || root.panelId; when: stage.item && !root.realPanels[root.panelId] }
         Binding { target: stage.item; property: "page"; value: root.page; when: stage.item }
-        Binding { target: stage.item; property: "timer"; value: root.timer; when: stage.item && stage.item.timer !== undefined }
         Binding { target: stage.item; property: "maxHeight"; value: root.maxHeight; when: stage.item }
         Connections {
             target: stage.item

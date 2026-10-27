@@ -47,9 +47,12 @@ Item {
         onTriggered: {
             notifList.resetScroll()
             timerOpen = false
+            tileGrid.editing = false
             holdConsumed = false
         }
     }
+    // Night Light, the theme and the microphone are read when the island opens (no polling).
+    onVisibleChanged: if (visible) { displaySettings.refresh(); tiles.refresh() }
     onNotifFadeChanged: if (notifFade > 0.2) resetTimer.stop()   // reopened before it ran
 
     // The notch "becomes" YouTube Music: the island takes it from here (setMode("media")
@@ -75,12 +78,43 @@ Item {
         Row {
             anchors { right: parent.right; verticalCenter: parent.verticalCenter; verticalCenterOffset: 4 }
             spacing: 12
+            // Timer: a small icon (the running countdown replaces it); edit: rearrange the tiles
+            Item {
+                anchors.verticalCenter: parent.verticalCenter
+                width: root.timer.active ? timerLabel.implicitWidth + 12 : 26; height: 26
+                Rectangle {
+                    anchors.fill: parent; radius: height / 2
+                    color: Qt.rgba(1, 1, 1, timerTap.pressed ? Tokens.tint.strong : timerHover.hovered || root.timerOpen ? Tokens.tint.soft : 0)
+                }
+                Glyph { visible: !root.timer.active; anchors.centerIn: parent; name: "timer"; size: 14 }
+                Text {
+                    id: timerLabel
+                    visible: root.timer.active
+                    anchors.centerIn: parent
+                    text: root.timer.text
+                    font { family: Theme.mono; pixelSize: Tokens.type.label; weight: Font.Medium }
+                    color: Theme.accent
+                }
+                HoverHandler { id: timerHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { id: timerTap; onTapped: root.timerOpen = !root.timerOpen }
+            }
+            Item {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 26; height: 26
+                Rectangle {
+                    anchors.fill: parent; radius: height / 2
+                    color: Qt.rgba(1, 1, 1, editTap.pressed ? Tokens.tint.strong : editHover.hovered || tileGrid.editing ? Tokens.tint.soft : 0)
+                }
+                Glyph { anchors.centerIn: parent; name: "edit"; size: 14; color: tileGrid.editing ? Theme.accent : Theme.text }
+                HoverHandler { id: editHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { id: editTap; onTapped: tileGrid.editing = !tileGrid.editing }
+            }
             // The active app (it used to live in the bar's left corner)
             Text {
                 visible: root.appName.length > 0
                 text: root.appName
                 anchors.verticalCenter: parent.verticalCenter
-                width: Math.min(implicitWidth, 150)
+                width: Math.min(implicitWidth, 90)
                 elide: Text.ElideRight
                 font { family: Theme.font; pixelSize: Tokens.type.label; weight: Font.Medium }
                 color: Theme.subtext
@@ -118,48 +152,11 @@ Item {
         // it is also the way into the media view (the app inside the bar).
         MediaCard { width: parent.width; onSearchRequested: root.openMediaSearch() }
 
-        Row {
+        TileGrid {
+            id: tileGrid
             width: parent.width
-            spacing: 10
-            readonly property real w: (width - 3 * spacing) / 4
-            ToggleChip {
-                width: parent.w
-                glyph: system.network === "ethernet" ? "ethernet" : (system.wifiEnabled ? "wifi-3" : "wifi-off")
-                label: "Wi‑Fi"
-                sublabel: !system.wifiEnabled ? "Off" : (system.wifiName || "Not connected")
-                active: system.wifiEnabled
-                hasPanel: true
-                onTapped: system.toggleWifi()
-                onPanelRequested: root.panelRequested("wifi")
-            }
-            ToggleChip {
-                width: parent.w
-                glyph: system.bluetoothOn ? "bluetooth" : "bluetooth-off"
-                label: "Bluetooth"
-                sublabel: !system.bluetoothOn ? "Off" : (system.bluetoothDevices > 0 ? system.bluetoothDevices + " connected" : "On")
-                active: system.bluetoothOn
-                hasPanel: true
-                onTapped: system.toggleBluetooth()
-                onPanelRequested: root.panelRequested("bluetooth")
-            }
-            ToggleChip {
-                width: parent.w
-                glyph: system.muted ? "volume-muted" : "volume-2"
-                label: "Sound"
-                sublabel: system.muted ? "Muted" : system.volume + "%"
-                active: !system.muted
-                hasPanel: true
-                onTapped: system.toggleMute()
-                onPanelRequested: root.panelRequested("sound")
-            }
-            ToggleChip {
-                width: parent.w
-                glyph: "timer"
-                label: "Timer"
-                sublabel: root.timer.active ? root.timer.text : ""
-                active: root.timer.active || root.timerOpen
-                onTapped: root.timerOpen = !root.timerOpen
-            }
+            onPanelRequested: (id) => root.panelRequested(id)
+            onCloseRequested: root.closeRequested()
         }
 
         TimerRow { width: parent.width; timer: root.timer; visible: root.timerOpen || root.timer.active }

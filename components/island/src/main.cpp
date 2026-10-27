@@ -36,6 +36,7 @@
 #include "BluetoothModel.h"
 #include "NetworkModel.h"
 #include "SystemPanels.h"
+#include "TileStore.h"
 #include "SystemInfo.h"
 
 #include <KWindowEffects>
@@ -505,6 +506,8 @@ int main(int argc, char **argv)
     view.rootContext()->setContextProperty(QStringLiteral("displaySettings"), &displayModel);
     SessionActions session;
     view.rootContext()->setContextProperty(QStringLiteral("session"), &session);
+    TileStore tiles;
+    view.rootContext()->setContextProperty(QStringLiteral("tiles"), &tiles);
     IslandController controller(&view);
     view.rootContext()->setContextProperty(QStringLiteral("island"), &controller);
     NotificationSink sink;
