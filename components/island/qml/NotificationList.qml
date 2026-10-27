@@ -45,7 +45,7 @@ Item {
 
         Text {
             anchors { left: parent.left; leftMargin: 2; verticalCenter: parent.verticalCenter }
-            text: "NOTIFICATIONS"
+            text: I18n.tr("NOTIFICATIONS")
             font { family: Theme.font; pixelSize: Tokens.type.caption; weight: Font.Medium; capitalization: Font.AllUppercase; letterSpacing: 0.6 }
             color: Theme.subtext
         }
@@ -56,7 +56,7 @@ Item {
             Text {
                 id: clearLabel
                 anchors.centerIn: parent
-                text: "Clear"
+                text: I18n.tr("Clear")
                 font { family: Theme.font; pixelSize: Tokens.type.caption; weight: Font.Medium }
                 color: clearHover.hovered ? Theme.accent : Theme.subtext
                 Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
@@ -102,7 +102,7 @@ Item {
             Glyph { name: "bell"; size: 22; color: Theme.subtext; anchors.horizontalCenter: parent.horizontalCenter }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: "No notifications"
+                text: I18n.tr("No notifications")
                 font { family: Theme.font; pixelSize: Tokens.type.label }
                 color: Theme.subtext
             }

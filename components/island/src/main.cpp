@@ -19,6 +19,7 @@
 #include <QFileSystemWatcher>
 #include <QCoreApplication>
 #include <QDir>
+#include <QFont>
 #include <QGuiApplication>
 #include <QPainterPath>
 #include <QQmlContext>
@@ -469,6 +470,8 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     QGuiApplication app(argc, argv);
+    // Inter has no Hebrew; borrow it from Noto Sans Hebrew so mixed text keeps one weight and size.
+    QFont::insertSubstitution(QStringLiteral("Inter"), QStringLiteral("Noto Sans Hebrew"));
     app.setApplicationName(QStringLiteral("aether-island"));
     app.setDesktopFileName(QStringLiteral("aether-island"));
 

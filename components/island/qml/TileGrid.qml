@@ -4,7 +4,7 @@ import "."
 
 // The tile set. Normal: pages of 8 (4 x 2) with dots when there is more than one page.
 // Editing: every tile is shown at once; drag one onto another slot to reorder, tap the minus
-// badge to remove it, tap a tile in "Available" to add it. Every change is saved at once.
+// badge to remove it, tap a tile in I18n.tr("Available") to add it. Every change is saved at once.
 Item {
     id: root
     property bool editing: false
@@ -15,6 +15,7 @@ Item {
     readonly property int gap: 10
     readonly property int cellH: 58
     readonly property real cellW: (width - (cols - 1) * gap) / cols
+    function colX(c) { const x = c * (cellW + gap); return I18n.rtl ? width - cellW - x : x }
     readonly property int perPage: 8
     readonly property int count: work.count
     readonly property int pages: Math.max(1, Math.ceil(count / perPage))
@@ -68,7 +69,7 @@ Item {
                     readonly property int slot: index
                     tileId: work.get(parent.index * root.perPage + slot).tid
                     host: root
-                    x: (slot % root.cols) * (root.cellW + root.gap)
+                    x: root.colX(slot % root.cols)
                     y: Math.floor(slot / root.cols) * (root.cellH + root.gap)
                     width: root.cellW; height: root.cellH
                 }
@@ -106,13 +107,13 @@ Item {
             width: parent.width; height: root.gridH
             property int target: -1            // slot under the dragged tile, -1 when none
             function slotAt(px, py) {
-                const c = Math.max(0, Math.min(root.cols - 1, Math.floor(px / (root.cellW + root.gap))))
+                const c = Math.max(0, Math.min(root.cols - 1, Math.floor((I18n.rtl ? root.width - px : px) / (root.cellW + root.gap))))
                 const r = Math.max(0, Math.min(root.editRows - 1, Math.floor(py / (root.cellH + root.gap))))
                 return Math.min(root.count - 1, r * root.cols + c)
             }
             Rectangle {      // where the dragged tile will land
                 visible: gridArea.target >= 0
-                x: (gridArea.target % root.cols) * (root.cellW + root.gap)
+                x: root.colX(gridArea.target % root.cols)
                 y: Math.floor(gridArea.target / root.cols) * (root.cellH + root.gap)
                 width: root.cellW; height: root.cellH; radius: Tokens.radius.xl
                 color: "transparent"
@@ -126,7 +127,7 @@ Item {
                     id: slotItem
                     required property int index
                     required property string tid
-                    x: (index % root.cols) * (root.cellW + root.gap)
+                    x: root.colX(index % root.cols)
                     y: Math.floor(index / root.cols) * (root.cellH + root.gap)
                     width: root.cellW; height: root.cellH
                     z: held.dragging ? 10 : 0
@@ -161,7 +162,7 @@ Item {
                     }
                     Rectangle {      // remove badge
                         visible: root.count > 1 && !held.dragging
-                        x: parent.width - width + 4; y: -4
+                        x: I18n.rtl ? -4 : parent.width - width + 4; y: -4
                         width: 20; height: 20; radius: 10
                         color: Theme.chip
                         border { width: 1; color: Theme.rim }
@@ -173,7 +174,7 @@ Item {
             }
         }
 
-        SectionLabel { visible: root.available.length > 0; width: parent.width; text: "Available" }
+        SectionLabel { visible: root.available.length > 0; width: parent.width; text: I18n.tr("Available") }
         Flow {
             visible: root.available.length > 0
             width: parent.width
@@ -202,8 +203,8 @@ Item {
         }
         Row {
             spacing: Tokens.space.sm
-            Button { kind: "filled"; text: "Done"; onClicked: root.editing = false }
-            Button { kind: "text"; text: "Reset"; onClicked: { tiles.reset(); root.load() } }
+            Button { kind: "filled"; text: I18n.tr("Done"); onClicked: root.editing = false }
+            Button { kind: "text"; text: I18n.tr("Reset"); onClicked: { tiles.reset(); root.load() } }
         }
     }
 }

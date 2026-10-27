@@ -13,14 +13,14 @@ PanelScaffold {
     readonly property var out: sound.outputs.find(o => o.isDefault) || (sound.outputs.length > 0 ? sound.outputs[0] : null)
     readonly property var mic: sound.inputs.length > 0 ? sound.inputs[0] : null
 
-    title: "Sound"
-    subtitle: out ? out.description : "No output device"
+    title: I18n.tr("Sound")
+    subtitle: out ? out.description : I18n.tr("No output device")
     showBack: true
     headerTrailing: [
         Button {
             visible: root.out !== null
             kind: "tonal"
-            text: root.out && root.out.muted ? "Unmute" : "Mute"
+            text: root.out && root.out.muted ? I18n.tr("Unmute") : I18n.tr("Mute")
             onClicked: sound.setOutputMuted(root.out.name, !root.out.muted)
         }
     ]
@@ -28,7 +28,7 @@ PanelScaffold {
     footer: [
         Item {
             anchors.fill: parent
-            Button { kind: "text"; text: "Sound settings ↗"; x: 14; anchors.verticalCenter: parent.verticalCenter
+            Button { kind: "text"; text: I18n.tr("Sound settings ↗"); anchors { left: parent.left; leftMargin: 14; verticalCenter: parent.verticalCenter }
                 onClicked: { sound.openSettings(); root.closeRequested() } }
         }
     ]
@@ -81,14 +81,14 @@ PanelScaffold {
                 }
             }
 
-            SectionLabel { visible: sound.outputs.length > 1; width: parent.width; text: "Output" }
+            SectionLabel { visible: sound.outputs.length > 1; width: parent.width; text: I18n.tr("Output") }
             Repeater {
                 model: sound.outputs.length > 1 ? sound.outputs : []
                 delegate: ListRow {
                     required property var modelData
                     width: parent.width
                     title: modelData.description
-                    subtitle: modelData.bluetooth ? "Bluetooth" : ""
+                    subtitle: modelData.bluetooth ? I18n.tr("Bluetooth") : ""
                     onClicked: sound.setDefaultOutput(modelData.name)
                     Text {
                         text: modelData.isDefault ? "●" : "○"
@@ -98,12 +98,12 @@ PanelScaffold {
                 }
             }
 
-            SectionLabel { visible: root.mic !== null; width: parent.width; text: "Input" }
+            SectionLabel { visible: root.mic !== null; width: parent.width; text: I18n.tr("Input") }
             Item {
                 visible: root.mic !== null
                 width: parent.width; height: 64
                 Text {
-                    x: Tokens.space.md; y: 6
+                    anchors.left: parent.left; anchors.leftMargin: Tokens.space.md; y: 6
                     width: parent.width - 100
                     text: root.mic ? root.mic.description : ""; textFormat: Text.PlainText; elide: Text.ElideRight
                     font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
@@ -113,7 +113,7 @@ PanelScaffold {
                     anchors { right: parent.right; top: parent.top }
                     height: 28
                     kind: "text"
-                    text: root.mic && root.mic.muted ? "Unmute" : "Mute"
+                    text: root.mic && root.mic.muted ? I18n.tr("Unmute") : I18n.tr("Mute")
                     onClicked: sound.setInputMuted(root.mic.name, !root.mic.muted)
                 }
                 SliderBar {
@@ -124,16 +124,16 @@ PanelScaffold {
                 }
             }
 
-            SectionLabel { visible: sound.apps.length > 0; width: parent.width; text: "Apps" }
+            SectionLabel { visible: sound.apps.length > 0; width: parent.width; text: I18n.tr("Apps") }
             Repeater {
                 model: sound.apps
                 delegate: Item {
                     required property var modelData
                     width: parent.width; height: 64
                     Text {
-                        x: Tokens.space.md; y: 6
+                        anchors.left: parent.left; anchors.leftMargin: Tokens.space.md; y: 6
                         width: parent.width - 100
-                        text: modelData.name + (modelData.paused ? " · paused" : ""); textFormat: Text.PlainText; elide: Text.ElideRight
+                        text: modelData.paused ? I18n.f("%1 · paused", modelData.name) : modelData.name; textFormat: Text.PlainText; elide: Text.ElideRight
                         font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
                         color: Theme.text
                     }
@@ -141,7 +141,7 @@ PanelScaffold {
                         anchors { right: parent.right; top: parent.top }
                         height: 28
                         kind: "text"
-                        text: modelData.muted ? "Unmute" : "Mute"
+                        text: modelData.muted ? I18n.tr("Unmute") : I18n.tr("Mute")
                         onClicked: sound.setAppMuted(modelData.index, !modelData.muted)
                     }
                     SliderBar {

@@ -18,6 +18,11 @@ Item {
     id: root
 
     readonly property real shoulder: 10
+    // Interface language (saved in aetherislandrc). Right-to-left languages mirror every
+    // layout below; the media card and the battery icon opt out (they stay left-to-right).
+    Binding { target: I18n; property: "lang"; value: tiles.language }
+    LayoutMirroring.enabled: I18n.rtl
+    LayoutMirroring.childrenInherit: true
     readonly property real screenW: island.screenWidth
     readonly property real screenH: island.screenHeight
     readonly property bool big: mode === "large" || mode === "expanded" || mode === "panel"
@@ -89,7 +94,7 @@ Item {
     function refreshApp() {
         const idx = tasks.activeTask
         const n = idx.valid ? tasks.data(idx, TaskManager.AbstractTasksModel.AppName) : ""
-        appName = n && n.length ? n : "Desktop"
+        appName = n && n.length ? n : I18n.tr("Desktop")
     }
     Connections {
         target: tasks
@@ -472,8 +477,13 @@ Item {
         // the same gesture is the way back to the regular bar.
         TapHandler {
             acceptedButtons: Qt.LeftButton
-            onTapped: if (root.mode === "bar") root.setMode("large")
-                      else if (root.mode === "media") root.setMode("bar")
+            onTapped: (point) => {
+                // A tap on one of the tab's own buttons (search, language, power) is theirs.
+                const p = tabRow.mapFromItem(notchArea, point.position)
+                if (tabRow.visible && tabRow.childAt(p.x, p.y)) return
+                if (root.mode === "bar") root.setMode("large")
+                else if (root.mode === "media") root.setMode("bar")
+            }
         }
         DragHandler {
             enabled: root.mode === "bar"
@@ -498,7 +508,7 @@ Item {
                 onTapped: island.openSearch()
             }
             Text {
-                text: timerState.done ? "Time's up" : (timerState.active ? timerState.text : Qt.formatTime(root.now, "H:mm"))
+                text: timerState.done ? I18n.tr("Time's up") : (timerState.active ? timerState.text : Qt.formatTime(root.now, "H:mm"))
                 anchors.verticalCenter: parent.verticalCenter
                 font { family: Theme.mono; pixelSize: Tokens.type.body; weight: Font.Medium }
                 color: timerState.done || timerState.active ? Theme.accent : Theme.text
@@ -510,6 +520,23 @@ Item {
                     NumberAnimation { to: 1.1; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
                     NumberAnimation { to: 1.0; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
                 }
+            }
+            // Language: shows the current one, a tap moves to the next
+            Item {
+                width: 30; height: 30
+                Rectangle {
+                    anchors.fill: parent; radius: width / 2
+                    color: Qt.rgba(1, 1, 1, langTap.pressed ? Tokens.tint.strong : langHover.hovered ? Tokens.tint.soft : 0)
+                    Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
+                }
+                Text {
+                    anchors.centerIn: parent
+                    text: I18n.languages.find(l => l.code === I18n.lang).short
+                    font { family: Theme.font; pixelSize: Tokens.type.label; weight: Font.DemiBold }
+                    color: Theme.text
+                }
+                HoverHandler { id: langHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { id: langTap; onTapped: tiles.language = I18n.next() }
             }
             NotchButton { glyph: "power"; onTapped: root.openPanel("power") }
         }

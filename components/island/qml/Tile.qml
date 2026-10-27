@@ -18,21 +18,21 @@ Item {
         switch (id) {
         case "wifi": return {
             glyph: system.network === "ethernet" ? "ethernet" : (system.wifiEnabled ? "wifi-3" : "wifi-off"),
-            label: "Wi‑Fi", sub: !system.wifiEnabled ? "Off" : (system.wifiName || "Not connected"),
+            label: I18n.tr("Wi‑Fi"), sub: !system.wifiEnabled ? I18n.tr("Off") : (system.wifiName || I18n.tr("Not connected")),
             active: system.wifiEnabled, panel: "wifi", tap: () => system.toggleWifi() }
         case "bluetooth": return {
-            glyph: system.bluetoothOn ? "bluetooth" : "bluetooth-off", label: "Bluetooth",
-            sub: !system.bluetoothOn ? "Off" : (system.bluetoothDevices > 0 ? system.bluetoothDevices + " connected" : "On"),
+            glyph: system.bluetoothOn ? "bluetooth" : "bluetooth-off", label: I18n.tr("Bluetooth"),
+            sub: !system.bluetoothOn ? I18n.tr("Off") : (system.bluetoothDevices > 0 ? I18n.f("%1 connected", system.bluetoothDevices) : I18n.tr("On")),
             active: system.bluetoothOn, panel: "bluetooth", tap: () => system.toggleBluetooth() }
         case "nightlight": return {
-            glyph: "moon", label: "Night", sub: displaySettings.nightEnabled ? "On" : "Off",
+            glyph: "moon", label: I18n.tr("Night"), sub: displaySettings.nightEnabled ? I18n.tr("On") : I18n.tr("Off"),
             active: displaySettings.nightEnabled, panel: "display", tap: () => displaySettings.setNightEnabled(!displaySettings.nightEnabled) }
         case "darktheme": return {
-            glyph: "contrast", label: "Dark", sub: displaySettings.dark ? "On" : "Off",
+            glyph: "contrast", label: I18n.tr("Dark"), sub: displaySettings.dark ? I18n.tr("On") : I18n.tr("Off"),
             active: displaySettings.dark, panel: "display", tap: () => displaySettings.setDark(!displaySettings.dark) }
         case "airplane": {
             const on = !system.wifiEnabled && !system.bluetoothOn
-            return { glyph: "plane", label: "Airplane", sub: on ? "On" : "Off", active: on, panel: "",
+            return { glyph: "plane", label: I18n.tr("Airplane"), sub: on ? I18n.tr("On") : I18n.tr("Off"), active: on, panel: "",
                 tap: () => {
                     if (on) {     // back to how the radios were before
                         if (tiles.wifiBefore && !system.wifiEnabled) system.toggleWifi()
@@ -45,20 +45,20 @@ Item {
                 } }
         }
         case "keepawake": return {
-            glyph: "coffee", label: "Awake", sub: tiles.keepAwake ? "On" : "Off",
+            glyph: "coffee", label: I18n.tr("Awake"), sub: tiles.keepAwake ? I18n.tr("On") : I18n.tr("Off"),
             active: tiles.keepAwake, panel: "", tap: () => tiles.toggleKeepAwake() }
         case "micmute": return {
-            glyph: tiles.micMuted ? "mic-off" : "mic", label: "Mic", sub: tiles.micMuted ? "Muted" : "On",
+            glyph: tiles.micMuted ? "mic-off" : "mic", label: I18n.tr("Mic"), sub: tiles.micMuted ? I18n.tr("Muted") : I18n.tr("On"),
             active: !tiles.micMuted, panel: "sound", tap: () => tiles.toggleMic() }
         case "powersaver": return {
-            glyph: "leaf", label: "Saver", sub: power.profile === "power-saver" ? "On" : "Off",
+            glyph: "leaf", label: I18n.tr("Saver"), sub: power.profile === "power-saver" ? I18n.tr("On") : I18n.tr("Off"),
             active: power.profile === "power-saver", panel: "battery",
             tap: () => power.setProfile(power.profile === "power-saver" ? "balanced" : "power-saver") }
         case "screenshot": return {
-            glyph: "camera", label: "Capture", sub: "Area", active: false, panel: "",
+            glyph: "camera", label: I18n.tr("Capture"), sub: I18n.tr("Area"), active: false, panel: "",
             tap: () => { tiles.screenshot(); host.closeRequested() } }
         case "record": return {
-            glyph: "record", label: "Record", sub: "Area", active: false, panel: "",
+            glyph: "record", label: I18n.tr("Record"), sub: I18n.tr("Area"), active: false, panel: "",
             tap: () => { tiles.record(); host.closeRequested() } }
         }
         return { glyph: "", label: id, sub: "", active: false, panel: "", tap: () => {} }

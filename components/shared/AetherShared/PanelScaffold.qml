@@ -28,7 +28,7 @@ Item {
         Item {
             id: back
             visible: root.showBack
-            x: Tokens.space.sm; width: 40; height: 40
+            anchors.left: parent.left; anchors.leftMargin: Tokens.space.sm; width: 40; height: 40
             anchors.verticalCenter: parent.verticalCenter
             activeFocusOnTab: true
             Keys.onReturnPressed: root.backRequested()
@@ -40,7 +40,7 @@ Item {
             }
             Text {
                 anchors.centerIn: parent
-                text: "‹"
+                text: I18n.rtl ? "›" : "‹"
                 font { family: Theme.font; pixelSize: Tokens.type.heading; weight: Font.Medium }
                 color: Theme.text
             }

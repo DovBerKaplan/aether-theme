@@ -33,7 +33,7 @@ Item {
     Item {
         id: lead
         visible: root.leadingGlyphSource.toString().length > 0
-        x: Tokens.space.md; width: visible ? 36 : 0; height: 36
+        anchors.left: parent.left; anchors.leftMargin: Tokens.space.md; width: visible ? 36 : 0; height: 36
         anchors.verticalCenter: parent.verticalCenter
         Rectangle { anchors.fill: parent; radius: 18; color: Theme.chip }
         Image {
@@ -74,7 +74,7 @@ Item {
         id: chevron
         visible: root.showChevron
         anchors { right: parent.right; rightMargin: Tokens.space.md; verticalCenter: parent.verticalCenter }
-        text: "›"
+        text: I18n.rtl ? "‹" : "›"
         font { family: Theme.font; pixelSize: Tokens.type.title }
         color: Theme.subtext
     }

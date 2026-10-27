@@ -45,7 +45,8 @@ class PowerModel : public QObject
     Q_PROPERTY(bool hasBattery READ hasBattery NOTIFY changed)
     Q_PROPERTY(int percent READ percent NOTIFY changed)
     Q_PROPERTY(QString state READ state NOTIFY changed)           // charging | discharging | full | empty | unknown
-    Q_PROPERTY(QString timeText READ timeText NOTIFY changed)     // "Full in 38 min" / "2 h 10 min left"
+    Q_PROPERTY(QString timeKind READ timeKind NOTIFY changed)     // charging | discharging | full | "" - the panel words it
+    Q_PROPERTY(int timeMinutes READ timeMinutes NOTIFY changed)
     Q_PROPERTY(double watts READ watts NOTIFY changed)
     Q_PROPERTY(int health READ health NOTIFY changed)             // full vs design capacity, -1 unknown
     Q_PROPERTY(QString profile READ profile NOTIFY changed)       // power-saver | balanced | performance
@@ -67,7 +68,8 @@ public:
     bool hasBattery() const { return m_has; }
     int percent() const { return m_percent; }
     QString state() const { return m_state; }
-    QString timeText() const { return m_time; }
+    QString timeKind() const { return m_timeKind; }
+    int timeMinutes() const { return m_timeMins; }
     double watts() const { return m_watts; }
     int health() const { return m_health; }
     QString profile() const { return m_profile; }
@@ -100,7 +102,9 @@ public:
         }
         const qint64 secs = m_state == QLatin1String("charging") ? b.value(QStringLiteral("TimeToFull")).toLongLong()
                                                                   : b.value(QStringLiteral("TimeToEmpty")).toLongLong();
-        m_time = span(secs, m_state);
+        m_timeMins = secs > 0 ? int((secs + 30) / 60) : 0;
+        m_timeKind = m_state == QLatin1String("full") ? QStringLiteral("full")
+                   : (m_timeMins > 0 && (m_state == QLatin1String("charging") || m_state == QLatin1String("discharging"))) ? m_state : QString();
         const double full = PanelDbus::readText(QStringLiteral("/sys/class/power_supply/BAT0/energy_full")).toDouble();
         const double design = PanelDbus::readText(QStringLiteral("/sys/class/power_supply/BAT0/energy_full_design")).toDouble();
         m_health = design > 0 && full > 0 ? qMin(100, qRound(100.0 * full / design)) : -1;
@@ -121,20 +125,12 @@ private Q_SLOTS:
 
 private:
     static inline const QString DisplayDevice = QStringLiteral("/org/freedesktop/UPower/devices/DisplayDevice");
-    static QString span(qint64 secs, const QString &state)
-    {
-        if (secs <= 0 || (state != QLatin1String("charging") && state != QLatin1String("discharging"))) {
-            return state == QLatin1String("full") ? QStringLiteral("Fully charged") : QString();
-        }
-        const int mins = int((secs + 30) / 60);
-        const QString t = mins >= 60 ? QStringLiteral("%1 h %2 min").arg(mins / 60).arg(mins % 60) : QStringLiteral("%1 min").arg(mins);
-        return state == QLatin1String("charging") ? QStringLiteral("Full in ") + t : t + QStringLiteral(" left");
-    }
     QTimer m_debounce;
     bool m_has = false, m_degraded = false;
     int m_percent = 0, m_health = -1;
     double m_watts = 0;
-    QString m_state = QStringLiteral("unknown"), m_time, m_profile;
+    QString m_state = QStringLiteral("unknown"), m_timeKind, m_profile;
+    int m_timeMins = 0;
     QStringList m_profiles;
 };
 

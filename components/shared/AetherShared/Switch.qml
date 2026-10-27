@@ -36,7 +36,7 @@ Item {
         readonly property real d: tap.pressed ? 24 : root.checked ? 20 : 16
         width: d; height: d; radius: d / 2
         anchors.verticalCenter: parent.verticalCenter
-        x: (root.checked ? root.width - 14 : 12) - d / 2
+        x: (root.checked !== I18n.rtl ? root.width - 14 : 12) - d / 2
         color: root.checked ? Tokens.role.dark.textOnAccent : Theme.subtext
         Behavior on x { NumberAnimation { duration: Tokens.motion.duration.fast; easing.type: Tokens.motion.easing.enter } }
         Behavior on width { NumberAnimation { duration: Tokens.motion.duration.micro } }
