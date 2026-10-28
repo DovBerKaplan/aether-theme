@@ -14,9 +14,12 @@ import "."
 Item {
     id: root
 
-    readonly property int pw: 400                 // shelf width
+    readonly property int pwList: 400             // the list
+    readonly property int pwDetail: 640           // a destination's visual card
     readonly property real rad: 26                // the left corners
     property bool open: false
+    property bool detailOpen: false
+    readonly property int pw: detailOpen ? pwDetail : pwList
     property real px: open ? root.width - pw : root.width
     readonly property bool panelIn: px < root.width - 1
     property real closedAt: 0
@@ -44,6 +47,27 @@ Item {
         ctl.setWindowSize(ctl.screenWidth, ctl.screenHeight)
         report()
         rebuild()
+        if (testDetail.length > 0) {
+            root.open = true
+            detailTimer.restart()
+        }
+    }
+    Timer {
+        id: detailTimer
+        interval: 2000
+        onTriggered: {
+            if (testDetail === "cont" && discovery.containers.length > 0) {
+                root.openDetail("cont", discovery.containers[0])
+                logsTimer.restart()
+            }
+            else if (testDetail === "session" && store.sessions.length > 0)
+                root.openDetail("session", store.sessions[0])
+        }
+    }
+    Timer {
+        id: logsTimer
+        interval: 3000
+        onTriggered: if (testDetail.length > 0) { root.detailView = root.logsIdx; root.syncDetail() }
     }
 
     Connections {
@@ -74,7 +98,7 @@ Item {
 
     function report() {
         if (panelIn) {
-            ctl.setLayout(panelCmds(px, pw, root.height, rad), Qt.rect(0, 0, 0, 0), true)
+            ctl.setLayout(panelCmds(px, root.width - px, root.height, rad), Qt.rect(0, 0, 0, 0), true)
         } else {
             ctl.setLayout(earCmds(), Qt.rect(root.width - 5, 14, 5, 64), false)
         }
@@ -133,6 +157,100 @@ Item {
             }
         }
         Timer { id: armTimer; interval: 2500; onTriggered: ag.armed = false }
+    }
+
+    // A value bar for the detail card: label left, mono value right, a quiet accent fill.
+    component StatBar: Column {
+        id: sb
+        property string label
+        property real frac: 0
+        property string value
+        width: parent ? parent.width : 0
+        spacing: Tokens.space.xs
+        Item {
+            width: parent.width; height: 16
+            Text {
+                anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                text: sb.label; textFormat: Text.PlainText
+                font { family: Theme.font; pixelSize: Tokens.type.label }
+                color: Theme.subtext
+            }
+            Text {
+                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                text: sb.value; textFormat: Text.PlainText
+                font { family: Theme.mono; pixelSize: Tokens.type.label }
+                color: Theme.text
+            }
+        }
+        Rectangle {
+            width: parent.width; height: 6; radius: 3
+            color: Theme.chip
+            Rectangle {
+                anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                width: Math.max(0, Math.min(1, sb.frac)) * parent.width
+                height: parent.height; radius: 3
+                color: Theme.accent
+                Behavior on width { NumberAnimation { duration: Tokens.motion.duration.slow; easing.type: Easing.OutCubic } }
+            }
+        }
+    }
+
+    function gb(b) { return (b / 1073741824).toFixed(1) }
+    function logColor(line) {
+        if (/error|fatal|panic|fail|exception|traceback/i.test(line)) return Tokens.role.island.negative
+        if (/warn|deprecat/i.test(line)) return "#c9a26d"
+        return Theme.text
+    }
+    readonly property var logShown: {
+        const f = logSearch.text.trim().toLowerCase()
+        return !f ? logStream.lines : logStream.lines.filter(l => l.toLowerCase().indexOf(f) >= 0)
+    }
+    // which segment index holds the logs / terminal views for the current kind
+    readonly property int logsIdx: detailKind === "pod" ? 0 : 1
+    readonly property int termIdx: detailKind === "pod" ? 1 : 2
+
+    // ---------- the detail card ----------
+    property string detailKind: ""            // "session" | "cont" | "pod"
+    property var detailData: ({})
+    property int detailView: 0
+    property string metricKey: ""
+    property string streamKey: ""
+
+    function openDetail(kind, d) {
+        detailKind = kind
+        detailData = d
+        detailView = 0
+        content.page = "detail"
+    }
+    function launchTerminal(kind, d) {
+        if (kind === "session") { if (launcher.sshSession(d)) store.markLaunched(d.id) }
+        else if (kind === "cont") launcher.container(d.name)
+        else launcher.pod(d.name, d.ns, discovery.context)
+    }
+    // Starts/stops the pollers so they match exactly what is on screen: metrics for the
+    // dashboard/overview views, a log stream for the logs view, nothing anywhere else.
+    function syncDetail() {
+        if (content.page !== "detail" || detailKind === "") {
+            if (metricKey !== "") { metrics.stop(); metricKey = "" }
+            if (streamKey !== "") { logStream.stop(); streamKey = "" }
+            return
+        }
+        if (detailKind === "session" && detailView === 0) {
+            if (metricKey !== "s") { metrics.watchSession(detailData); metricKey = "s" }
+        } else if (detailKind === "cont" && detailView === 0) {
+            if (metricKey !== "c:" + detailData.name) { metrics.watchContainer(detailData.name); metricKey = "c:" + detailData.name }
+        } else if (metricKey !== "") {
+            metrics.stop(); metricKey = ""
+        }
+        if (detailView === logsIdx) {
+            let k = "", begin = null
+            if (detailKind === "session") { k = "s:" + detailData.id; begin = () => logStream.startSession(detailData) }
+            else if (detailKind === "cont") { k = "c:" + detailData.name; begin = () => logStream.startContainer(detailData.name) }
+            else { k = "p:" + detailData.name + "/" + detailData.ns; begin = () => logStream.startPod(detailData.name, detailData.ns, discovery.context) }
+            if (streamKey !== k) { logStream.clear(); begin(); streamKey = k }
+        } else if (streamKey !== "") {
+            logStream.stop(); streamKey = ""
+        }
     }
 
     // ---------- the list model: one flat block list, rebuilt on any data change ----------
@@ -205,7 +323,7 @@ Item {
     }
     Item {
         id: shelf
-        x: root.px; y: 0; width: root.pw; height: root.height
+        x: root.px; y: 0; width: root.width - root.px; height: root.height
         clip: true
 
         TapHandler { onTapped: (e) => e.accepted = true }   // the glass eats its own clicks
@@ -264,21 +382,30 @@ Item {
         Item {
             id: content
             property string page: "main"
+            onPageChanged: root.syncDetail()
             anchors.fill: parent
             LayoutMirroring.enabled: I18n.rtl
             LayoutMirroring.childrenInherit: true
 
             function openImport() { importPage.reload(); content.page = "import" }
 
-            // ---- main list ----
-            PanelScaffold {
-                id: mainPage
-                anchors.fill: parent
-                showBack: false
-                maxHeight: root.height
-                footerHeight: 56
-                busy: discovery.busy
-                title: I18n.tr("Console")
+            // ---- main list: a fixed-width page; the detail card opens beside it ----
+            Item {
+                id: listPage
+                anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+                width: root.pwList
+                opacity: content.page === "detail" ? 0 : 1
+                visible: opacity > 0.01
+                Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+
+                PanelScaffold {
+                    id: mainPage
+                    anchors.fill: parent
+                    showBack: false
+                    maxHeight: root.height
+                    footerHeight: 56
+                    busy: discovery.busy
+                    title: I18n.tr("Console")
                 subtitle: blocks.length === 0 ? I18n.tr("servers · containers · pods")
                                               : I18n.f("%1 destinations", blocks.filter(b => b.t === "session" || b.t === "cont" || b.t === "pod").length)
                 property alias filterField: filter
@@ -359,6 +486,257 @@ Item {
                     }
                 }
             }
+            }
+
+            // ---- detail card: one destination, three views, the glass grows for it ----
+            Item {
+                id: detailPage
+                anchors {
+                    left: listPage.right; right: parent.right
+                    top: parent.top; bottom: parent.bottom
+                }
+                visible: content.page === "detail"
+
+                PanelScaffold {
+                    anchors.fill: parent
+                    showBack: true
+                    maxHeight: root.height
+                    onBackRequested: content.page = "main"
+                    title: root.detailKind === "session"
+                           ? (root.detailData.name || root.detailData.host || "")
+                           : (root.detailData.name || "")
+                    subtitle: root.detailKind === "session"
+                              ? I18n.ltr((root.detailData.user ? root.detailData.user + "@" : "") + root.detailData.host
+                                         + (root.detailData.port && root.detailData.port !== "22" ? ":" + root.detailData.port : ""))
+                              : I18n.ltr(root.detailKind === "cont"
+                                         ? (root.detailData.image || "")
+                                         : (root.detailData.ns || "") + "  ·  " + (root.detailData.phase || ""))
+                    footerHeight: 0
+
+                    headerTrailing: Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 8; height: 8; radius: 4
+                        color: root.detailKind === "cont"
+                               ? (root.detailData.running ? Theme.accent : Theme.subtext)
+                               : root.detailKind === "pod"
+                                 ? (root.detailData.phase === "Running" ? Theme.accent : Theme.subtext)
+                                 : Theme.accent
+                        opacity: color === Theme.subtext ? 0.45 : 1
+                    }
+
+                    SegmentedControl {
+                        width: parent.width - 2 * Tokens.space.md
+                        x: Tokens.space.md
+                        model: root.detailKind === "session" ? [I18n.tr("Dashboard"), I18n.tr("Logs"), I18n.tr("Terminal")]
+                             : root.detailKind === "cont" ? [I18n.tr("Overview"), I18n.tr("Logs"), I18n.tr("Terminal")]
+                             : [I18n.tr("Logs"), I18n.tr("Terminal")]
+                        currentIndex: root.detailView
+                        onActivated: (i) => { root.detailView = i; root.syncDetail() }
+                    }
+
+                    // ----- dashboard (ssh session) -----
+                    Column {
+                        visible: root.detailKind === "session" && root.detailView === 0
+                        width: parent.width
+                        spacing: Tokens.space.lg
+                        topPadding: Tokens.space.sm
+                        Text {
+                            visible: metrics.data.err !== undefined && metrics.data.err !== ""
+                            x: Tokens.space.md; width: parent.width - 2 * Tokens.space.md
+                            text: I18n.tr("Could not read metrics - connect once so the host knows the key.")
+                            wrapMode: Text.Wrap
+                            font { family: Theme.font; pixelSize: Tokens.type.label }
+                            color: Tokens.role.island.negative
+                        }
+                        Text {
+                            visible: Object.keys(metrics.data).length === 0
+                            x: Tokens.space.md
+                            text: I18n.tr("Waiting for the first reading…")
+                            font { family: Theme.font; pixelSize: Tokens.type.label }
+                            color: Theme.subtext
+                        }
+                        StatBar {
+                            visible: !metrics.data.err
+                            label: I18n.tr("CPU")
+                            frac: metrics.data.cpu || 0
+                            value: Math.round((metrics.data.cpu || 0) * 100) + "%"
+                        }
+                        StatBar {
+                            visible: !metrics.data.err
+                            label: I18n.tr("Memory")
+                            frac: metrics.data.memTotal > 0 ? (metrics.data.memUsed || 0) / metrics.data.memTotal : 0
+                            value: root.gb(metrics.data.memUsed || 0) + " / " + root.gb(metrics.data.memTotal || 0) + " GB"
+                        }
+                        StatBar {
+                            visible: !metrics.data.err
+                            label: I18n.tr("Disk")
+                            frac: metrics.data.diskTotal > 0 ? (metrics.data.diskUsed || 0) / metrics.data.diskTotal : 0
+                            value: Math.round(((metrics.data.diskUsed || 0) / Math.max(1, metrics.data.diskTotal || 1)) * 100) + "%"
+                        }
+                        Column {
+                            visible: !metrics.data.err
+                            width: parent.width
+                            spacing: Tokens.space.xs
+                            SectionLabel {
+                                x: Tokens.space.md; width: parent.width - 2 * Tokens.space.md
+                                text: I18n.tr("Top processes")
+                            }
+                            Repeater {
+                                model: metrics.processes
+                                Item {
+                                    required property var modelData
+                                    x: Tokens.space.md
+                                    width: parent ? parent.width - 2 * Tokens.space.md : 0
+                                    height: 24
+                                    Text {
+                                        anchors { left: parent.left; right: procCpu.left; verticalCenter: parent.verticalCenter }
+                                        text: I18n.ltr(modelData.cmd); textFormat: Text.PlainText
+                                        elide: Text.ElideRight
+                                        font { family: Theme.mono; pixelSize: Tokens.type.label }
+                                        color: Theme.text
+                                    }
+                                    Text {
+                                        id: procCpu
+                                        anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                                        text: I18n.ltr(modelData.cpu.toFixed(1) + "%")
+                                        font { family: Theme.mono; pixelSize: Tokens.type.label }
+                                        color: modelData.cpu > 50 ? Tokens.role.island.negative : Theme.subtext
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ----- overview (local container) -----
+                    Column {
+                        visible: root.detailKind === "cont" && root.detailView === 0
+                        width: parent.width
+                        spacing: Tokens.space.lg
+                        topPadding: Tokens.space.sm
+                        StatBar {
+                            label: I18n.tr("CPU")
+                            frac: metrics.data.cpu || 0
+                            value: Math.round((metrics.data.cpu || 0) * 100) + "%"
+                        }
+                        Item {
+                            width: parent.width; height: 20
+                            Text {
+                                anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                                x: Tokens.space.md
+                                text: I18n.tr("Memory")
+                                font { family: Theme.font; pixelSize: Tokens.type.label }
+                                color: Theme.subtext
+                            }
+                            Text {
+                                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                                x: -Tokens.space.md
+                                text: metrics.data.memText || "…"
+                                font { family: Theme.mono; pixelSize: Tokens.type.label }
+                                color: Theme.text
+                            }
+                        }
+                        Text {
+                            x: Tokens.space.md; width: parent.width - 2 * Tokens.space.md
+                            text: I18n.ltr(root.detailData.image || "")
+                            elide: Text.ElideRight
+                            font { family: Theme.mono; pixelSize: Tokens.type.caption }
+                            color: Theme.subtext
+                        }
+                        Row {
+                            x: Tokens.space.md
+                            spacing: Tokens.space.sm
+                            Button {
+                                text: root.detailData.running ? I18n.tr("Stop") : I18n.tr("Start")
+                                onClicked: discovery.containerAction(root.detailData.running ? "stop" : "start", root.detailData.name)
+                            }
+                            Button {
+                                text: I18n.tr("Restart")
+                                onClicked: discovery.containerAction("restart", root.detailData.name)
+                            }
+                        }
+                    }
+
+                    // ----- logs (all kinds) -----
+                    Column {
+                        visible: root.detailView === root.logsIdx && content.page === "detail"
+                        width: parent.width
+                        spacing: Tokens.space.sm
+                        topPadding: Tokens.space.sm
+                        Row {
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            spacing: Tokens.space.sm
+                            TextField {
+                                id: logSearch
+                                width: parent.width - 70
+                                placeholder: I18n.tr("Search in logs")
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: logStream.running ? "● " + I18n.tr("Live") : "○"
+                                color: logStream.running ? Theme.accent : Theme.subtext
+                                font { family: Theme.font; pixelSize: Tokens.type.caption }
+                            }
+                        }
+                        Text {
+                            visible: logStream.err.length > 0 && logStream.lines.length === 0
+                            x: Tokens.space.md; width: parent.width - 2 * Tokens.space.md
+                            text: logStream.err
+                            wrapMode: Text.WrapAnywhere
+                            font { family: Theme.mono; pixelSize: Tokens.type.caption }
+                            color: Tokens.role.island.negative
+                        }
+                        ListView {
+                            id: logList
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            height: Math.max(200, Math.min(430, root.height - 380))
+                            clip: true
+                            reuseItems: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            LayoutMirroring.enabled: false
+                            model: root.logShown
+                            onCountChanged: if (atYEnd) Qt.callLater(positionViewAtEnd)
+                            delegate: Text {
+                                required property int index
+                                required property string modelData
+                                width: logList.width
+                                text: modelData
+                                color: root.logColor(modelData)
+                                textFormat: Text.PlainText
+                                wrapMode: Text.WrapAnywhere
+                                font { family: Theme.mono; pixelSize: Tokens.type.caption }
+                            }
+                        }
+                    }
+
+                    // ----- terminal (all kinds): the honest card until the glass seat lands -----
+                    Column {
+                        visible: root.detailView === root.termIdx && content.page === "detail"
+                        width: parent.width
+                        spacing: Tokens.space.lg
+                        topPadding: Tokens.space.lg
+                        Glyph {
+                            name: "terminal"; size: 40; color: Theme.subtext
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        Text {
+                            x: Tokens.space.lg; width: parent.width - 2 * Tokens.space.lg
+                            horizontalAlignment: Text.AlignHCenter
+                            text: I18n.tr("The full session opens in Konsole with the Aether profile - tmux on the server keeps everything alive.")
+                            wrapMode: Text.Wrap
+                            font { family: Theme.font; pixelSize: Tokens.type.label }
+                            color: Theme.subtext
+                        }
+                        Button {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: I18n.tr("Open terminal")
+                            kind: "filled"
+                            onClicked: root.launchTerminal(root.detailKind, root.detailData)
+                        }
+                    }
+                }
+            }
 
             // ---- sub-pages ----
             SessionEditor {
@@ -406,22 +784,25 @@ Item {
                                + (s.port && s.port !== "22" ? ":" + s.port : ""))
             leadingGlyphSource: Qt.resolvedUrl("assets/glyphs/terminal.svg")
             showChevron: true
-            onClicked: root.connectSession(s)
+            onClicked: root.openDetail("session", s)
+            HoverHandler { id: rowHover }
             trailing: [
-                Item {
-                    width: 30; height: 36
+                Row {
+                    spacing: Tokens.space.xs
+                    anchors.verticalCenter: parent.verticalCenter
                     Rectangle {
                         visible: modelData.active === true
-                        anchors { verticalCenter: parent.verticalCenter }
-                        x: I18n.rtl ? parent.width - 10 : 0
                         width: 6; height: 6; radius: 3; color: Theme.accent
+                        anchors.verticalCenter: parent.verticalCenter
                     }
-                    Glyph {
-                        anchors.centerIn: parent
-                        name: "edit"; size: 15; color: Theme.subtext
+                    Row {
+                        spacing: Tokens.space.xs
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: rowHover.hovered ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+                        ActionGlyph { glyph: "terminal"; onAct: root.launchTerminal("session", s) }
+                        ActionGlyph { glyph: "edit"; onAct: root.openEditor(s) }
                     }
-                    HoverHandler { cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: root.openEditor(s) }
                 }
             ]
         }
@@ -434,7 +815,7 @@ Item {
             title: c.name
             subtitle: I18n.ltr(c.image + (c.ports && c.ports.length > 0 ? "  ·  " + c.ports : ""))
             leadingGlyphSource: Qt.resolvedUrl("assets/glyphs/container.svg")
-            onClicked: root.connectContainer(c)
+            onClicked: root.openDetail("cont", c)
             HoverHandler { id: rowHover }
             trailing: [
                 Row {
@@ -446,6 +827,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         opacity: rowHover.hovered ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+                        ActionGlyph { glyph: "terminal"; onAct: root.launchTerminal("cont", c) }
                         ActionGlyph {
                             glyph: "restart"
                             visible: c.running
@@ -474,7 +856,7 @@ Item {
             title: p.name
             subtitle: I18n.ltr(p.ns + "  ·  " + p.phase + (p.restarts > 0 ? "  ·  " + I18n.f("%1 restarts", p.restarts) : ""))
             leadingGlyphSource: Qt.resolvedUrl("assets/glyphs/pod.svg")
-            onClicked: root.connectPod(p)
+            onClicked: root.openDetail("pod", p)
             HoverHandler { id: rowHover }
             trailing: [
                 Row {
@@ -485,6 +867,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         opacity: rowHover.hovered ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+                        ActionGlyph { glyph: "terminal"; onAct: root.launchTerminal("pod", p) }
                         ActionGlyph {
                             glyph: "restart"
                             needsArm: true

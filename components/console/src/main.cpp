@@ -17,6 +17,8 @@
 #include "ConsoleController.h"
 #include "Discovery.h"
 #include "Launcher.h"
+#include "LogStream.h"
+#include "Metrics.h"
 #include "SessionStore.h"
 
 static QString qmlDir()
@@ -63,6 +65,11 @@ int main(int argc, char **argv)
     view->rootContext()->setContextProperty(QStringLiteral("store"), store);
     view->rootContext()->setContextProperty(QStringLiteral("discovery"), discovery);
     view->rootContext()->setContextProperty(QStringLiteral("launcher"), launcher);
+    view->rootContext()->setContextProperty(QStringLiteral("metrics"), new Metrics(controller));
+    view->rootContext()->setContextProperty(QStringLiteral("logStream"), new LogStream(controller));
+    // live-test fixture, like the island's AETHER_ISLAND_FAKE_BT: AETHER_CONSOLE_TEST_DETAIL=cont|session
+    view->rootContext()->setContextProperty(QStringLiteral("testDetail"),
+                                             qEnvironmentVariable("AETHER_CONSOLE_TEST_DETAIL"));
     view->setSource(QUrl::fromLocalFile(qmlDir() + QStringLiteral("/Console.qml")));
     if (view->status() == QQuickView::Error) {
         for (const auto &e : view->errors()) {
