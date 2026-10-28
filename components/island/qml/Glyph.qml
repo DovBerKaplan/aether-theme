@@ -8,7 +8,7 @@ Item {
     property string name
     property color color: Theme.text
     property int size: 16
-    property real stroke: 2.0             // the line weight in screen pixels - the same for every glyph at every size
+    property real stroke: 2.5             // the line weight in screen pixels - the same for every glyph at every size
     implicitWidth: size
     implicitHeight: size
     width: size
