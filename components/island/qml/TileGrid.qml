@@ -105,7 +105,8 @@ Item {
         property bool cooling: false
         onWheel: (e) => {
             const d = Math.abs(e.angleDelta.x) > Math.abs(e.angleDelta.y) ? e.angleDelta.x : 0
-            if (d === 0 || cooling) return
+            if (d === 0) return
+            if (cooling) { cool.restart(); return }
             acc += d
             if (Math.abs(acc) < 90) return
             const dir = (acc < 0) !== I18n.rtl ? 1 : -1
@@ -113,7 +114,7 @@ Item {
             acc = 0; cooling = true; cool.restart()
         }
     }
-    Timer { id: cool; interval: 380; onTriggered: swipe.cooling = false }
+    Timer { id: cool; interval: 280; onTriggered: { swipe.cooling = false; swipe.acc = 0 } }
 
     // ---- edit mode ----------------------------------------------------------------------
     // Nothing in edit mode may fall through to the island's click-outside-to-close area: a drag
