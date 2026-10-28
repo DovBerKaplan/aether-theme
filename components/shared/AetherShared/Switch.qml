@@ -37,7 +37,7 @@ Item {
         width: d; height: d; radius: d / 2
         anchors.verticalCenter: parent.verticalCenter
         x: (root.checked !== I18n.rtl ? root.width - 14 : 12) - d / 2
-        color: root.checked ? Tokens.role.dark.textOnAccent : Theme.subtext
+        color: root.checked ? Theme.onAccent : Theme.subtext
         Behavior on x { NumberAnimation { duration: Tokens.motion.duration.fast; easing.type: Tokens.motion.easing.enter } }
         Behavior on width { NumberAnimation { duration: Tokens.motion.duration.micro } }
         Behavior on height { NumberAnimation { duration: Tokens.motion.duration.micro } }

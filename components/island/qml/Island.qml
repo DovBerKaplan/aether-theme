@@ -21,7 +21,7 @@ Item {
     // Interface language (saved in aetherislandrc). Right-to-left languages mirror every
     // layout below; the media card and the battery icon opt out (they stay left-to-right).
     Binding { target: I18n; property: "lang"; value: tiles.language }
-    Binding { target: Theme; property: "accentOverride"; value: tiles.accentCustom ? Qt.hsla(tiles.accentHue / 360, 1.0, tiles.accentLight, 1) : "transparent" }
+    Binding { target: Theme; property: "accentOverride"; value: tiles.accentCustom ? Qt.hsla(tiles.accentHue / 360, tiles.accentSat, tiles.accentLight, 1) : "transparent" }
     Binding { target: Theme; property: "accentTint"; value: 0.07 }
     // The YouTube Music widget: on = the card, the "bar becomes the app" mode and the app itself;
     // off = none of it exists (no card, no mode, no app process, no tray icon, no autostart).

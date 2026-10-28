@@ -23,7 +23,8 @@ class TileStore : public QObject
     Q_PROPERTY(QStringList sizes READ sizes NOTIFY orderChanged)             // "id:2" / "id:3" for tiles wider than the default one cell
     Q_PROPERTY(bool accentCustom READ accentCustom NOTIFY accentChanged)      // a colour was chosen; otherwise the theme's own
     Q_PROPERTY(int accentHue READ accentHue NOTIFY accentChanged)             // 0..359
-    Q_PROPERTY(qreal accentLight READ accentLight NOTIFY accentChanged)       // HSL lightness, 0.45..0.80
+    Q_PROPERTY(qreal accentLight READ accentLight NOTIFY accentChanged)       // HSL lightness, 0.25..0.80 (darker .. lighter)
+    Q_PROPERTY(qreal accentSat READ accentSat NOTIFY accentChanged)           // HSL saturation, 0.15..1 (faded .. vivid)
     Q_PROPERTY(QVariantList catalog READ catalog CONSTANT)           // every tile that can be shown
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)   // interface language: "en" | "he"
     Q_PROPERTY(bool hebrewDates READ hebrewDates WRITE setHebrewDates NOTIFY hebrewDatesChanged)   // Calendar panel
@@ -58,13 +59,15 @@ public:
         }
         m_accentCustom = m_settings.value(QStringLiteral("Appearance/AccentSet")).toBool();
         m_hue = qBound(0, m_settings.value(QStringLiteral("Appearance/AccentHue"), 183).toInt(), 359);
-        m_light = qBound(0.45, m_settings.value(QStringLiteral("Appearance/AccentLight"), 0.5).toDouble(), 0.8);
+        m_light = qBound(0.25, m_settings.value(QStringLiteral("Appearance/AccentLight"), 0.5).toDouble(), 0.8);
+        m_sat = qBound(0.15, m_settings.value(QStringLiteral("Appearance/AccentSat"), 1.0).toDouble(), 1.0);
         m_saveAccent.setSingleShot(true);
         m_saveAccent.setInterval(400);          // dragging a slider changes it many times a second: write once it settles
         connect(&m_saveAccent, &QTimer::timeout, this, [this] {
             m_settings.setValue(QStringLiteral("Appearance/AccentSet"), m_accentCustom);
             m_settings.setValue(QStringLiteral("Appearance/AccentHue"), m_hue);
             m_settings.setValue(QStringLiteral("Appearance/AccentLight"), m_light);
+            m_settings.setValue(QStringLiteral("Appearance/AccentSat"), m_sat);
             m_settings.sync();
         });
         QTimer::singleShot(0, this, [this] { refresh(); });
@@ -109,10 +112,12 @@ public:
     bool accentCustom() const { return m_accentCustom; }
     int accentHue() const { return m_hue; }
     qreal accentLight() const { return m_light; }
-    Q_INVOKABLE void setAccent(int hue, qreal light)
+    qreal accentSat() const { return m_sat; }
+    Q_INVOKABLE void setAccent(int hue, qreal light, qreal sat)
     {
         m_hue = qBound(0, hue, 359);
-        m_light = qBound(0.45, light, 0.8);
+        m_light = qBound(0.25, light, 0.8);
+        m_sat = qBound(0.15, sat, 1.0);
         m_accentCustom = true;
         m_saveAccent.start();
         Q_EMIT accentChanged();
@@ -122,6 +127,7 @@ public:
         m_accentCustom = false;
         m_hue = 183;
         m_light = 0.5;
+        m_sat = 1.0;
         m_saveAccent.start();
         Q_EMIT accentChanged();
     }
@@ -302,7 +308,7 @@ private:
     QTimer m_saveAccent;
     bool m_accentCustom = false;
     int m_hue = 183;
-    qreal m_light = 0.5;
+    qreal m_light = 0.5, m_sat = 1.0;
     QStringList m_order, m_sizes;
     uint m_cookie = 0;
     bool m_micMuted = false, m_wifiBefore = true, m_btBefore = true;
