@@ -24,14 +24,7 @@ public:
     // in Konsole). ControlMaster multiplexes everything over one authenticated socket.
     static QStringList sshArgs(const QVariantMap &s, const QString &remote, bool tty, bool batch)
     {
-        const QString home = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-        QStringList args{
-            QStringLiteral("-o"), QStringLiteral("ControlMaster=auto"),
-            QStringLiteral("-o"), QStringLiteral("ControlPath=%1/.ssh/cm-%r@%h-%p").arg(home),
-            QStringLiteral("-o"), QStringLiteral("ControlPersist=10m"),
-            QStringLiteral("-o"), QStringLiteral("ServerAliveInterval=15"),
-            QStringLiteral("-o"), QStringLiteral("ServerAliveCountMax=3"),
-        };
+        QStringList args = coreOpts();
         if (batch) {
             args << QStringLiteral("-o") << QStringLiteral("BatchMode=yes")
                  << QStringLiteral("-o") << QStringLiteral("ConnectTimeout=5");
@@ -54,6 +47,14 @@ public:
             args << remote;
         }
         return args;
+    }
+
+    // The option list for the stock sftp client over the same master socket (the files view).
+    static QStringList sftpOpts()
+    {
+        return coreOpts()
+               << QStringLiteral("-o") << QStringLiteral("BatchMode=yes")
+               << QStringLiteral("-o") << QStringLiteral("ConnectTimeout=5");
     }
 
     Q_INVOKABLE bool sshSession(const QVariantMap &s)
@@ -134,6 +135,19 @@ Q_SIGNALS:
     void launched(const QString &kind, const QString &id);
 
 private:
+    // The shared keep-alive/multiplexing options: one authenticated socket per host that
+    // every later connection rides.
+    static QStringList coreOpts()
+    {
+        return {
+            QStringLiteral("-o"), QStringLiteral("ControlMaster=auto"),
+            QStringLiteral("-o"), QStringLiteral("ControlPath=%1/.ssh/cm-%r@%h-%p")
+                                      .arg(QStandardPaths::writableLocation(QStandardPaths::HomeLocation)),
+            QStringLiteral("-o"), QStringLiteral("ControlPersist=10m"),
+            QStringLiteral("-o"), QStringLiteral("ServerAliveInterval=15"),
+            QStringLiteral("-o"), QStringLiteral("ServerAliveCountMax=3"),
+        };
+    }
     QString konsole() const
     {
         static QString k = QStandardPaths::findExecutable(QStringLiteral("konsole"));

@@ -20,7 +20,8 @@ qt_add_executable(aether-console
     src/Discovery.h
     src/Launcher.h
     src/Metrics.h
-    src/LogStream.h)
+    src/LogStream.h
+    src/Sftp.h)
 target_link_libraries(aether-console PRIVATE
     Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus
     KF6::WindowSystem LayerShellQt::Interface)

@@ -119,5 +119,9 @@ var dict = {
     "Could not read metrics - connect once so the host knows the key.":
         "לא ניתן לקרוא מדדים - התחבר פעם אחת כדי שהשרת יכיר את המפתח.",
     "The full session opens in Konsole with the Aether profile - tmux on the server keeps everything alive.":
-        "הסשן המלא נפתח ב-Konsole עם פרופיל Aether - ה-tmux בשרת שומר על הכל חי."
+        "הסשן המלא נפתח ב-Konsole עם פרופיל Aether - ה-tmux בשרת שומר על הכל חי.",
+    "Files": "קבצים", "Folder": "תיקייה", "Upload…": "העלאה…",
+    "Drop to upload here": "שחררו כאן להעלאה", "or drop files here": "או גררו קבצים לכאן",
+    "Empty folder": "תיקייה ריק", "Transfer finished": "ההעברה הסתיימה", "Transfer failed": "ההעברה נכשלה",
+    "Check ~/Downloads": "בדקו ב-~/Downloads"
 }
