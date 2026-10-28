@@ -63,16 +63,33 @@ public:
         if (host.isEmpty() || konsole().isEmpty()) {
             return false;
         }
-        const QString sess = QStringLiteral("aether_") + sanitize(host);
+        return launch(konsoleSshArgs(s));
+    }
 
-        // Self-healing: without tmux the server still gives a login shell (and the row keeps a
-        // ready-made install command). The string travels as one argv element, so $SHELL stays
-        // untouched until the remote shell reads it.
-        const QString remote = QStringLiteral(
-            "if command -v tmux >/dev/null 2>&1; then exec tmux new -A -s %1; "
-            "else echo \"tmux not found - plain shell (sessions will not survive disconnects)\"; exec $SHELL; fi").arg(sess);
-
-        return launch(QStringList{ QStringLiteral("-e"), QStringLiteral("ssh") } + sshArgs(s, remote, true, false));
+    // The same session as its own process, whose pid the KWin seat script matches on.
+    // The window lives concealed until the shelf seats it; closing it never loses work
+    // (the tmux session is on the server).
+    Q_INVOKABLE qint64 sshSessionPid(const QVariantMap &s)
+    {
+        const QString host = s.value(QStringLiteral("host")).toString().trimmed();
+        if (host.isEmpty() || konsole().isEmpty()) {
+            return 0;
+        }
+        qint64 pid = 0;
+        QStringList args;
+        const QString profile = QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
+            + QStringLiteral("/.local/share/konsole/Aether.profile");
+        if (QFile::exists(profile)) {
+            args << QStringLiteral("--profile") << QStringLiteral("Aether");
+        }
+        // seated windows are chrome-less in the glass; each invocation is its own process,
+        // so the pid the script receives is this window's
+        args << QStringLiteral("--hide-tabbar") << QStringLiteral("--hide-toolbars") << konsoleSshArgs(s);
+        if (!QProcess::startDetached(konsole(), args, QString(), &pid)) {
+            return 0;
+        }
+        Q_EMIT launched(QStringLiteral("session"), QString());
+        return pid;
     }
 
     // The row's fallback when a server turns out to have no tmux: copy, ssh, paste, done.
@@ -135,6 +152,18 @@ Q_SIGNALS:
     void launched(const QString &kind, const QString &id);
 
 private:
+    // The tmux-wrapped ssh command as konsole arguments (self-healing: without tmux the
+    // server still gives a login shell). The string travels as one argv element, so $SHELL
+    // stays untouched until the remote shell reads it.
+    static QStringList konsoleSshArgs(const QVariantMap &s)
+    {
+        const QString host = s.value(QStringLiteral("host")).toString().trimmed();
+        const QString sess = QStringLiteral("aether_") + sanitize(host);
+        const QString remote = QStringLiteral(
+            "if command -v tmux >/dev/null 2>&1; then exec tmux new -A -s %1; "
+            "else echo \"tmux not found - plain shell (sessions will not survive disconnects)\"; exec $SHELL; fi").arg(sess);
+        return QStringList{ QStringLiteral("-e"), QStringLiteral("ssh") } + sshArgs(s, remote, true, false);
+    }
     // The shared keep-alive/multiplexing options: one authenticated socket per host that
     // every later connection rides.
     static QStringList coreOpts()

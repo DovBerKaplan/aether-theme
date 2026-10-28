@@ -1,6 +1,9 @@
 #pragma once
 
 #include <QColor>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusPendingCall>
 #include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
@@ -93,8 +96,11 @@ public:
     }
 
     // The silhouette arrives as path commands (the same list QML draws from), so blur, input and
-    // drawing cannot disagree. hot: an invisible strip that still gets the pointer (the resting ear).
-    Q_INVOKABLE void setLayout(const QVariantList &cmds, const QRectF &hot, bool fullInput)
+    // drawing cannot disagree. hot: an invisible strip that still gets the pointer (the resting
+    // ear). hole: a rounded cut-out whose clicks and keyboard belong to the seated terminal
+    // window beneath the glass (OddEvenFill cuts it from both blur and input).
+    Q_INVOKABLE void setLayout(const QVariantList &cmds, const QRectF &hot, bool fullInput,
+                               const QVariantMap &hole = QVariantMap())
     {
         QPainterPath p;
         for (const QVariant &v : cmds) {
@@ -110,6 +116,11 @@ public:
             }
         }
         p.closeSubpath();
+        QRectF holeRect(hole.value(QStringLiteral("x")).toReal(), hole.value(QStringLiteral("y")).toReal(),
+                        hole.value(QStringLiteral("w")).toReal(), hole.value(QStringLiteral("h")).toReal());
+        if (holeRect.width() > 0 && holeRect.height() > 0) {
+            p.addRoundedRect(holeRect, 12, 12);   // OddEvenFill (QPainterPath default) cuts it out
+        }
         QRegion shape;
         if (!cmds.isEmpty()) {
             shape = QRegion(p.toFillPolygon().toPolygon());
@@ -122,11 +133,25 @@ public:
         // While the panel is open the whole window takes input, to catch click-outside; at rest
         // only the ear listens, so nothing else on screen loses a single click.
         QRegion input = fullInput ? QRegion(QRect(QPoint(0, 0), m_view->size())) : shape;
+        if (holeRect.width() > 0 && holeRect.height() > 0) {
+            // The seated terminal's window keeps its own clicks and keys.
+            input -= QRegion(holeRect.toRect());
+        }
         if (!hot.isEmpty()) {
             input += QRegion(hot.toRect());
         }
         m_view->setMask(input.isEmpty() ? QRegion(0, 0, 1, 1) : input);
     }
+
+    // The terminal seat: pid + geometry travel together to the aether-console-seat KWin
+    // script through these keyless global shortcuts (the media-seat handshake).
+    Q_INVOKABLE void showSeat(int pid, int x, int y, int w, int h)
+    {
+        m_seatPid = pid;
+        m_seatRect = QRect(x, y, w, h);
+        invokeKwinShortcut(QStringLiteral("Aether Console Seat Show"));
+    }
+    Q_INVOKABLE void hideSeat() { invokeKwinShortcut(QStringLiteral("Aether Console Seat Hide")); }
 
     Q_INVOKABLE void setKeyboard(bool wanted)
     {
@@ -142,6 +167,13 @@ public Q_SLOTS:
     void Show() { Q_EMIT stateRequested(QStringLiteral("shown")); }
     void Hide() { Q_EMIT stateRequested(QStringLiteral("hidden")); }
     void Toggle() { Q_EMIT stateRequested(QStringLiteral("toggle")); }
+    // Called by the aether-console-seat KWin script.
+    QString seatRect() const   // "pid,x,y,w,h" in screen coordinates
+    {
+        return QStringLiteral("%1,%2,%3,%4,%5").arg(m_seatPid).arg(m_seatRect.x()).arg(m_seatRect.y())
+            .arg(m_seatRect.width()).arg(m_seatRect.height());
+    }
+    void SeatReady() { Q_EMIT seatReady(); }   // seated and visible: the frost may clear
 
 Q_SIGNALS:
     void stateRequested(const QString &state);
@@ -149,8 +181,16 @@ Q_SIGNALS:
     void langChanged();
     void tabRatioChanged();
     void systemDarkChanged();
+    void seatReady();
 
 private:
+    static void invokeKwinShortcut(const QString &name)
+    {
+        auto msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kglobalaccel"), QStringLiteral("/component/kwin"),
+                                                  QStringLiteral("org.kde.kglobalaccel.Component"), QStringLiteral("invokeShortcut"));
+        msg << name;
+        QDBusConnection::sessionBus().asyncCall(msg);
+    }
     static QString consoleCfg()
     {
         return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
@@ -224,4 +264,6 @@ private:
     QColor m_accent = Qt::transparent;
     QString m_lang = QStringLiteral("en");
     bool m_systemDark = true;
+    int m_seatPid = 0;
+    QRect m_seatRect;
 };

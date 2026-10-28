@@ -81,7 +81,7 @@ Item {
         interval: 3000
         onTriggered:
             if (testDetail === "cont") { root.detailView = root.logsIdx; root.syncDetail() }
-            else if (testDetail === "session") { root.detailView = root.filesIdx; root.syncDetail() }
+            else if (testDetail === "session") { root.detailView = root.termIdx; root.syncDetail() }
     }
 
     Connections {
@@ -112,8 +112,13 @@ Item {
 
     function report() {
         if (panelIn) {
+            let hole = {}
+            if (content.page === "detail" && detailKind === "session" && detailView === termIdx && seatPid > 0) {
+                const r = seatHost.mapToItem(root, 0, 0)
+                hole = { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(seatHost.width), h: Math.round(seatHost.height) }
+            }
             ctl.setLayout(panelCmds(root.px, root.shelfY, root.gw, root.shelfH, root.rad),
-                          Qt.rect(0, 0, 0, 0), true)
+                          Qt.rect(0, 0, 0, 0), true, hole)
         } else {
             ctl.setLayout(earCmds(), Qt.rect(root.width - 14, ear.y - 10, 16, ear.height + 20), false)
         }
@@ -250,6 +255,30 @@ Item {
     property string metricKey: ""
     property string streamKey: ""
     property string sftpKey: ""
+    property int seatPid: 0         // the konsole window seated in the card (0 = none launched)
+    property bool seatReady: false  // the KWin script seated and revealed it
+    Connections {
+        target: ctl
+        function onSeatReady() { root.seatReady = true }
+    }
+    // The media-seat handshake, console edition: launch once per card (the window lives
+    // concealed between visits - tmux keeps the session anyway), then seat or re-seat it.
+    function syncSeat() {
+        const want = content.page === "detail" && detailKind === "session" && detailView === termIdx
+        if (!want) {
+            if (seatPid > 0) ctl.hideSeat()
+            seatReady = false
+            return
+        }
+        if (seatPid === 0) {
+            seatPid = launcher.sshSessionPid(detailData)
+            if (!seatPid) return
+        }
+        seatReady = false
+        const r = seatHost.mapToItem(root, 0, 0)
+        ctl.showSeat(seatPid, Math.round(r.x), Math.round(r.y), Math.round(seatHost.width), Math.round(seatHost.height))
+        report()
+    }
 
     function openDetail(kind, d) {
         detailKind = kind
@@ -269,6 +298,7 @@ Item {
             if (metricKey !== "") { metrics.stop(); metricKey = "" }
             if (streamKey !== "") { logStream.stop(); streamKey = "" }
             sftpKey = ""
+            if (seatPid > 0) { ctl.hideSeat(); seatReady = false }
             return
         }
         if (detailKind === "session" && detailView === 0) {
@@ -291,6 +321,13 @@ Item {
         // into the card (or another session) starts fresh at the home folder
         if (detailKind === "session" && detailView === filesIdx) {
             if (sftpKey !== "s:" + detailData.id) { sftp.open(detailData); sftpKey = "s:" + detailData.id }
+        }
+        // the terminal seat follows the view; leaving the view conceals the window
+        if (detailKind === "session" && detailView === termIdx) {
+            syncSeat()
+        } else if (seatPid > 0) {
+            ctl.hideSeat()
+            seatReady = false
         }
     }
 
@@ -923,29 +960,60 @@ Item {
                         }
                     }
 
-                    // ----- terminal (all kinds): the honest card until the glass seat lands -----
-                    Column {
-                        visible: root.detailView === root.termIdx && content.page === "detail"
+                    // ----- terminal: seated inside the glass (the media-seat handshake) -----
+                    Item {
+                        visible: root.detailKind === "session" && root.detailView === root.termIdx && content.page === "detail"
                         width: parent.width
-                        spacing: Tokens.space.lg
-                        topPadding: Tokens.space.lg
-                        Glyph {
-                            name: "terminal"; size: 40; color: Theme.subtext
-                            anchors.horizontalCenter: parent.horizontalCenter
-                        }
-                        Text {
-                            x: Tokens.space.lg; width: parent.width - 2 * Tokens.space.lg
-                            horizontalAlignment: Text.AlignHCenter
-                            text: I18n.tr("The full session opens in Konsole with the Aether profile - tmux on the server keeps everything alive.")
-                            wrapMode: Text.Wrap
-                            font { family: Theme.font; pixelSize: Tokens.type.label }
-                            color: Theme.subtext
-                        }
-                        Button {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: I18n.tr("Open terminal")
-                            kind: "filled"
-                            onClicked: root.launchTerminal(root.detailKind, root.detailData)
+                        height: Math.max(280, root.height - 430)
+                        Item {
+                            id: seatHost
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            height: parent.height
+                            // the frost: covers the seat until the script reports the window seated
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 12
+                                color: Theme.bodyTop
+                                visible: root.seatPid > 0 && !root.seatReady
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: Tokens.space.sm
+                                    Text {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: I18n.tr("Opening the session…")
+                                        font { family: Theme.font; pixelSize: Tokens.type.label }
+                                        color: Theme.subtext
+                                    }
+                                    Text {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: I18n.tr("tmux on the server holds your place")
+                                        font { family: Theme.font; pixelSize: Tokens.type.caption }
+                                        color: Theme.subtext
+                                        opacity: 0.6
+                                    }
+                                }
+                            }
+                            Column {
+                                anchors.centerIn: parent
+                                visible: root.seatPid === 0
+                                spacing: Tokens.space.sm
+                                Glyph {
+                                    name: "terminal"; size: 36; color: Theme.subtext
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: I18n.tr("The terminal could not open - check the host")
+                                    font { family: Theme.font; pixelSize: Tokens.type.label }
+                                    color: Theme.subtext
+                                }
+                                Button {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: I18n.tr("Try again")
+                                    onClicked: root.syncSeat()
+                                }
+                            }
                         }
                     }
                 }
