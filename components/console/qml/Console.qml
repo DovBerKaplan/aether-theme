@@ -329,14 +329,28 @@ Item {
         x: root.width - width + pull
         y: root.yFromRatio(ctl.tabRatio)
         width: 5; height: 72; radius: width / 2
-        color: Theme.bodyTop
-        border { width: 1; color: Theme.rim }
-        opacity: earHover.hovered || tabDrag.active ? 0.9 : 0.22
+        color: "transparent"
+        // the tab lives directly on the desktop: a light rim, a touch thick, against a dark
+        // scheme; an ink hairline against a light one. The rim stands on its own - only the
+        // glass body inside fades at rest and wakes on approach.
+        border {
+            width: ctl.systemDark ? 2 : 1.5
+            color: ctl.systemDark ? Qt.rgba(1, 1, 1, 0.45)
+                                  : Qt.rgba(0.13, 0.15, 0.20, 0.55)
+        }
+        Behavior on border.width { NumberAnimation { duration: Tokens.motion.duration.micro } }
+        Behavior on border.color { ColorAnimation { duration: Tokens.motion.duration.base } }
+        Rectangle {
+            anchors { fill: parent; margins: parent.border.width }
+            radius: Math.max(0, parent.radius - parent.border.width / 2)
+            color: Theme.bodyTop
+            opacity: earHover.hovered || tabDrag.active ? 1 : 0.35
+            Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+        }
         transform: Scale {
             xScale: 1 + Math.min(0.6, Math.abs(ear.pull) / 50)
             origin.x: ear.width; origin.y: ear.height / 2   // stretches leftward from the edge
         }
-        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
         // the pull follows the finger 1:1; on release it springs back with the button family
         property real pull: 0
         Behavior on pull {

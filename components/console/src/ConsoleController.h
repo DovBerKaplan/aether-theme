@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QDateTime>
+#include <QFile>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
 #include <QObject>
@@ -31,6 +32,10 @@ class ConsoleController : public QObject
     // Where the resting tab sits along the right edge, as a fraction of the usable height
     // (0 = top edge, 1 = bottom) - the phone's Smart-Sidebar handle, dragged and saved.
     Q_PROPERTY(qreal tabRatio READ tabRatio WRITE setTabRatio NOTIFY tabRatioChanged)
+    // The system colour scheme (kdeglobals, the dock's heuristic). The shelf glass is always
+    // the island's dark object, but the little tab lives directly on the desktop and should
+    // rim itself against what is actually behind it.
+    Q_PROPERTY(bool systemDark READ systemDark NOTIFY systemDarkChanged)
 
 public:
     explicit ConsoleController(QQuickView *view)
@@ -38,6 +43,7 @@ public:
     {
         m_cfg = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
                 + QStringLiteral("/aetherislandrc");
+        m_kdeglobals = QStandardPaths::locate(QStandardPaths::GenericConfigLocation, QStringLiteral("kdeglobals"));
         m_debounce.setSingleShot(true);
         m_debounce.setInterval(300);
         connect(&m_debounce, &QTimer::timeout, this, &ConsoleController::reread);
@@ -61,6 +67,7 @@ public:
     int screenHeight() const { return m_view->screen() ? m_view->screen()->size().height() : 1080; }
     QColor accent() const { return m_accent; }
     QString lang() const { return m_lang; }
+    bool systemDark() const { return m_systemDark; }
     qreal tabRatio() const
     {
         QSettings s(consoleCfg(), QSettings::IniFormat);
@@ -141,6 +148,7 @@ Q_SIGNALS:
     void accentChanged();
     void langChanged();
     void tabRatioChanged();
+    void systemDarkChanged();
 
 private:
     static QString consoleCfg()
@@ -153,6 +161,9 @@ private:
         m_lastModified = QFileInfo(m_cfg).lastModified();
         if (!m_watcher.files().contains(m_cfg)) {
             m_watcher.addPath(m_cfg);
+        }
+        if (!m_kdeglobals.isEmpty() && !m_watcher.files().contains(m_kdeglobals)) {
+            m_watcher.addPath(m_kdeglobals);   // a scheme switch replaces the file
         }
         QSettings s(m_cfg, QSettings::IniFormat);
         QColor accent = Qt::transparent;
@@ -174,6 +185,33 @@ private:
             m_lang = lang;
             Q_EMIT langChanged();
         }
+        readScheme();
+    }
+    // The scheme *name* is not always written to kdeglobals; light or dark is judged from the
+    // window background colour the scheme actually installed (the dock's proven heuristic).
+    void readScheme()
+    {
+        bool dark = true;
+        QFile f(m_kdeglobals);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            bool inWindow = false;
+            while (!f.atEnd()) {
+                const QString line = QString::fromUtf8(f.readLine()).trimmed();
+                if (line.startsWith(QLatin1Char('['))) {
+                    inWindow = line == QLatin1String("[Colors:Window]");
+                } else if (inWindow && line.startsWith(QLatin1String("BackgroundNormal="))) {
+                    const QStringList c = line.mid(17).split(QLatin1Char(','));
+                    if (c.size() >= 3) {
+                        dark = (0.299 * c[0].toInt() + 0.587 * c[1].toInt() + 0.114 * c[2].toInt()) < 128;
+                    }
+                    break;
+                }
+            }
+        }
+        if (dark != m_systemDark) {
+            m_systemDark = dark;
+            Q_EMIT systemDarkChanged();
+        }
     }
 
     QQuickView *m_view;
@@ -182,6 +220,8 @@ private:
     QTimer m_poll;
     QDateTime m_lastModified;
     QString m_cfg;
+    QString m_kdeglobals;
     QColor m_accent = Qt::transparent;
     QString m_lang = QStringLiteral("en");
+    bool m_systemDark = true;
 };
