@@ -64,7 +64,7 @@ Item {
     readonly property int editRows: flat.reduce((m, t) => Math.max(m, t.row + 1), 1)
     readonly property real gridH: editRows * cellH + (editRows - 1) * gap
 
-    implicitHeight: editing ? editCol.implicitHeight : pagerH + (pages > 1 ? 18 : 0)
+    implicitHeight: editing ? editCol.implicitHeight : pagerH + (pages > 1 ? 24 : 0)
     Behavior on implicitHeight { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
 
     // The working copy of the order and sizes; the store is the saved one.
@@ -97,6 +97,8 @@ Item {
         orientation: ListView.Horizontal
         snapMode: ListView.SnapOneItem
         highlightRangeMode: ListView.StrictlyEnforceRange
+        highlightMoveDuration: 240
+        flickDeceleration: 6000
         boundsBehavior: Flickable.StopAtBounds
         interactive: root.pages > 1
         clip: true
@@ -119,18 +121,23 @@ Item {
             }
         }
     }
-    Row {
+    Row {      // page dots: tap one to go to that page
         visible: !root.editing && root.pages > 1
-        anchors { horizontalCenter: parent.horizontalCenter; top: pager.bottom; topMargin: 8 }
-        spacing: 6
+        anchors { horizontalCenter: parent.horizontalCenter; top: pager.bottom; topMargin: 2 }
         Repeater {
             model: root.pages
-            Rectangle {
+            Item {
                 required property int index
-                width: index === pager.currentIndex ? 14 : 5; height: 5; radius: 2.5
-                color: index === pager.currentIndex ? Theme.text : Theme.subtext
-                opacity: index === pager.currentIndex ? 0.9 : 0.5
+                width: (index === pager.currentIndex ? 16 : 7) + 14; height: 22
                 Behavior on width { NumberAnimation { duration: Tokens.motion.duration.fast; easing.type: Tokens.motion.easing.enter } }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: parent.width - 14; height: 6; radius: 3
+                    color: index === pager.currentIndex ? Theme.text : Theme.subtext
+                    opacity: index === pager.currentIndex ? 0.9 : 0.5
+                }
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: pager.currentIndex = index }
             }
         }
     }
@@ -148,7 +155,7 @@ Item {
             if (d === 0) return
             if (cooling) { cool.restart(); return }
             acc += d
-            if (Math.abs(acc) < 90) return
+            if (Math.abs(acc) < 40) return
             const dir = (acc < 0) !== I18n.rtl ? 1 : -1
             pager.currentIndex = Math.max(0, Math.min(root.pages - 1, pager.currentIndex + dir))
             acc = 0; cooling = true; cool.restart()
