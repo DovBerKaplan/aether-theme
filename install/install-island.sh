@@ -13,7 +13,7 @@ for tool in cmake ninja; do
   command -v "$tool" >/dev/null || { echo "missing $tool (sudo apt install cmake ninja-build qt6-base-dev qt6-declarative-dev qt6-wayland-dev kf6-kwindowsystem-dev liblayershellqtinterface-dev extra-cmake-modules)" >&2; exit 1; }
 done
 
-for app in island toasts dock; do
+for app in island toasts dock console; do
   echo "== build $app"
   cmake -S "$ROOT/components/$app" -B "$ROOT/components/$app/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" >/dev/null
   cmake --build "$ROOT/components/$app/build"
@@ -56,7 +56,7 @@ qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start 2>/dev/null || true
 
 echo "== services"
 mkdir -p "$HOME/.config/systemd/user" "$HOME/.local/share/applications"
-for app in island toasts dock; do
+for app in island toasts dock console; do
   cat > "$HOME/.config/systemd/user/aether-$app.service" <<EOF
 [Unit]
 Description=Aether ${app^}
@@ -74,6 +74,7 @@ EOF
 done
 # KWin hands the window list to a client only if its desktop file (matched by executable) asks for it.
 sed "s|@EXEC@|$PREFIX/bin/aether-dock|" "$ROOT/components/dock/org.aether.dock.desktop.in" > "$HOME/.local/share/applications/org.aether.dock.desktop"
+sed "s|@EXEC@|$PREFIX/bin/aether-console|" "$ROOT/components/console/org.aether.console.desktop.in" > "$HOME/.local/share/applications/org.aether.console.desktop"
 # A launcher entry so a global shortcut (Win+N) can toggle the island over DBus.
 cat > "$HOME/.local/share/applications/aether-island-toggle.desktop" <<EOF
 [Desktop Entry]
@@ -83,17 +84,27 @@ Exec=qdbus6 org.aether.Island /Island org.aether.Island.Toggle
 NoDisplay=true
 Icon=preferences-desktop
 EOF
+# Same for the console shelf (Win+C).
+cat > "$HOME/.local/share/applications/aether-console-toggle.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Aether Console
+Exec=qdbus6 org.aether.Console /Console org.aether.Console.Toggle
+NoDisplay=true
+Icon=utilities-terminal
+EOF
 kbuildsycoca6 >/dev/null 2>&1 || true
 systemctl --user daemon-reload
-systemctl --user enable aether-island.service aether-toasts.service aether-dock.service >/dev/null 2>&1
+systemctl --user enable aether-island.service aether-toasts.service aether-dock.service aether-console.service >/dev/null 2>&1
 
 if [[ $NO_START == 0 ]]; then
   pkill -x aether-island 2>/dev/null || true
   pkill -x aether-toasts 2>/dev/null || true
   pkill -x aether-dock 2>/dev/null || true
+  pkill -x aether-console 2>/dev/null || true
   sleep 1
-  systemctl --user restart aether-island.service aether-toasts.service aether-dock.service
+  systemctl --user restart aether-island.service aether-toasts.service aether-dock.service aether-console.service
   sleep 2
-  systemctl --user is-active aether-island.service aether-toasts.service aether-dock.service
+  systemctl --user is-active aether-island.service aether-toasts.service aether-dock.service aether-console.service
 fi
-echo "Installed. Quit with: systemctl --user stop aether-island aether-toasts aether-dock"
+echo "Installed. Quit with: systemctl --user stop aether-island aether-toasts aether-dock aether-console"

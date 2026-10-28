@@ -1,7 +1,7 @@
 # Aether: a Plasma 6 desktop layer (theme, island, toasts). `make help` lists the targets.
 SHELL := /bin/bash
 GEN   := theme/generators
-APPS  := island toasts dock
+APPS  := island toasts dock console
 
 .DEFAULT_GOAL := help
 .PHONY: help all tokens theme fonts components install install-island install-login install-gestures uninstall restore check clean
@@ -9,7 +9,7 @@ APPS  := island toasts dock
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-18s %s\n", $$1, $$2}'
 
-all: theme components ## Generate the theme and build the island, toasts and dock
+all: theme components ## Generate the theme and build the island, toasts, dock and console
 
 tokens: ## Regenerate the QML design tokens from theme/tokens.toml
 	python3 $(GEN)/build_tokens_qml.py
@@ -26,7 +26,7 @@ theme: tokens ## Generate colors, Kvantum, Plasma theme, global themes, Konsole,
 fonts: ## Fetch Inter and JetBrainsMono Nerd Font into ~/.local/share/fonts (skips what is present)
 	install/fonts.sh
 
-components: ## Build aether-island, aether-toasts and aether-dock (needs the Qt/KF6 dev packages, see docs/INSTALL.md)
+components: ## Build aether-island, aether-toasts, aether-dock and aether-console (needs the Qt/KF6 dev packages, see docs/INSTALL.md)
 	@for app in $(APPS); do \
 	  cmake -S components/$$app -B components/$$app/build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null && \
 	  cmake --build components/$$app/build || exit 1; \
