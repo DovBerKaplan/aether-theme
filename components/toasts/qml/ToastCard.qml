@@ -21,7 +21,7 @@ Item {
     y: shown ? slotY : -height - 10
     opacity: shown ? 1 : 0
     Behavior on y { SpringAnimation { spring: 3.0; damping: 0.30; epsilon: 0.3 } }
-    Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+    Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
 
     function close() { shown = false; removeTimer.start() }
     Component.onCompleted: shown = true
@@ -32,7 +32,7 @@ Item {
         onTriggered: root.close()
     }
 
-    CardSurface { anchors.fill: parent; radius: 24 }
+    CardSurface { anchors.fill: parent; radius: Tokens.radius.card }
     HoverHandler { id: hover }
 
     Image {
@@ -50,14 +50,14 @@ Item {
             width: parent.width
             text: root.app
             elide: Text.ElideRight
-            font { family: Theme.font; pixelSize: 11; weight: Font.Medium; capitalization: Font.AllUppercase; letterSpacing: 0.6 }
+            font { family: Theme.font; pixelSize: Tokens.type.caption; weight: Font.Medium; capitalization: Font.AllUppercase; letterSpacing: 0.6 }
             color: Theme.subtext
         }
         Text {
             width: parent.width
             text: root.summary
             elide: Text.ElideRight
-            font { family: Theme.font; pixelSize: 14; weight: Font.DemiBold }
+            font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.DemiBold }
             color: Theme.text
         }
         Text {
@@ -66,23 +66,23 @@ Item {
             visible: text.length > 0
             elide: Text.ElideRight
             maximumLineCount: 1
-            font { family: Theme.font; pixelSize: 13 }
-            color: Qt.rgba(0.925, 0.933, 0.949, 0.78)
+            font { family: Theme.font; pixelSize: Tokens.type.body }
+            color: Qt.alpha(Theme.text, Tokens.tint.textDim)
         }
     }
     // Critical notifications get a thin accent line on the left edge.
     Rectangle {
         visible: root.urgency >= 2
-        x: 0; y: 18; width: 3; height: root.height - 36; radius: 2
+        x: 0; y: 18; width: 3; height: root.height - 36; radius: Tokens.radius.hair
         color: Theme.accent
     }
     Rectangle {                          // dismiss, only while hovered
         anchors { right: parent.right; rightMargin: 12; top: parent.top; topMargin: 12 }
-        width: 22; height: 22; radius: 11
+        width: 22; height: 22; radius: Tokens.radius.md
         color: Theme.chip
         opacity: hover.hovered ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 120 } }
-        Text { anchors.centerIn: parent; text: "✕"; color: Theme.text; font.pixelSize: 10 }
+        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+        Text { anchors.centerIn: parent; text: "✕"; color: Theme.text; font.pixelSize: Tokens.type.caption }
         TapHandler { onTapped: root.close() }
     }
     TapHandler { onTapped: { root.activated(); root.close() } }

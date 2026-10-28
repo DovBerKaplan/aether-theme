@@ -63,7 +63,8 @@ public:
     }
 
 Q_SIGNALS:
-    void received(const QString &app, const QString &icon, const QString &summary, const QString &body, int urgency, int timeoutMs);
+    void received(const QString &app, const QString &icon, const QString &summary, const QString &body,
+                  int urgency, int timeoutMs, int islandBottom, bool islandOpen);
 
 private:
     void inhibit()
@@ -110,9 +111,24 @@ private:
             // progress-style updates (replaces_id set) would spam the stack; show only fresh ones
             return;
         }
+        // Where should this card land? The island owns the top of the screen: while its
+        // double bar (expanded) is open, the history list shows it there and no card is
+        // spawned at all; otherwise the card drops just below the island's current edge.
+        int islandBottom = 0;
+        bool islandOpen = false;
+        QDBusInterface island(QStringLiteral("org.aether.Island"), QStringLiteral("/Island"),
+                              QStringLiteral("org.aether.Island"));
+        const QDBusReply<QString> islandMode = island.call(QStringLiteral("mode"));
+        if (islandMode.isValid() && islandMode.value() == QLatin1String("expanded")) {
+            islandOpen = true;
+        }
+        const QDBusReply<int> bottom = island.call(QStringLiteral("bottom"));
+        if (bottom.isValid()) {
+            islandBottom = bottom.value();
+        }
         Q_EMIT received(d.at(0).toString(), icon, d.at(3).toString(), d.at(4).toString(),
                         hints.value(QStringLiteral("urgency")).toObject().value(QStringLiteral("data")).toInt(1),
-                        d.at(7).toInt(-1));
+                        d.at(7).toInt(-1), islandBottom, islandOpen);
     }
 
     QProcess m_proc;
@@ -227,7 +243,7 @@ int main(int argc, char **argv)
     auto *ls = LayerShellQt::Window::get(&view);
     ls->setLayer(LayerShellQt::Window::LayerOverlay);
     ls->setAnchors(LayerShellQt::Window::AnchorTop);
-    ls->setExclusiveZone(-1);
+    ls->setExclusiveZone(0);
     ls->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
     ls->setScope(QStringLiteral("aether-toasts"));
 

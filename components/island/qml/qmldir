@@ -21,6 +21,7 @@ SoundPanel 1.0 SoundPanel.qml
 PowerPanel 1.0 PowerPanel.qml
 BatteryPanel 1.0 BatteryPanel.qml
 DisplayPanel 1.0 DisplayPanel.qml
+ColorPanel 1.0 ColorPanel.qml
 CalendarPanel 1.0 CalendarPanel.qml
 Tile 1.0 Tile.qml
 TileGrid 1.0 TileGrid.qml
