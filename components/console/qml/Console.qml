@@ -190,6 +190,19 @@ Item {
         Timer { id: armTimer; interval: 2500; onTriggered: ag.armed = false }
     }
 
+    // A status dot for sessions: accent while alive, a blinking orange while the window is
+    // down or the network is gone (the tmux on the server kept the work either way).
+    component StatusDot: Rectangle {
+        property bool down: false
+        width: 6; height: 6; radius: 3
+        color: down ? "#e08a3c" : Theme.accent
+        SequentialAnimation on opacity {
+            running: down; loops: Animation.Infinite
+            NumberAnimation { to: 0.25; duration: 480 }
+            NumberAnimation { to: 1; duration: 480 }
+        }
+    }
+
     // A value bar for the detail card: label left, mono value right, a quiet accent fill.
     component StatBar: Column {
         id: sb
@@ -255,14 +268,41 @@ Item {
     property string metricKey: ""
     property string streamKey: ""
     property string sftpKey: ""
-    property int seatPid: 0         // the konsole window seated in the card (0 = none launched)
+    property var seats: ({})        // session id -> the konsole window living for it
+    property int seatPid: 0         // the one currently seated (for the hole and the frost)
     property bool seatReady: false  // the KWin script seated and revealed it
+    property var downIds: ({})      // sessions whose terminal window died (orange dot)
     Connections {
         target: ctl
-        function onSeatReady() { root.seatReady = true }
+        function onSeatReady() {
+            root.seatReady = true
+            const d = Object.assign({}, root.downIds)
+            for (const id in root.seats) {
+                if (root.seats[id] === root.seatPid) delete d[id]
+            }
+            root.downIds = d
+        }
+        function onSeatClosed(pid) {
+            const d = Object.assign({}, root.downIds)
+            let openId = ""
+            for (const id in root.seats) {
+                if (root.seats[id] === pid) {
+                    d[id] = true
+                    if (id === root.detailData.id) openId = id
+                }
+            }
+            root.downIds = d
+            // reconnect in place only when the user is looking at that terminal
+            if (openId !== "" && content.page === "detail" && root.detailKind === "session"
+                && root.detailView === root.termIdx) {
+                root.syncSeat()
+            }
+        }
     }
     // The media-seat handshake, console edition: launch once per card (the window lives
     // concealed between visits - tmux keeps the session anyway), then seat or re-seat it.
+    // A window the script reports dead (ssh drop, user close) is relaunched automatically
+    // when its card is on screen, and marked with the orange dot otherwise.
     function syncSeat() {
         const want = content.page === "detail" && detailKind === "session" && detailView === termIdx
         if (!want) {
@@ -270,13 +310,21 @@ Item {
             seatReady = false
             return
         }
-        if (seatPid === 0) {
-            seatPid = launcher.sshSessionPid(detailData)
-            if (!seatPid) return
+        let pid = seats[detailData.id] || 0
+        if (pid === 0 || downIds[detailData.id] === true) {
+            if (pid > 0) ctl.hideSeat()   // the dead window may still be on stage
+            pid = launcher.sshSessionPid(detailData)
+            if (!pid) return
+            seats[detailData.id] = pid
+            ctl.registerSeat(pid)
+            const d = Object.assign({}, downIds)
+            delete d[detailData.id]
+            downIds = d
         }
+        seatPid = pid
         seatReady = false
         const r = seatHost.mapToItem(root, 0, 0)
-        ctl.showSeat(seatPid, Math.round(r.x), Math.round(r.y), Math.round(seatHost.width), Math.round(seatHost.height))
+        ctl.showSeat(pid, Math.round(r.x), Math.round(r.y), Math.round(seatHost.width), Math.round(seatHost.height))
         report()
     }
 
@@ -657,15 +705,20 @@ Item {
                                          : (root.detailData.ns || "") + "  ·  " + (root.detailData.phase || ""))
                     footerHeight: 0
 
-                    headerTrailing: Rectangle {
+                    headerTrailing: StatusDot {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 8; height: 8; radius: 4
-                        color: root.detailKind === "cont"
-                               ? (root.detailData.running ? Theme.accent : Theme.subtext)
-                               : root.detailKind === "pod"
-                                 ? (root.detailData.phase === "Running" ? Theme.accent : Theme.subtext)
-                                 : Theme.accent
+                        down: root.detailKind === "session"
+                              && (root.downIds[root.detailData.id] === true || !ctl.online)
+                        color: down ? "#e08a3c"
+                              : root.detailKind === "cont"
+                                ? (root.detailData.running ? Theme.accent : Theme.subtext)
+                                : root.detailKind === "pod"
+                                  ? (root.detailData.phase === "Running" ? Theme.accent : Theme.subtext)
+                                  : Theme.accent
                         opacity: color === Theme.subtext ? 0.45 : 1
+                        // no blink here: the header dot's opacity is a binding, and the row
+                        // dots carry the down-pulse for the whole card
                     }
 
                     SegmentedControl {
@@ -1071,9 +1124,9 @@ Item {
                 Row {
                     spacing: Tokens.space.xs
                     anchors.verticalCenter: parent.verticalCenter
-                    Rectangle {
-                        visible: modelData.active === true
-                        width: 6; height: 6; radius: 3; color: Theme.accent
+                    StatusDot {
+                        visible: modelData.active === true || root.downIds[s.id] === true
+                        down: root.downIds[s.id] === true || (!ctl.online && modelData.active === true)
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Row {
