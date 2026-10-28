@@ -597,11 +597,12 @@ Item {
             // ---- detail card: one destination, three views, the glass grows for it ----
             Item {
                 id: detailPage
-                anchors {
-                    left: listPage.right; right: parent.right
-                    top: parent.top; bottom: parent.bottom
-                }
+                // the card owns the whole glass; the list fades out beneath it while the
+                // glass grows - the old 240px strip left the far half of the glass dead
+                anchors { left: parent.left; right: parent.right; top: parent.top; bottom: parent.bottom }
                 visible: content.page === "detail"
+                opacity: content.page === "detail" ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
 
                 PanelScaffold {
                     anchors.fill: parent
@@ -631,7 +632,7 @@ Item {
                     }
 
                     SegmentedControl {
-                        width: parent.width - 2 * Tokens.space.md
+                        width: Math.min(320, parent.width - 2 * Tokens.space.md)
                         x: Tokens.space.md
                         model: root.detailKind === "session" ? [I18n.tr("Dashboard"), I18n.tr("Files"), I18n.tr("Logs"), I18n.tr("Terminal")]
                              : root.detailKind === "cont" ? [I18n.tr("Overview"), I18n.tr("Logs"), I18n.tr("Terminal")]
@@ -663,18 +664,24 @@ Item {
                         }
                         StatBar {
                             visible: !metrics.data.err
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
                             label: I18n.tr("CPU")
                             frac: metrics.data.cpu || 0
                             value: Math.round((metrics.data.cpu || 0) * 100) + "%"
                         }
                         StatBar {
                             visible: !metrics.data.err
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
                             label: I18n.tr("Memory")
                             frac: metrics.data.memTotal > 0 ? (metrics.data.memUsed || 0) / metrics.data.memTotal : 0
                             value: root.gb(metrics.data.memUsed || 0) + " / " + root.gb(metrics.data.memTotal || 0) + " GB"
                         }
                         StatBar {
                             visible: !metrics.data.err
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
                             label: I18n.tr("Disk")
                             frac: metrics.data.diskTotal > 0 ? (metrics.data.diskUsed || 0) / metrics.data.diskTotal : 0
                             value: Math.round(((metrics.data.diskUsed || 0) / Math.max(1, metrics.data.diskTotal || 1)) * 100) + "%"
@@ -721,21 +728,23 @@ Item {
                         topPadding: Tokens.space.sm
                         StatBar {
                             label: I18n.tr("CPU")
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
                             frac: metrics.data.cpu || 0
                             value: Math.round((metrics.data.cpu || 0) * 100) + "%"
                         }
                         Item {
-                            width: parent.width; height: 20
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            height: 20
                             Text {
                                 anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-                                x: Tokens.space.md
                                 text: I18n.tr("Memory")
                                 font { family: Theme.font; pixelSize: Tokens.type.label }
                                 color: Theme.subtext
                             }
                             Text {
                                 anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-                                x: -Tokens.space.md
                                 text: metrics.data.memText || "…"
                                 font { family: Theme.mono; pixelSize: Tokens.type.label }
                                 color: Theme.text
