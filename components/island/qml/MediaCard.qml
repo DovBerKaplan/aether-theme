@@ -19,6 +19,24 @@ Item {
     property string lastTitle: ""
     property bool showA: true
 
+    // Two-finger sideways swipe on the card: next / previous track, one per gesture.
+    WheelHandler {
+        id: swipe
+        enabled: media.hasPlayer
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        property real acc: 0
+        property bool cooling: false
+        onWheel: (e) => {
+            const d = Math.abs(e.angleDelta.x) > Math.abs(e.angleDelta.y) ? e.angleDelta.x : 0
+            if (d === 0 || cooling) return
+            acc += d
+            if (Math.abs(acc) < 90) return
+            if (acc < 0) media.next(); else media.previous()
+            acc = 0; cooling = true; cool.restart()
+        }
+    }
+    Timer { id: cool; interval: 450; onTriggered: swipe.cooling = false }
+
     Component.onCompleted: {
         root.lastTitle = media.title
         root.lastRequested = media.artUrl
