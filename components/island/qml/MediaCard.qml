@@ -22,6 +22,7 @@ Item {
     // Two-finger sideways swipe on the card: next / previous track, one per gesture.
     WheelHandler {
         id: swipe
+        orientation: Qt.Horizontal
         enabled: media.hasPlayer
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         property real acc: 0

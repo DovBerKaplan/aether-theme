@@ -36,6 +36,7 @@ Item {
     // Two-finger swipe on the touchpad (or a sideways wheel): one step per gesture, not per event.
     WheelHandler {
         id: swipe
+        orientation: Qt.Horizontal
         target: root; enabled: root.pairedCount > 1
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         property real acc: 0
