@@ -148,6 +148,37 @@ public:
         return launch({ QStringLiteral("-e"), QStringLiteral("sh"), QStringLiteral("-c"), inner });
     }
 
+    // A plain local shell in its own window, wrapped in the local tmux like every remote
+    // session - the same survival story with no outgoing connection. One window per call;
+    // KWin's own tiling (Meta+T) arranges them.
+    Q_INVOKABLE bool localTerminal()
+    {
+        if (konsole().isEmpty()) {
+            return false;
+        }
+        return launch({ QStringLiteral("-e"), QStringLiteral("tmux"), QStringLiteral("new"), QStringLiteral("-A"),
+                        QStringLiteral("-s"), QStringLiteral("aether_local") });
+    }
+
+    // Remote files open in Kate over KIO's sftp worker (edit and save straight on the server,
+    // credentials from the keys/agent), folders open in Dolphin - both stock KDE.
+    Q_INVOKABLE bool editRemote(const QString &url)
+    {
+        const QString kate = QStandardPaths::findExecutable(QStringLiteral("kate"));
+        if (kate.isEmpty() || url.isEmpty()) {
+            return false;
+        }
+        return QProcess::startDetached(kate, { url });
+    }
+    Q_INVOKABLE bool browseRemote(const QString &url)
+    {
+        const QString dolphin = QStandardPaths::findExecutable(QStringLiteral("dolphin"));
+        if (dolphin.isEmpty() || url.isEmpty()) {
+            return false;
+        }
+        return QProcess::startDetached(dolphin, { url });
+    }
+
 Q_SIGNALS:
     void launched(const QString &kind, const QString &id);
 

@@ -160,7 +160,8 @@ public:
     Q_INVOKABLE void showSeat(int pid, int x, int y, int w, int h)
     {
         m_seatPid = pid;
-        m_seatRect = QRect(x, y, w, h);
+        // local (window) coordinates -> screen: the window is anchored right+top, full height
+        m_seatRect = QRect(screenWidth() - m_view->width() + x, y, w, h);
         invokeKwinShortcut(QStringLiteral("Aether Console Seat Show"));
     }
     Q_INVOKABLE void hideSeat() { invokeKwinShortcut(QStringLiteral("Aether Console Seat Hide")); }
