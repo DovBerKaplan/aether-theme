@@ -70,6 +70,7 @@ LAUNCHERS = [
     ("systemsettings.desktop", "System Settings", ["Meta+I"], "Win+I settings"),
     ("org.kde.kinfocenter.desktop", "Info Center", ["Meta+Pause"], "Win+Pause system info"),
     ("aether-island-toggle.desktop", "Aether Island", ["Meta+N", "Meta+A"], "Win+N / Win+A open the island (controls)"),
+    ("aether-console-toggle.desktop", "Aether Console", ["Meta+C"], "Win+C open the console shelf"),
     ("aether-new-desktop.desktop", "New Virtual Desktop", ["Meta+Ctrl+D"], "Win+Ctrl+D new desktop"),
     ("aether-close-desktop.desktop", "Close Virtual Desktop", ["Meta+Ctrl+F4"], "Win+Ctrl+F4 close desktop"),
 ]

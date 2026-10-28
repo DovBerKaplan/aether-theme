@@ -90,5 +90,22 @@ var dict = {
     // Power
     "Power": "אפשרויות כיבוי", "Tap twice to restart, shut down or log out": "הקש פעמיים כדי להפעיל מחדש, לכבות או להתנתק",
     "Lock": "נעילה", "Sleep": "שינה", "Restart": "הפעלה מחדש", "Tap to restart": "הקש להפעלה מחדש", "Shut down": "כיבוי",
-    "Tap to shut down": "הקש לכיבוי", "Log out": "התנתקות", "Tap to log out": "הקש להתנתקות", "Firmware setup": "הגדרות קושחה"
+    "Tap to shut down": "הקש לכיבוי", "Log out": "התנתקות", "Tap to log out": "הקש להתנתקות", "Firmware setup": "הגדרות קושחה",
+    // Console
+    "Console": "קונסולה", "Active now": "פעילים עכשיו", "General": "כללי",
+    "Containers": "קונטיינרים", "Pods": "פודים", "Kubernetes context": "קונטקסט Kubernetes",
+    "servers · containers · pods": "שרתים · קונטיינרים · פודים", "%1 destinations": "%1 יעדים",
+    "Filter": "סינון", "%1 restarts": "%1 הפעלות מחדש",
+    "No saved connections yet": "אין עדיין חיבורים שמורים",
+    "Every connection is wrapped in tmux on the server - a drop, a crash or a reboot only needs one more tap.":
+        "כל חיבור נעטף ב-tmux בשרת - נפילה, קריסה או הפעלה מחדש מצריכים רק נגיעה נוספת.",
+    "New connection": "חיבור חדש", "Import": "ייבוא", "Import hosts": "ייבוא שרתים",
+    "Edit connection": "עריכת חיבור", "Save": "שמירה", "Delete": "מחיקה",
+    "Name": "שם", "optional": "לא חובה", "Host": "מארח", "address or hostname": "כתובת או שם מארח",
+    "User": "משתמש", "Port": "פורט", "Group": "קבוצה", "Identity file": "קובץ מפתח", "agent default": "ברירת ה-agent",
+    "Deploy key": "העלאת מפתח", "Deploy to host?": "להעלות לשרת?",
+    "Opens a Konsole window: the password (if any) is typed there, once. After that the agent and ControlMaster connect silently.":
+        "נפתח חלון Konsole: את הסיסמה (אם יש) מקלידים שם, פעם אחת. מאז ה-agent וה-ControlMaster מתחברים בשקט.",
+    "Select all": "בחר הכל", "Clear selection": "ניקוי בחירה",
+    "Nothing to import - no new hosts in ~/.ssh/config": "אין מה לייבא - אין מארחים חדשים ב-~/.ssh/config"
 }
