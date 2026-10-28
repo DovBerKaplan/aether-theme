@@ -13,6 +13,7 @@ QtObject {
     readonly property TypeTokens type: TypeTokens {}
     readonly property FontTokens font: FontTokens {}
     readonly property MotionTokens motion: MotionTokens {}
+    readonly property DockTokens dock: DockTokens {}
 
     component PaletteTokens: QtObject {
         readonly property color cyan400: "#00f2fe"
@@ -100,6 +101,10 @@ QtObject {
         readonly property real grainOpacity: 0.022
         readonly property real dockScrim: 0.28
         readonly property real dockFrost: 0.1
+        readonly property real dockAlphaDark: 0.82
+        readonly property real dockAlphaLight: 0.5
+        readonly property real dockGrainDark: 0.032
+        readonly property real dockGrainLight: 0.01
         readonly property real tintHover: 0.08
         readonly property real tintFocus: 0.1
         readonly property real tintAttention: 0.14
@@ -159,5 +164,16 @@ QtObject {
     component MotionTokens: QtObject {
         readonly property MotionDurationTokens duration: MotionDurationTokens {}
         readonly property MotionEasingTokens easing: MotionEasingTokens {}
+    }
+    component DockTokens: QtObject {
+        readonly property int icon: 44
+        readonly property int cellInset: 3
+        readonly property int pad: 11
+        readonly property int gap: 4
+        readonly property int radius: 26
+        readonly property int sepExtra: 14
+        readonly property real homeW: 0.25
+        readonly property int homeH: 4
+        readonly property int homeInset: 5
     }
 }

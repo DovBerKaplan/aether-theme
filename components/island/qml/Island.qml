@@ -121,8 +121,8 @@ Item {
     }
     Connections {
         target: connectModel
-        function onFileReceived(device, name, url) {
-            root.showActivity({ glyph: "folder", title: I18n.f("File received from %1", device), text: name, url: url, panel: "connect:files",
+        function onFileReceived(device, name, url, copied) {
+            root.showActivity({ glyph: copied ? "send" : "folder", title: I18n.f(copied ? "Picture from %1 - copied, paste it anywhere" : "File received from %1", device), text: name, url: url, panel: "connect:files",
                                 buttons: [{ id: "open", label: I18n.tr("Open file") }, { id: "folder", glyph: "folder" }] })
         }
     }
