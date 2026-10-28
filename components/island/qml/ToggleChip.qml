@@ -11,7 +11,7 @@ Item {
     property string sublabel
     property bool active: false
     property bool hasPanel: false
-    property bool wide: false                // 2 cells: a pill with the text beside the disc, instead of a disc with the text under it
+    property bool wide: false                // 1.5 cells: a pill with the text beside the disc, instead of a disc with the text under it
     signal tapped()
     signal panelRequested()
 

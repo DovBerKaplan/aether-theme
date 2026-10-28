@@ -14,13 +14,13 @@ Item {
     signal closeRequested()
     signal doneRequested()
 
-    readonly property int cols: 4
+    readonly property int cols: 8          // half-cells: a round tile is 2, a wide one 3 (one and a half cells)
     readonly property int gap: 2
     readonly property int cellH: 74
     readonly property int rowsPerPage: 2
-    readonly property real cellW: (width - (cols - 1) * gap) / cols
-    function spanW(span) { return span * cellW + (span - 1) * gap }
-    function colX(c, span) { const x = c * (cellW + gap); return I18n.rtl ? width - spanW(span) - x : x }
+    readonly property real unitW: (width - (cols - 1) * gap) / cols
+    function spanW(span) { return span * unitW + (span - 1) * gap }
+    function colX(c, span) { const x = c * (unitW + gap); return I18n.rtl ? width - spanW(span) - x : x }
     readonly property int count: work.count
     readonly property var available: {
         const used = {}
@@ -36,7 +36,7 @@ Item {
         const used = {}                      // "page,row,col" -> true
         const free = (pg, r, c, span) => { for (let k = 0; k < span; ++k) if (used[pg + "," + r + "," + (c + k)]) return false; return true }
         for (let i = 0; i < work.count; ++i) {
-            const span = work.get(i).wide ? 2 : 1
+            const span = work.get(i).wide ? 3 : 2
             let done = false
             for (let pg = 0; !done; ++pg) {
                 for (let r = 0; r < perPage && !done; ++r) {
@@ -108,7 +108,7 @@ Item {
                 delegate: Tile {
                     required property var modelData
                     tileId: work.get(modelData.i).tid
-                    wide: modelData.span === 2
+                    wide: modelData.span === 3
                     host: root
                     x: root.colX(modelData.col, modelData.span)
                     y: modelData.row * (root.cellH + root.gap)
@@ -195,7 +195,7 @@ Item {
                     required property int index
                     required property string tid
                     required property bool wide
-                    readonly property var cell: root.flat[index] || ({ row: 0, col: 0, span: 1 })
+                    readonly property var cell: root.flat[index] || ({ row: 0, col: 0, span: 2 })
                     x: root.colX(cell.col, cell.span)
                     y: cell.row * (root.cellH + root.gap)
                     width: root.spanW(cell.span); height: root.cellH
