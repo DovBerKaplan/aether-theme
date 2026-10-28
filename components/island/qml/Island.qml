@@ -280,6 +280,8 @@ Item {
     // ---- state changes ---------------------------------------------------------------
     function setMode(next) {
         if (next === "media" && !mediaOn) return
+        // Editing the tiles and widgets: the island stays open until "Done" (or the edit button) ends it.
+        if (largeContent.editing && (next === "bar" || next === "hidden" || next === "toggle")) return
         if (next === "toggle") next = (root.big || mode === "media") ? "bar" : "large"
         if (mediaCovering) {
             // Already frosting over to leave: a second request only changes the destination.
@@ -386,6 +388,7 @@ Item {
         // two-stop jump, which reads as the curtain running away from the pointer.
         if (vy > 300) idx = Math.min(idx + 1, 2)
         else if (vy < -300) idx = Math.max(idx - 1, 0)
+        if (largeContent.editing) idx = Math.max(idx, 1)       // see setMode: no folding while editing
         const target = s[idx]
         setMode(["bar", "large", "expanded"][idx])
         // A cancelled pull can land on the mode it started from (setMode then no-ops), and
@@ -498,7 +501,8 @@ Item {
     }
 
     focus: true
-    Keys.onEscapePressed: root.mode === "activity" ? root.dismissActivity()
+    Keys.onEscapePressed: largeContent.editing ? largeContent.editing = false
+                          : root.mode === "activity" ? root.dismissActivity()
                           : root.mode === "panel" ? root.panelBack()
                           : root.setMode(root.mode === "expanded" ? "large" : root.mode === "large" ? "bar" : "hidden")
 
