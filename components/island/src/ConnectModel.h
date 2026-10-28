@@ -364,7 +364,8 @@ public:
         Q_EMIT changed();
     }
     // Next paired device after the selected one (reachable ones first, as listed).
-    Q_INVOKABLE void selectNext()
+    Q_INVOKABLE void selectNext() { selectStep(1); }
+    Q_INVOKABLE void selectStep(int dir)
     {
         QStringList paired;
         for (const QVariant &v : std::as_const(m_devices)) {
@@ -373,7 +374,7 @@ public:
             }
         }
         if (paired.size() > 1) {
-            select(paired.at((paired.indexOf(m_selectedId) + 1) % paired.size()));
+            select(paired.at((paired.indexOf(m_selectedId) + (dir < 0 ? paired.size() - 1 : 1)) % paired.size()));
         }
     }
 

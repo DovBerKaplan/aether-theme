@@ -33,6 +33,24 @@ Item {
     TapHandler { id: tap; onTapped: root.openRequested("connect") }
     DropTarget { id: drop; deviceId: root.online && root.d.pluginState["kdeconnect_share"] === true ? root.d.id : "" }
 
+    // Two-finger swipe on the touchpad (or a sideways wheel): one step per gesture, not per event.
+    WheelHandler {
+        id: swipe
+        target: root; enabled: root.pairedCount > 1
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        property real acc: 0
+        property bool cooling: false
+        onWheel: (e) => {
+            const d = Math.abs(e.angleDelta.x) > Math.abs(e.angleDelta.y) ? e.angleDelta.x : 0
+            if (d === 0 || cooling) return
+            acc += d
+            if (Math.abs(acc) < 90) return
+            connectModel.selectStep((acc < 0) !== I18n.rtl ? 1 : -1)
+            acc = 0; cooling = true; cool.restart()
+        }
+    }
+    Timer { id: cool; interval: 380; onTriggered: swipe.cooling = false }
+
     // ---- a device is selected ------------------------------------------------------------
     Item {
         anchors.fill: parent

@@ -95,6 +95,25 @@ Item {
         }
     }
 
+    // Two-finger swipe on the touchpad (or a sideways wheel): one step per gesture, not per event.
+    WheelHandler {
+        id: swipe
+        target: pager; enabled: root.pages > 1 && !root.editing
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        property real acc: 0
+        property bool cooling: false
+        onWheel: (e) => {
+            const d = Math.abs(e.angleDelta.x) > Math.abs(e.angleDelta.y) ? e.angleDelta.x : 0
+            if (d === 0 || cooling) return
+            acc += d
+            if (Math.abs(acc) < 90) return
+            const dir = (acc < 0) !== I18n.rtl ? 1 : -1
+            pager.currentIndex = Math.max(0, Math.min(root.pages - 1, pager.currentIndex + dir))
+            acc = 0; cooling = true; cool.restart()
+        }
+    }
+    Timer { id: cool; interval: 380; onTriggered: swipe.cooling = false }
+
     // ---- edit mode ----------------------------------------------------------------------
     // Nothing in edit mode may fall through to the island's click-outside-to-close area: a drag
     // released on a tile, or a tap on dead space, would fold the island mid-edit.
