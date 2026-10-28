@@ -23,25 +23,31 @@ Item {
     property bool open: false
     readonly property bool detailOpen: content.page === "detail"
     readonly property int pw: detailOpen ? pwDetail : pwList
-    // The glass width springs alongside px with the same constants, so while the card grows the
-    // right edge stays pinned at width - edgeGap and only the far edge moves.
-    property real gw: pw
+    // The window is exactly as wide as its content needs (the dock's way, not an overlay):
+    // the rest of the screen stays free for terminals, editors and tiled apps. Inside it the
+    // glass slides in from beyond the right edge and grows leftward for the card.
+    property real gw: pw                       // sprung glass width
     Behavior on gw { SpringAnimation { spring: 3.6; damping: 0.22; epsilon: 3 } }
-    property real px: open ? root.width - edgeGap - pw : root.width
-    readonly property bool panelIn: px < root.width - 1
-    property real closedAt: 0
-    Behavior on px {
+    property real slide: open ? 0 : gw + 24    // 0 = hugging the window's right edge
+    Behavior on slide {
         enabled: true
         SpringAnimation { spring: 3.6; damping: root.open ? 0.22 : 0.36; epsilon: 3 }
     }
-    onPxChanged: report()
+    readonly property bool panelIn: slide < gw / 2
+    property real closedAt: 0
+    onSlideChanged: {
+        report()
+        // keep the window wide until the glass has fully slid out, then shrink to the ear strip
+        if (!open && slide > gw + 20 && root.width > 64) ctl.setWindowSize(64, ctl.screenHeight)
+    }
     onGwChanged: report()
+    onPwChanged: if (open) ctl.setWindowSize(pw + edgeGap, ctl.screenHeight)
     onOpenChanged: {
         closedAt = open ? 0 : Date.now()
         ctl.setKeyboard(open)
         discovery.setPolling(open)
-        if (open) mainPage.filterField.forceFocus()
-        else content.page = "main"
+        if (open) ctl.setWindowSize(pw + edgeGap, ctl.screenHeight)
+        else content.page = "main"   // the width shrinks when the slide settles (onSlideChanged)
         report()
     }
     onWidthChanged: report()
@@ -53,7 +59,7 @@ Item {
     Binding { target: I18n; property: "lang"; value: ctl.lang }
 
     Component.onCompleted: {
-        ctl.setWindowSize(ctl.screenWidth, ctl.screenHeight)
+        ctl.setWindowSize(64, ctl.screenHeight)   // the resting ear strip
         report()
         rebuild()
         if (testDetail.length > 0) {
@@ -117,8 +123,9 @@ Item {
                 const r = seatHost.mapToItem(root, 0, 0)
                 hole = { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(seatHost.width), h: Math.round(seatHost.height) }
             }
-            ctl.setLayout(panelCmds(root.px, root.shelfY, root.gw, root.shelfH, root.rad),
-                          Qt.rect(0, 0, 0, 0), true, hole)
+            ctl.setLayout(panelCmds(root.width - root.edgeGap - root.gw + root.slide,
+                                    root.shelfY, root.gw, root.shelfH, root.rad),
+                          Qt.rect(0, 0, 0, 0), false, hole)
         } else {
             ctl.setLayout(earCmds(), Qt.rect(root.width - 14, ear.y - 10, 16, ear.height + 20), false)
         }
@@ -245,6 +252,13 @@ Item {
         if (b >= 1048576) return (b / 1048576).toFixed(1) + " MB"
         if (b >= 1024) return Math.round(b / 1024) + " KB"
         return b + " B"
+    }
+    // KIO resolves the host through ~/.ssh/config, so a bare alias works too
+    function sftpUrl(path) {
+        const d = detailData
+        const auth = d.user ? encodeURIComponent(d.user) + "@" : ""
+        const port = d.port && d.port !== "22" ? ":" + d.port : ""
+        return "sftp://" + auth + d.host + port + path
     }
     function logColor(line) {
         if (/error|fatal|panic|fail|exception|traceback/i.test(line)) return Tokens.role.island.negative
@@ -503,14 +517,13 @@ Item {
     }
 
     // ---------- the shelf ----------
-    MouseArea {
-        anchors.fill: parent
-        enabled: root.open
-        onClicked: root.open = false
-    }
+    // No click-outside any more: the window is only as wide as the glass, so clicks to its
+    // left belong to the apps living there (that is the point). Close with Esc, Win+C or the
+    // header's close button.
     Item {
         id: shelf
-        x: root.px; y: root.shelfY; width: root.gw; height: root.shelfH
+        x: root.width - root.edgeGap - root.gw + root.slide
+        y: root.shelfY; width: root.gw; height: root.shelfH
         clip: true
 
         TapHandler { onTapped: (e) => e.accepted = true }   // the glass eats its own clicks
@@ -602,20 +615,33 @@ Item {
                 property alias filterField: filter
                 onBackRequested: content.page = "main"
 
-                headerTrailing: Item {
-                    width: 40; height: 40
-                    Glyph {
-                        id: refreshGlyph
-                        anchors.centerIn: parent
-                        name: "restart"; size: 16
-                        color: refreshHover.hovered ? Theme.text : Theme.subtext
-                        NumberAnimation on rotation {
-                            from: 0; to: 360; duration: 900
-                            running: discovery.busy; loops: Animation.Infinite
+                headerTrailing: Row {
+                    spacing: Tokens.space.xs
+                    Item {
+                        width: 40; height: 40
+                        Glyph {
+                            id: refreshGlyph
+                            anchors.centerIn: parent
+                            name: "restart"; size: 16
+                            color: refreshHover.hovered ? Theme.text : Theme.subtext
+                            NumberAnimation on rotation {
+                                from: 0; to: 360; duration: 900
+                                running: discovery.busy; loops: Animation.Infinite
+                            }
                         }
+                        HoverHandler { id: refreshHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: discovery.refresh() }
                     }
-                    HoverHandler { id: refreshHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: discovery.refresh() }
+                    Item {
+                        width: 40; height: 40
+                        Glyph {
+                            anchors.centerIn: parent
+                            name: "close"; size: 16
+                            color: closeHover.hovered ? Theme.text : Theme.subtext
+                        }
+                        HoverHandler { id: closeHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: root.open = false }
+                    }
                 }
 
                 footer: Row {
@@ -623,6 +649,7 @@ Item {
                     anchors { left: parent.left; right: parent.right; leftMargin: Tokens.space.md; rightMargin: Tokens.space.md }
                     Button { text: I18n.tr("New connection"); kind: "filled"; onClicked: root.openEditor({}) }
                     Button { text: I18n.tr("Import"); onClicked: content.openImport() }
+                    Button { text: I18n.tr("Local terminal"); onClicked: launcher.localTerminal() }
                 }
 
                 TextField {
@@ -872,6 +899,7 @@ Item {
                             width: parent.width - 2 * Tokens.space.md
                             spacing: Tokens.space.xs
                             ActionGlyph { glyph: "up"; onAct: sftp.up() }
+                            ActionGlyph { glyph: "folder"; onAct: launcher.browseRemote(root.sftpUrl(sftp.path)) }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width - 30
@@ -917,6 +945,11 @@ Item {
                                                                                      : "assets/glyphs/file.svg")
                                     onClicked: if (modelData.dir) sftp.list(sftp.path + "/" + modelData.name)
                                     trailing: [
+                                        ActionGlyph {
+                                            glyph: "edit"
+                                            visible: !modelData.dir
+                                            onAct: launcher.editRemote(root.sftpUrl(sftp.path + "/" + modelData.name))
+                                        },
                                         ActionGlyph {
                                             glyph: "download"
                                             visible: !modelData.dir

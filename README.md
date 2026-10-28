@@ -10,6 +10,7 @@ A desktop layer for **KDE Plasma 6** (Wayland): a dark, blurred, rounded look, p
 | **Toasts** | Notification cards that drop from the top edge. A separate program: it only listens, Plasma stays the notification server | `components/toasts/` |
 | **Login** | SDDM login screen in the same material | `login/` |
 | **System** | Windows-style keyboard shortcuts, touchpad gestures, panel layout, light/dark sync | `system/` |
+| **Direction** | Per-app RTL/LTR launch rules: run any app Hebrew-RTL or force English-LTR; dock, KRunner, xdg-open and Flatpak all honor the rules | `system/direction/` |
 
 Both components are Qt 6 / QML apps (C++ for the window and system bits) running as systemd **user services**. They draw with real KWin blur, so they need a Wayland session with KWin.
 
@@ -22,6 +23,20 @@ make install        # backs up your KDE settings first, then installs everything
 
 Prerequisites, build dependencies and what each step changes: **[docs/INSTALL.md](docs/INSTALL.md)**.
 Undo: `make uninstall` (services) and `make restore` (KDE settings from the backup).
+
+## Direction rules
+
+Every app launches exactly as the system launches it unless a rule says otherwise, so newly installed applications need nothing. A rule applies at the app's next launch.
+
+```bash
+make direction-install
+aether-direction set dolphin rtl    # Hebrew UI, RTL layout (date/number formats stay en_IL)
+aether-direction set kate ltr       # force English/LTR even if defaults change later
+aether-direction unset dolphin      # back to system default
+aether-direction doctor             # what is covered, how, and what can't be
+```
+
+Rules shadow the application's .desktop file through `~/.local/share/applications`, so KRunner, the dock, xdg-open and file associations all follow them; the original file is backed up and restored by `unset`. `sync` refreshes the overrides after an app update changes its launcher.
 
 ## Layout of the repository
 
@@ -41,6 +56,19 @@ docs/         INSTALL, ARCHITECTURE, CONTRIBUTING, DOCK-SPEC, history/
 ## Status
 
 Personal project, used daily on KDE neon (Plasma 6.8, Wayland, one 1920x1080 screen). Known gaps: no app menus in the island (they return to each window), no tray icons of other apps, single-screen assumptions in a few places, Hebrew/English only tested.
+
+## Credits
+
+Aether is a thin layer over KDE - almost everything hard is a ready-made project wearing the glass:
+
+- **Plasma / KWin** — the desktop this lives in: blur through KWindowEffects, **KWin Custom Tiling** (`Win+Z` / `Win+T`) arranges the terminal windows and everything else on screen, and KWin scripting seats the console's terminals (a pattern proven by the island's media seat).
+- **Konsole + tmux** — every terminal is a Konsole window wearing the Aether profile; tmux on each server (and locally) keeps sessions alive across drops, crashes and reboots.
+- **OpenSSH** — ControlMaster multiplexing (one authenticated socket per host, so repeats are instant), BatchMode for the background pollers, and sftp batch mode driving the file browser.
+- **Kate + KIO (kio_sftp) + Dolphin** — remote files open and save straight over `sftp://`, folders open in Dolphin, all from the shelf.
+- **Docker CLI / kubectl** — container and pod discovery, start/stop actions, log streams and death events.
+- **NetworkManager, KWallet, freedesktop notifications** — reachability, secrets and the toast pipeline.
+
+Design references: the resting tab and pull-out drawer are an homage to the **OxygenOS Smart Sidebar**; the per-connection cards follow **MobaXterm**'s session panel and **Termius**' SFTP UX; the files explorer aims at **VS Code**'s Remote Explorer rather than a desktop file manager.
 
 ## License
 

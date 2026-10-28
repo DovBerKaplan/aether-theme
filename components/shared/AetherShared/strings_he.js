@@ -125,5 +125,6 @@ var dict = {
     "Empty folder": "תיקייה ריק", "Transfer finished": "ההעברה הסתיימה", "Transfer failed": "ההעברה נכשלה",
     "Check ~/Downloads": "בדקו ב-~/Downloads",
     "Opening the session…": "הסשן נפתח…", "tmux on the server holds your place": "ה-tmux בשרת שומר על המקום שלך",
-    "The terminal could not open - check the host": "המסוף לא נפתח - בדקו את המארח", "Try again": "נסו שוב"
+    "The terminal could not open - check the host": "המסוף לא נפתח - בדקו את המארח", "Try again": "נסו שוב",
+    "Local terminal": "מסוף מקומי"
 }
