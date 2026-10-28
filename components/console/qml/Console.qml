@@ -69,14 +69,19 @@ Item {
                 root.openDetail("cont", discovery.containers[0])
                 logsTimer.restart()
             }
-            else if (testDetail === "session" && store.sessions.length > 0)
-                root.openDetail("session", store.sessions[0])
+            else if (testDetail === "session") {
+                // the fixture host resolves through ~/.ssh/config - no saved session needed
+                root.openDetail("session", { id: "fixture", name: "kot-prod", host: "kot-prod" })
+                logsTimer.restart()
+            }
         }
     }
     Timer {
         id: logsTimer
         interval: 3000
-        onTriggered: if (testDetail.length > 0) { root.detailView = root.logsIdx; root.syncDetail() }
+        onTriggered:
+            if (testDetail === "cont") { root.detailView = root.logsIdx; root.syncDetail() }
+            else if (testDetail === "session") { root.detailView = root.filesIdx; root.syncDetail() }
     }
 
     Connections {
@@ -217,6 +222,12 @@ Item {
     }
 
     function gb(b) { return (b / 1073741824).toFixed(1) }
+    function hsize(b) {
+        if (b >= 1073741824) return (b / 1073741824).toFixed(1) + " GB"
+        if (b >= 1048576) return (b / 1048576).toFixed(1) + " MB"
+        if (b >= 1024) return Math.round(b / 1024) + " KB"
+        return b + " B"
+    }
     function logColor(line) {
         if (/error|fatal|panic|fail|exception|traceback/i.test(line)) return Tokens.role.island.negative
         if (/warn|deprecat/i.test(line)) return "#c9a26d"
@@ -226,9 +237,11 @@ Item {
         const f = logSearch.text.trim().toLowerCase()
         return !f ? logStream.lines : logStream.lines.filter(l => l.toLowerCase().indexOf(f) >= 0)
     }
-    // which segment index holds the logs / terminal views for the current kind
-    readonly property int logsIdx: detailKind === "pod" ? 0 : 1
-    readonly property int termIdx: detailKind === "pod" ? 1 : 2
+    // which segment index holds each view for the current kind
+    //   session: [Dashboard, Files, Logs, Terminal] · cont: [Overview, Logs, Terminal] · pod: [Logs, Terminal]
+    readonly property int filesIdx: detailKind === "session" ? 1 : -1
+    readonly property int logsIdx: detailKind === "pod" ? 0 : detailKind === "cont" ? 1 : 2
+    readonly property int termIdx: detailKind === "pod" ? 1 : detailKind === "cont" ? 2 : 3
 
     // ---------- the detail card ----------
     property string detailKind: ""            // "session" | "cont" | "pod"
@@ -236,6 +249,7 @@ Item {
     property int detailView: 0
     property string metricKey: ""
     property string streamKey: ""
+    property string sftpKey: ""
 
     function openDetail(kind, d) {
         detailKind = kind
@@ -254,6 +268,7 @@ Item {
         if (content.page !== "detail" || detailKind === "") {
             if (metricKey !== "") { metrics.stop(); metricKey = "" }
             if (streamKey !== "") { logStream.stop(); streamKey = "" }
+            sftpKey = ""
             return
         }
         if (detailKind === "session" && detailView === 0) {
@@ -271,6 +286,11 @@ Item {
             if (streamKey !== k) { logStream.clear(); begin(); streamKey = k }
         } else if (streamKey !== "") {
             logStream.stop(); streamKey = ""
+        }
+        // the files view keeps its browsing position while the card is open; a new entry
+        // into the card (or another session) starts fresh at the home folder
+        if (detailKind === "session" && detailView === filesIdx) {
+            if (sftpKey !== "s:" + detailData.id) { sftp.open(detailData); sftpKey = "s:" + detailData.id }
         }
     }
 
@@ -613,7 +633,7 @@ Item {
                     SegmentedControl {
                         width: parent.width - 2 * Tokens.space.md
                         x: Tokens.space.md
-                        model: root.detailKind === "session" ? [I18n.tr("Dashboard"), I18n.tr("Logs"), I18n.tr("Terminal")]
+                        model: root.detailKind === "session" ? [I18n.tr("Dashboard"), I18n.tr("Files"), I18n.tr("Logs"), I18n.tr("Terminal")]
                              : root.detailKind === "cont" ? [I18n.tr("Overview"), I18n.tr("Logs"), I18n.tr("Terminal")]
                              : [I18n.tr("Logs"), I18n.tr("Terminal")]
                         currentIndex: root.detailView
@@ -738,6 +758,104 @@ Item {
                             Button {
                                 text: I18n.tr("Restart")
                                 onClicked: discovery.containerAction("restart", root.detailData.name)
+                            }
+                        }
+                    }
+
+                    // ----- files (ssh session): the stock sftp client over the same master -----
+                    Column {
+                        visible: root.detailKind === "session" && root.detailView === root.filesIdx && content.page === "detail"
+                        width: parent.width
+                        spacing: Tokens.space.sm
+                        topPadding: Tokens.space.sm
+                        Row {
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            spacing: Tokens.space.xs
+                            ActionGlyph { glyph: "up"; onAct: sftp.up() }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - 30
+                                text: I18n.ltr(sftp.path)
+                                textFormat: Text.PlainText
+                                elide: Text.ElideMiddle
+                                font { family: Theme.mono; pixelSize: Tokens.type.label }
+                                color: Theme.subtext
+                            }
+                        }
+                        LinearProgress {
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            running: sftp.busy
+                        }
+                        Text {
+                            visible: sftp.err.length > 0
+                            x: Tokens.space.md; width: parent.width - 2 * Tokens.space.md
+                            text: sftp.err
+                            wrapMode: Text.WrapAnywhere
+                            font { family: Theme.mono; pixelSize: Tokens.type.caption }
+                            color: Tokens.role.island.negative
+                        }
+                        Item {
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            height: Math.max(180, Math.min(360, root.height - 460))
+                            ListView {
+                                id: fileList
+                                anchors.fill: parent
+                                clip: true
+                                reuseItems: true
+                                boundsBehavior: Flickable.StopAtBounds
+                                LayoutMirroring.enabled: false
+                                model: sftp.entries
+                                delegate: ListRow {
+                                    required property var modelData
+                                    width: fileList.width
+                                    title: modelData.name
+                                    subtitle: modelData.dir ? I18n.tr("Folder") + " · " + I18n.ltr(modelData.date)
+                                                            : I18n.ltr(root.hsize(modelData.size) + "  ·  " + modelData.date)
+                                    leadingGlyphSource: Qt.resolvedUrl(modelData.dir ? "assets/glyphs/folder.svg"
+                                                                                     : "assets/glyphs/file.svg")
+                                    onClicked: if (modelData.dir) sftp.list(sftp.path + "/" + modelData.name)
+                                    trailing: [
+                                        ActionGlyph {
+                                            glyph: "download"
+                                            visible: !modelData.dir
+                                            onAct: sftp.download(modelData.name)
+                                        }
+                                    ]
+                                }
+                            }
+                            DropArea {
+                                id: fileDrop
+                                anchors.fill: parent
+                                onEntered: (d) => d.accepted = d.hasUrls
+                                onDropped: (d) => { if (d.hasUrls) d.urls.forEach(u => sftp.upload(u)); d.accept() }
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: fileDrop.containsDrag
+                                text: I18n.tr("Drop to upload here")
+                                font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
+                                color: Theme.accent
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: sftp.entries.length === 0 && !sftp.busy && sftp.err.length === 0
+                                text: I18n.tr("Empty folder")
+                                font { family: Theme.font; pixelSize: Tokens.type.label }
+                                color: Theme.subtext
+                            }
+                        }
+                        Row {
+                            x: Tokens.space.md
+                            spacing: Tokens.space.sm
+                            Button { text: I18n.tr("Upload…"); onClicked: sftp.chooseUpload() }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: I18n.tr("or drop files here")
+                                font { family: Theme.font; pixelSize: Tokens.type.caption }
+                                color: Theme.subtext
                             }
                         }
                     }

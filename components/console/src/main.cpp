@@ -20,6 +20,7 @@
 #include "LogStream.h"
 #include "Metrics.h"
 #include "SessionStore.h"
+#include "Sftp.h"
 
 static QString qmlDir()
 {
@@ -67,6 +68,7 @@ int main(int argc, char **argv)
     view->rootContext()->setContextProperty(QStringLiteral("launcher"), launcher);
     view->rootContext()->setContextProperty(QStringLiteral("metrics"), new Metrics(controller));
     view->rootContext()->setContextProperty(QStringLiteral("logStream"), new LogStream(controller));
+    view->rootContext()->setContextProperty(QStringLiteral("sftp"), new Sftp(controller));
     // live-test fixture, like the island's AETHER_ISLAND_FAKE_BT: AETHER_CONSOLE_TEST_DETAIL=cont|session
     view->rootContext()->setContextProperty(QStringLiteral("testDetail"),
                                              qEnvironmentVariable("AETHER_CONSOLE_TEST_DETAIL"));
