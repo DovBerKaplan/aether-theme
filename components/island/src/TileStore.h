@@ -218,7 +218,7 @@ private:
         return {QStringLiteral("wifi"), QStringLiteral("bluetooth"), QStringLiteral("nightlight"), QStringLiteral("darktheme"),
                 QStringLiteral("airplane"), QStringLiteral("keepawake"), QStringLiteral("micmute"), QStringLiteral("powersaver")};
     }
-    static QStringList defaultWide() { return {QStringLiteral("wifi"), QStringLiteral("bluetooth")}; }
+    static QStringList defaultWide() { return {}; }
     void release()
     {
         if (m_cookie != 0) {
