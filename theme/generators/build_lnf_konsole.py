@@ -3,27 +3,19 @@
 import json
 from pathlib import Path
 
+from tokens import load
+
 ROOT = Path(__file__).resolve().parents[1] / "generated"
 
+_META = {
+    "glass": dict(id="org.aether.glass.desktop", name="Aether Glass", scheme="AetherGlass",
+                  icons="Papirus-Dark", cursor="breeze_cursors", kvantum="AetherGlass"),
+    "serenity": dict(id="org.aether.serenity.desktop", name="Aether Serenity", scheme="AetherSerenity",
+                     icons="Papirus-Light", cursor="breeze_cursors", kvantum="AetherSerenity"),
+}
 VARIANTS = {
-    "glass": dict(
-        id="org.aether.glass.desktop", name="Aether Glass", scheme="AetherGlass",
-        icons="Papirus-Dark", cursor="breeze_cursors", kvantum="AetherGlass",
-        konsole=dict(
-            bg="#0b0e14", fg="#e1e2eb", fg_intense="#ffffff", opacity="0.94",
-            ansi=["#191c22", "#ff6b81", "#7cf5c4", "#ffd27a", "#4fa8ff", "#a98bff", "#00f2fe", "#c8ccd6"],
-            bright=["#3a494b", "#ff8fa0", "#a3ffd9", "#ffe3a8", "#7cc0ff", "#cdbdff", "#6ff6ff", "#ffffff"],
-        ),
-    ),
-    "serenity": dict(
-        id="org.aether.serenity.desktop", name="Aether Serenity", scheme="AetherSerenity",
-        icons="Papirus-Light", cursor="breeze_cursors", kvantum="AetherSerenity",
-        konsole=dict(
-            bg="#f8f9fa", fg="#191c1d", fg_intense="#000000", opacity="0.96",
-            ansi=["#2e3132", "#ba1a1a", "#1e7d4f", "#8a6100", "#2a5d9f", "#6a4bb3", "#00696f", "#c5c6ca"],
-            bright=["#595f65", "#d63b3b", "#2a9d63", "#a87700", "#3b78c4", "#8566d1", "#00838a", "#e1e3e4"],
-        ),
-    ),
+    key: dict(meta, konsole={a.replace("-", "_"): b for a, b in load()["terminal"][key].items()})
+    for key, meta in _META.items()
 }
 
 

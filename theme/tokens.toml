@@ -1,0 +1,330 @@
+# Aether design tokens — the single source of truth for every design value.
+# Read docs/DESIGN-SYSTEM.md first. Consumers:
+#   theme/generators/tokens.py          (Python generators)
+#   theme/generators/build_tokens_qml.py → components/shared/AetherShared/Tokens.qml
+# After editing: `make tokens`.
+#
+# Tiers: [palette] holds raw values and is never used by components directly;
+# [role.*] gives them meaning (values are palette names or "#rrggbb");
+# [material] holds calibrated numbers; the rest are scales.
+
+# ---------- tier 1: primitives ----------
+[palette]
+cyan-400     = "#00f2fe"
+cyan-500     = "#00dce6"
+cyan-900     = "#00373a"
+ink-950      = "#0b0e14"
+ink-900      = "#10131a"
+ink-850      = "#121418"
+ink-800      = "#191c22"
+ink-750      = "#1c1e24"
+ink-700      = "#1d2026"
+ink-600      = "#2a2d34"
+fog-500      = "#8d939d"
+fog-300      = "#b9cacb"
+fog-100      = "#e1e2eb"
+fog-50       = "#eceef2"
+paper-0      = "#ffffff"
+paper-50     = "#f8f9fa"
+paper-100    = "#f3f4f5"
+graphite-950 = "#191c1d"
+graphite-900 = "#1a1d20"
+graphite-800 = "#2e3132"
+graphite-700 = "#44474a"
+graphite-500 = "#595f65"
+red-200      = "#ffb4ab"
+red-700      = "#ba1a1a"
+amber-200    = "#ffd27a"
+amber-700    = "#8a6100"
+green-200    = "#7cf5c4"
+green-700    = "#1e7d4f"
+violet-200   = "#cdbdff"
+
+# ---------- tier 2: semantic roles ----------
+# Values match today's KDE schemes (build_colors.py) exactly.
+[role.dark]
+text           = "fog-100"
+text-muted     = "fog-300"
+accent         = "cyan-400"
+accent-hover   = "cyan-500"
+text-on-accent = "cyan-900"
+link           = "cyan-500"
+visited        = "violet-200"
+surface        = "ink-900"
+surface-sunken = "ink-950"
+surface-alt    = "ink-800"
+surface-raised = "ink-700"
+negative       = "red-200"
+warning        = "amber-200"
+positive       = "green-200"
+
+[role.light]
+text           = "graphite-950"
+text-muted     = "graphite-500"
+accent         = "graphite-900"
+accent-hover   = "graphite-700"
+text-on-accent = "paper-0"
+link           = "graphite-900"
+visited        = "graphite-500"
+surface        = "paper-50"
+surface-sunken = "paper-0"
+surface-alt    = "paper-100"
+surface-raised = "paper-0"
+negative       = "red-700"
+warning        = "amber-700"
+positive       = "green-700"
+
+# The island and its cards are always dark (design line §1.2).
+# Open decision: fog-50/fog-500 here vs fog-100/fog-300 in role.dark.
+[role.island]
+text        = "fog-50"
+text-muted  = "fog-500"
+accent      = "cyan-400"
+chip        = "ink-600"
+negative    = "#ff6b6b"   # low battery
+hero        = "paper-0"   # media play button
+hero-pressed = "#dfe3e8"
+body-top    = "ink-750"
+body-bottom = "ink-850"
+
+# ---------- tier 3: calibrated numbers ----------
+[material]
+island-body-alpha = 0.75
+rim-alpha         = 0.09   # white hairline on dark glass
+bevel-alpha       = 0.35
+grain-opacity     = 0.022
+dock-scrim        = 0.28   # live-calibrated, see DOCK-SPEC.md
+dock-frost        = 0.10   # white veil; the value build_frames.py ships
+# aether-dock glass: the island's material, a touch denser and rougher in dark mode, smoother and clearer in light mode
+dock-alpha-dark   = 0.82
+dock-alpha-light  = 0.50   # cool white veil over the blur: frosted glass that still reads over white content
+dock-grain-dark   = 0.032
+dock-grain-light  = 0.010
+tint-hover        = 0.08
+tint-focus        = 0.10
+tint-attention    = 0.14
+
+# White-alpha steps over dark glass: resting fill, border, hover, press, strong edge; text-dim is island text at reduced alpha.
+[tint]
+faint    = 0.055
+subtle   = 0.09
+soft     = 0.13
+strong   = 0.22
+edge     = 0.55
+text-dim = 0.78
+
+# ---------- scales ----------
+[space]   # 4-pt grid
+xs  = 4
+sm  = 8
+md  = 12
+lg  = 16
+xl  = 24
+xxl = 32
+
+[radius]  # "pill" is not a number: height / 2
+hair = 2
+xs   = 4
+sm   = 8
+md   = 12
+lg   = 16
+xl   = 20
+card = 24
+
+[dock]    # the app bar's geometry (px); proportions follow the Android taskbar reference: icons ~60% of the bar
+icon       = 44
+cell-inset = 3      # hover chip's air around the icon
+pad        = 11     # glass inset around the icons
+gap        = 4      # between icon cells (+ 2 x cell-inset = visible gap)
+radius     = 26
+sep-extra  = 14     # extra air around the group hairline
+home-w     = 0.25   # home indicator: fraction of the bar's length ...
+home-h     = 4
+home-inset = 5      # ... and its distance from the screen edge
+
+[type]    # pixelSize; weight carries hierarchy
+caption = 11
+label   = 12
+body    = 13
+title   = 15
+heading = 22
+display = 28
+clock   = 168
+
+[font]
+family = "Inter"
+mono   = "JetBrains Mono"
+
+[motion.duration]  # ms
+micro   = 90
+fast    = 120
+base    = 180
+slow    = 250
+morph   = 450
+ambient = 900
+
+[motion.easing]    # Qt QEasingCurve names
+enter   = "OutCubic"
+exit    = "InCubic"
+ambient = "InOutSine"
+spring  = "OutBack"
+
+# ---------- generator inputs (moved out of the build_*.py files; values may be palette names or #rrggbb[aa]) ----------
+
+# KDE color schemes -> build_colors.py
+[scheme.AetherGlass]
+name = "Aether Glass"
+window = "ink-900"
+view = "ink-950"
+alt = "ink-800"
+button = "ink-700"
+header = "ink-950"
+tooltip = "ink-700"
+fg = "fog-100"
+fg-inactive = "fog-300"
+accent = "cyan-400"
+accent-hover = "cyan-500"
+selection = "cyan-500"
+selection-fg = "cyan-900"
+link = "cyan-500"
+visited = "violet-200"
+negative = "red-200"
+neutral = "amber-200"
+positive = "green-200"
+complementary = "ink-950"
+wm-active = "ink-950"
+wm-inactive = "ink-900"
+
+[scheme.AetherSerenity]
+name = "Aether Serenity"
+window = "paper-50"
+view = "paper-0"
+alt = "paper-100"
+button = "paper-0"
+header = "paper-100"
+tooltip = "paper-0"
+fg = "graphite-950"
+fg-inactive = "graphite-500"
+accent = "graphite-900"
+accent-hover = "graphite-700"
+selection = "graphite-900"
+selection-fg = "paper-0"
+link = "graphite-900"
+visited = "graphite-500"
+negative = "red-700"
+neutral = "amber-700"
+positive = "green-700"
+complementary = "graphite-800"
+wm-active = "paper-100"
+wm-inactive = "paper-50"
+
+# Konsole + global themes -> build_lnf_konsole.py (ansi/bright: 8 colors each, black..white)
+[terminal.glass]
+bg = "ink-950"
+fg = "fog-100"
+fg-intense = "paper-0"
+opacity = 0.94
+ansi = ["ink-800", "#ff6b81", "green-200", "amber-200", "#4fa8ff", "#a98bff", "cyan-400", "#c8ccd6"]
+bright = ["#3a494b", "#ff8fa0", "#a3ffd9", "#ffe3a8", "#7cc0ff", "violet-200", "#6ff6ff", "paper-0"]
+
+[terminal.serenity]
+bg = "paper-50"
+fg = "graphite-950"
+fg-intense = "#000000"
+opacity = 0.96
+ansi = ["graphite-800", "red-700", "green-700", "amber-700", "#2a5d9f", "#6a4bb3", "#00696f", "#c5c6ca"]
+bright = ["graphite-500", "#d63b3b", "#2a9d63", "#a87700", "#3b78c4", "#8566d1", "#00838a", "#e1e3e4"]
+
+# Kvantum recolor of WhiteSur -> build_kvantum.py (svg: source color -> new color; colors: kvconfig [GeneralColors])
+[kvantum.AetherGlass]
+base = "WhiteSurDark"
+
+[kvantum.AetherGlass.svg]
+"#315bef" = "cyan-500"
+"#5294e2" = "cyan-400"
+"#0e4bb4" = "#00696f"
+"#333333" = "ink-700"
+"#2d2d2d" = "ink-800"
+"#262626" = "ink-900"
+"#31363b" = "#272a31"
+"#4f4f4f" = "#3a494b"
+"#656565" = "#32353c"
+"#696969" = "#3a494b"
+"#dfdfdf" = "fog-100"
+"#9d9d9d" = "#849495"
+
+[kvantum.AetherGlass.colors]
+"window.color" = "ink-900"
+"inactive.window.color" = "ink-900"
+"base.color" = "ink-950"
+"inactive.base.color" = "ink-950"
+"alt.base.color" = "ink-800"
+"inactive.alt.base.color" = "ink-800"
+"button.color" = "#272a31"
+"light.color" = "#363940"
+"mid.light.color" = "#32353c"
+"dark.color" = "ink-950"
+"mid.color" = "ink-700"
+"highlight.color" = "#00f2fe55"
+"inactive.highlight.color" = "#00f2fe33"
+"text.color" = "fog-100"
+"inactive.text.color" = "fog-300"
+"window.text.color" = "fog-100"
+"inactive.window.text.color" = "fog-300"
+"button.text.color" = "fog-100"
+"disabled.text.color" = "#849495"
+"tooltip.base.color" = "ink-700"
+"tooltip.text.color" = "fog-100"
+"highlight.text.color" = "#e0fdff"
+"inactive.highlight.text.color" = "fog-100"
+"link.color" = "cyan-500"
+"link.visited.color" = "violet-200"
+"progress.indicator.text.color" = "cyan-900"
+
+[kvantum.AetherSerenity]
+base = "WhiteSur"
+
+[kvantum.AetherSerenity.svg]
+"#0860f2" = "graphite-900"
+"#0e4bb4" = "graphite-700"
+"#b74aff" = "#5c5f62"
+"#f5f5f5" = "paper-50"
+"#f2f2f2" = "paper-100"
+"#424242" = "graphite-800"
+
+[kvantum.AetherSerenity.colors]
+"window.color" = "paper-50"
+"inactive.window.color" = "paper-50"
+"base.color" = "paper-0"
+"inactive.base.color" = "paper-0"
+"alt.base.color" = "paper-100"
+"inactive.alt.base.color" = "paper-100"
+"button.color" = "paper-0"
+"light.color" = "paper-0"
+"mid.light.color" = "#edeeef"
+"dark.color" = "#c5c6ca"
+"mid.color" = "#e1e3e4"
+"highlight.color" = "#1a1d2026"
+"inactive.highlight.color" = "#1a1d201a"
+"text.color" = "graphite-950"
+"inactive.text.color" = "graphite-500"
+"window.text.color" = "graphite-950"
+"inactive.window.text.color" = "graphite-500"
+"button.text.color" = "graphite-950"
+"disabled.text.color" = "#191c1d74"
+"tooltip.base.color" = "paper-0"
+"tooltip.text.color" = "graphite-950"
+"highlight.text.color" = "graphite-950"
+"inactive.highlight.text.color" = "graphite-800"
+"link.color" = "graphite-900"
+"link.visited.color" = "graphite-500"
+"progress.indicator.text.color" = "paper-0"
+
+[kvantum.hacks]
+composite = "true"
+translucent_windows = "true"
+blurring = "true"
+popup_blurring = "true"
+reduce_window_opacity = "6"
+reduce_menu_opacity = "4"
+menu_blur_radius = "12"

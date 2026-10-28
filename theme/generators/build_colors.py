@@ -2,26 +2,11 @@
 """Generate KDE .colors schemes (AetherGlass dark, AetherSerenity light) from Stitch tokens."""
 from pathlib import Path
 
+from tokens import load
+
 OUT = Path(__file__).resolve().parents[1] / "generated/color-schemes"
 
-PALETTES = {
-    "AetherGlass": dict(
-        name="Aether Glass", window="#10131a", view="#0b0e14", alt="#191c22",
-        button="#1d2026", header="#0b0e14", tooltip="#1d2026", fg="#e1e2eb",
-        fg_inactive="#b9cacb", accent="#00f2fe", accent_hover="#00dce6",
-        selection="#00dce6", selection_fg="#00373a", link="#00dce6", visited="#cdbdff",
-        negative="#ffb4ab", neutral="#ffd27a", positive="#7cf5c4",
-        complementary="#0b0e14", wm_active="#0b0e14", wm_inactive="#10131a",
-    ),
-    "AetherSerenity": dict(
-        name="Aether Serenity", window="#f8f9fa", view="#ffffff", alt="#f3f4f5",
-        button="#ffffff", header="#f3f4f5", tooltip="#ffffff", fg="#191c1d",
-        fg_inactive="#595f65", accent="#1a1d20", accent_hover="#44474a",
-        selection="#1a1d20", selection_fg="#ffffff", link="#1a1d20", visited="#595f65",
-        negative="#ba1a1a", neutral="#8a6100", positive="#1e7d4f",
-        complementary="#2e3132", wm_active="#f3f4f5", wm_inactive="#f8f9fa",
-    ),
-}
+PALETTES = {k: {a.replace("-", "_"): b for a, b in v.items()} for k, v in load()["scheme"].items()}
 
 
 def rgb(h: str) -> str:
@@ -44,7 +29,8 @@ def section(p: dict, bg: str, alt: str, fg: str | None = None, fg_inactive: str 
 
 
 def build(key: str, p: dict) -> str:
-    comp_fg = "#e1e2eb"
+    dark = load()["role"]["dark"]  # Complementary is dark in both schemes
+    comp_fg = dark["text"]
     parts = [
         "[ColorEffects:Disabled]\nColor=56,56,56\nColorAmount=0\nColorEffect=0\n"
         "ContrastAmount=0.65\nContrastEffect=1\nIntensityAmount=0.1\nIntensityEffect=2",
@@ -52,7 +38,7 @@ def build(key: str, p: dict) -> str:
         "ColorAmount=0.025\nColorEffect=2\nContrastAmount=0.1\nContrastEffect=2\n"
         "Enable=false\nIntensityAmount=0\nIntensityEffect=0",
         "[Colors:Button]\n" + section(p, p["button"], p["alt"]),
-        "[Colors:Complementary]\n" + section(p, p["complementary"], p["complementary"], comp_fg, "#b9cacb"),
+        "[Colors:Complementary]\n" + section(p, p["complementary"], p["complementary"], comp_fg, dark["text-muted"]),
         "[Colors:Header]\n" + section(p, p["header"], p["alt"]),
         "[Colors:Header][Inactive]\n" + section(p, p["window"], p["alt"]),
         "[Colors:Selection]\n" + section(p, p["selection"], p["accent_hover"], p["selection_fg"], p["selection_fg"]),

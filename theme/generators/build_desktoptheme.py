@@ -46,9 +46,15 @@ def main() -> None:
         },
         "X-Plasma-API-Minimum-Version": "6.0",
     }, indent=2) + "\n")
+    # No ContrastEffect: it paints a dark halo around every glass surface (panels,
+    # dock, tooltips), which reads as glow. Like the island, glass separates by blur,
+    # tint and a hairline rim alone. Breeze ships it disabled too.
+    # AdaptiveTransparency off as well: with an always-visible dock it turned the
+    # pill into the near-black opaque variant whenever a maximized window touched
+    # it - the pill must stay glass in every state.
     (OUT / "plasmarc").write_text(
-        "[ContrastEffect]\nenabled=true\ncontrast=0.9\nintensity=1.0\nsaturation=1.0\n\n"
-        "[BlurBehindEffect]\nenabled=true\n\n[AdaptiveTransparency]\nenabled=true\n"
+        "[ContrastEffect]\nenabled=false\n\n"
+        "[BlurBehindEffect]\nenabled=true\n\n[AdaptiveTransparency]\nenabled=false\n"
     )
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import build_frames

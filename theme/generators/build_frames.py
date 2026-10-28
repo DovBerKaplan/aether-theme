@@ -10,13 +10,19 @@ and Serenity (light).
 import gzip
 from pathlib import Path
 
-STYLE = """<style type="text/css" id="current-color-scheme">
-.ColorScheme-Background { color:#10131a; }
-.ColorScheme-Text { color:#e1e2eb; }
-.ColorScheme-Highlight { color:#00f2fe; }
-.ColorScheme-NegativeText { color:#ffb4ab; }
+from tokens import load
+
+T = load()
+_D, _M = T["role"]["dark"], T["material"]
+
+STYLE = f"""<style type="text/css" id="current-color-scheme">
+.ColorScheme-Background {{ color:{_D["surface"]}; }}
+.ColorScheme-Text {{ color:{_D["text"]}; }}
+.ColorScheme-Highlight {{ color:{_D["accent"]}; }}
+.ColorScheme-NegativeText {{ color:{_D["negative"]}; }}
 </style>"""
 # Gives an element its bounding box without adding alpha (alpha would leak into the blur mask).
+WHITE = T["palette"]["paper-0"]
 TINY = 'fill="#000" fill-opacity="0"'
 
 
@@ -101,9 +107,9 @@ def glass(f: Frame, prefix: str, r: int, opacity: float, margins, border=0.10, h
     ys = {"t": y0, "c": y0 + r, "b": y0 + r + e}
     fill = f'class="{fill_class}" fill="currentColor" fill-opacity="{opacity}"'
     # Milky frost: a faint white veil over the tint, so blurred colours read as frosted glass.
-    veil = f'fill="#ffffff" fill-opacity="{frost}"'
+    veil = f'fill="{WHITE}" fill-opacity="{frost}"'
     line = f'class="ColorScheme-Text" fill="currentColor" fill-opacity="{border}"'
-    hl = f'fill="#ffffff" fill-opacity="{highlight}"'
+    hl = f'fill="{WHITE}" fill-opacity="{highlight}"'
 
     def rim(x, y, w, h, style):  # hairline as a 1px filled rect (see corner_ring)
         return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" {style}/>'
@@ -207,14 +213,22 @@ def write(path: Path, frame: Frame):
 
 
 def build(theme: Path):
-    # Bars. Translucent variants are milky frosted glass: KWin blurs what's behind
-    # (mask-* pieces), a semi-transparent tint sits on top, then a faint white frost.
-    # Shadows only on the opaque variants: KWin also paints a Plasma shadow *under* a
-    # translucent window, which showed as a dark band inside the glass edges.
+    # Bars. The floating dock is a glass bar with modest corners (r 12 on the
+    # 56 px strip - the owner asked off the full-stadium r=28 capsule look).
+    # No rim, no halo, no shadow on translucent (KWin would paint it *under*
+    # the glass and show as a dark band inside the edges).
+    # The scrim was calibrated against the reference screenshot: the pill's glass
+    # sits ~25-30% darker than the wallpaper around it - a ~0.28 dark tint over the
+    # strong KWin blur (strength 14 - see install.sh); the wallpaper's colours still
+    # carry the bar. Heavier scrims read as a flat dark strip; much lighter stops
+    # matching the reference. A 0.10 white frost veil gives the pill Android's
+    # "tint floor": over dark content it reads ~+17 luminance (0.04 measured +0.3
+    # and the pill vanished - icons floating on nothing); over bright wallpaper it
+    # barely moves the calibration (187 vs 180).
     for rel, op, frost, sh in (("widgets/panel-background.svgz", 0.82, 0.0, 22),
-                               ("translucent/widgets/panel-background.svgz", 0.92, 0.0, 0)):
+                               ("translucent/widgets/panel-background.svgz", _M["dock-scrim"], _M["dock-frost"], 0)):
         f = Frame()
-        glass(f, "", 18, op, (6, 6, 10, 10), shadow=sh, frost=frost)
+        glass(f, "", 12, op, (6, 6, 12, 12), border=0.0, shadow=sh, frost=frost)
         # Top bar ("north-" is looked up first): edge-to-edge frosted strip, macOS
         # Tahoe proportions, no rim - just tint, frost and the blur behind it.
         glass(f, "north-", 2, op * 0.8, (2, 2, 10, 10), border=0.0, highlight=0.0, frost=frost)
@@ -225,13 +239,14 @@ def build(theme: Path):
         f = Frame()
         glass(f, "", 22, op, (14, 14, 14, 14), shadow=sh, frost=frost)
         write(theme / rel, f)
-    # Desktop widgets and tooltips.
+    # Desktop widgets and tooltips (the dock's hover previews) join the same
+    # language: soft big-radius glass, hairline rim.
     for rel, op, r, sh, frost in (("widgets/background.svgz", 0.9, 22, 18, 0.0),
                                   ("translucent/widgets/background.svgz", 0.92, 22, 0, 0.0),
-                                  ("widgets/tooltip.svgz", 0.94, 14, 18, 0.0),
-                                  ("translucent/widgets/tooltip.svgz", 0.95, 14, 0, 0.0)):
+                                  ("widgets/tooltip.svgz", 0.94, 20, 18, 0.0),
+                                  ("translucent/widgets/tooltip.svgz", 0.95, 20, 0, 0.0)):
         f = Frame()
-        glass(f, "", r, op, (12, 12, 14, 14) if r > 14 else (8, 8, 10, 10), shadow=sh, frost=frost)
+        glass(f, "", r, op, (12, 12, 14, 14) if r > 14 else (8, 8, 10, 10), border=0.08, shadow=sh, frost=frost)
         write(theme / rel, f)
     # Popup headers/footers (notification header, tray popups): no strip of their own,
     # the title just sits on the card's glass like an iOS banner.
@@ -242,14 +257,17 @@ def build(theme: Path):
         f.add(f'<rect id="hint-{side}-margin" x="{1900 + len(side)}" y="0" width="{w}" height="{h}" {TINY}/>')
     f.add(f'<rect id="hint-stretch-borders" x="1960" y="0" width="2" height="2" {TINY}/>')
     write(theme / "widgets/plasmoidheading.svgz", f)
-    # Task manager items in the dock: soft rounded chips.
+    # Task manager items in the dock: stadium chips (r = half the 44 px item box),
+    # neutral tints only - never the accent, never stacked highlights. Symmetric
+    # shapes, so the plain prefix serves every panel edge (north-/west-/east-
+    # lookups fall back to it).
     f = Frame()
-    glass(f, "normal-", 12, 0.0, (4, 4, 4, 4), border=0.0, highlight=0.0, mask=False)
-    glass(f, "hover-", 12, 0.10, (4, 4, 4, 4), fill_class="ColorScheme-Text", border=0.08, highlight=0.08, mask=False)
-    glass(f, "focus-", 12, 0.22, (4, 4, 4, 4), fill_class="ColorScheme-Highlight", border=0.0, highlight=0.12, mask=False)
-    glass(f, "attention-", 12, 0.28, (4, 4, 4, 4), fill_class="ColorScheme-NegativeText", border=0.0, highlight=0.0, mask=False)
-    glass(f, "minimized-", 12, 0.0, (4, 4, 4, 4), border=0.0, highlight=0.0, mask=False)
-    glass(f, "progress-", 12, 0.25, (4, 4, 4, 4), fill_class="ColorScheme-Highlight", border=0.0, highlight=0.0, mask=False)
+    glass(f, "normal-", 22, 0.0, (4, 4, 4, 4), border=0.0, highlight=0.0, mask=False)
+    glass(f, "hover-", 22, _M["tint-hover"], (4, 4, 4, 4), fill_class="ColorScheme-Text", border=0.0, highlight=0.0, mask=False)
+    glass(f, "focus-", 22, _M["tint-focus"], (4, 4, 4, 4), fill_class="ColorScheme-Text", border=0.0, highlight=0.0, mask=False)
+    glass(f, "attention-", 22, _M["tint-attention"], (4, 4, 4, 4), fill_class="ColorScheme-NegativeText", border=0.0, highlight=0.0, mask=False)
+    glass(f, "minimized-", 22, 0.0, (4, 4, 4, 4), border=0.0, highlight=0.0, mask=False)
+    glass(f, "progress-", 22, 0.12, (4, 4, 4, 4), fill_class="ColorScheme-Highlight", border=0.0, highlight=0.0, mask=False)
     write(theme / "widgets/tasks.svgz", f)
     # Workspace pager in the top bar: quiet pills, the current one tinted with the accent.
     f = Frame()
