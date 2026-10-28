@@ -15,12 +15,12 @@ Item {
     signal tapped()
     signal panelRequested()
 
-    readonly property int disc: wide ? 44 : 52
-    height: 88
+    readonly property int disc: wide ? 38 : 38
+    height: 70
     Rectangle {      // the pill behind a wide tile
         visible: root.wide
         anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
-        height: 64; radius: 32
+        height: 52; radius: 26
         color: Theme.chip
     }
     Rectangle {
@@ -45,7 +45,7 @@ Item {
         id: labelZone
         readonly property real inset: 10 + root.disc + 8      // a wide tile's text starts after the disc, so the disc keeps its own taps
         x: root.wide && !I18n.rtl ? inset : 0
-        y: root.wide ? 0 : circle.height + 6
+        y: root.wide ? 0 : circle.height + 3
         width: root.wide ? root.width - inset : root.width
         height: root.wide ? root.height : root.height - y
         Column {
