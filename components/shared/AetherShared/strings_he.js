@@ -123,5 +123,7 @@ var dict = {
     "Files": "קבצים", "Folder": "תיקייה", "Upload…": "העלאה…",
     "Drop to upload here": "שחררו כאן להעלאה", "or drop files here": "או גררו קבצים לכאן",
     "Empty folder": "תיקייה ריק", "Transfer finished": "ההעברה הסתיימה", "Transfer failed": "ההעברה נכשלה",
-    "Check ~/Downloads": "בדקו ב-~/Downloads"
+    "Check ~/Downloads": "בדקו ב-~/Downloads",
+    "Opening the session…": "הסשן נפתח…", "tmux on the server holds your place": "ה-tmux בשרת שומר על המקום שלך",
+    "The terminal could not open - check the host": "המסוף לא נפתח - בדקו את המארח", "Try again": "נסו שוב"
 }

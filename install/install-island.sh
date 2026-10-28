@@ -24,11 +24,15 @@ echo "== kwin media seat"
 # YouTube Music lives only inside the island: the aether-media KWin script owns its window
 # (hides it from the moment it maps, seats it in the media panel on request). A window rule
 # keeps it out of the taskbar, the switcher and the pager even before the script runs.
-KSCRIPTS="$HOME/.local/share/kwin/scripts"
-rm -rf "$KSCRIPTS/aether-media"
-mkdir -p "$KSCRIPTS"
-cp -r "$ROOT/components/island/kwin/aether-media" "$KSCRIPTS/"
-kwriteconfig6 --file kwinrc --group Plugins --key aether-mediaEnabled true
+	KSCRIPTS="$HOME/.local/share/kwin/scripts"
+	rm -rf "$KSCRIPTS/aether-media"
+	mkdir -p "$KSCRIPTS"
+	cp -r "$ROOT/components/island/kwin/aether-media" "$KSCRIPTS/"
+	kwriteconfig6 --file kwinrc --group Plugins --key aether-mediaEnabled true
+	# The console shelf's terminal seat (same handshake, matched by pid).
+	rm -rf "$KSCRIPTS/aether-console-seat"
+	cp -r "$ROOT/components/console/kwin/aether-console-seat" "$KSCRIPTS/"
+	kwriteconfig6 --file kwinrc --group Plugins --key aether-console-seatEnabled true
 R=(--file kwinrulesrc --group aether-media)
 kwriteconfig6 "${R[@]}" --key Description "Aether media window (YouTube Music lives inside the island)"
 for kv in wmclass=youtube-music wmclassmatch=2 types=1 above=true aboverule=2 \

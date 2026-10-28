@@ -1,0 +1,12 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [{ "Name": "Aether" }],
+        "Description": "Seats the console's terminal window inside the shelf's glass",
+        "EnabledByDefault": false,
+        "Id": "aether-console-seat",
+        "License": "GPL",
+        "Name": "Aether Console Seat"
+    },
+    "X-Plasma-API": "javascript"
+}
