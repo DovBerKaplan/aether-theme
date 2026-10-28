@@ -10,7 +10,9 @@
 #include <QDBusMessage>
 #include <QDBusReply>
 #include <QDBusVariant>
+#include <QDir>
 #include <QFile>
+#include <QFileSystemWatcher>
 #include <QObject>
 #include <QProcess>
 #include <QTimer>
@@ -143,7 +145,25 @@ class DisplayModel : public QObject
     Q_PROPERTY(bool dark READ dark NOTIFY changed)                          // the dark Aether theme is active
 
 public:
-    explicit DisplayModel(QObject *parent = nullptr) : QObject(parent) {}
+    explicit DisplayModel(QObject *parent = nullptr) : QObject(parent)
+    {
+        // The tile follows System Settings and automatic day/night too: any change to kdeglobals re-reads the mode.
+        m_debounce.setSingleShot(true);
+        m_debounce.setInterval(300);
+        connect(&m_debounce, &QTimer::timeout, this, [this] {
+            if (!m_watch.files().contains(m_globals)) {      // the file is replaced on every write: watch the new one
+                m_watch.addPath(m_globals);
+            }
+            const bool was = m_dark;
+            readMode();
+            if (was != m_dark) {
+                Q_EMIT changed();
+            }
+        });
+        connect(&m_watch, &QFileSystemWatcher::fileChanged, this, [this] { m_debounce.start(); });
+        m_watch.addPath(m_globals);
+        readMode();
+    }
     bool nightAvailable() const { return m_available; }
     bool nightEnabled() const { return m_enabled; }
     int nightTemperature() const { return m_temp; }
@@ -156,7 +176,7 @@ public:
         m_enabled = PanelDbus::tool(QStringLiteral("kreadconfig6"), {QStringLiteral("--file"), QStringLiteral("kwinrc"), QStringLiteral("--group"), QStringLiteral("NightColor"), QStringLiteral("--key"), QStringLiteral("Active")}) == QLatin1String("true");
         const int t = PanelDbus::tool(QStringLiteral("kreadconfig6"), {QStringLiteral("--file"), QStringLiteral("kwinrc"), QStringLiteral("--group"), QStringLiteral("NightColor"), QStringLiteral("--key"), QStringLiteral("NightTemperature"), QStringLiteral("--default"), QStringLiteral("4500")}).toInt();
         m_temp = qBound(1000, t, 6500);
-        m_dark = PanelDbus::tool(QStringLiteral("kreadconfig6"), {QStringLiteral("--group"), QStringLiteral("KDE"), QStringLiteral("--key"), QStringLiteral("LookAndFeelPackage")}) != QLatin1String("org.aether.serenity.desktop");
+        readMode();
         Q_EMIT changed();
     }
     Q_INVOKABLE void setNightEnabled(bool on) { writeNight(QStringLiteral("Active"), on ? QStringLiteral("true") : QStringLiteral("false")); m_enabled = on; Q_EMIT changed(); }
@@ -171,6 +191,7 @@ public:
         QProcess::startDetached(QStringLiteral("lookandfeeltool"), {QStringLiteral("-a"), dark ? QStringLiteral("org.aether.glass.desktop") : QStringLiteral("org.aether.serenity.desktop")});
         m_dark = dark;
         Q_EMIT changed();
+        QTimer::singleShot(2500, this, [this] { refresh(); });      // if the switch did not happen, the tile must not keep lying
     }
     Q_INVOKABLE void openSettings() { QProcess::startDetached(QStringLiteral("kcmshell6"), {QStringLiteral("kcm_kscreen")}); }
 
@@ -183,6 +204,23 @@ private:
         QProcess::execute(QStringLiteral("kwriteconfig6"), {QStringLiteral("--file"), QStringLiteral("kwinrc"), QStringLiteral("--group"), QStringLiteral("NightColor"), QStringLiteral("--key"), key, value});
         QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/KWin"), QStringLiteral("org.kde.KWin"), QStringLiteral("reconfigure")));
     }
+    // The color scheme decides: ours by name, any other by how light its window color is.
+    void readMode()
+    {
+        const auto kr = [](const QStringList &a) { return PanelDbus::tool(QStringLiteral("kreadconfig6"), a); };
+        const QString scheme = kr({QStringLiteral("--file"), QStringLiteral("kdeglobals"), QStringLiteral("--group"), QStringLiteral("General"), QStringLiteral("--key"), QStringLiteral("ColorScheme")});
+        if (scheme == QLatin1String("AetherSerenity")) {
+            m_dark = false;
+        } else if (scheme == QLatin1String("AetherGlass")) {
+            m_dark = true;
+        } else {
+            const QStringList rgb = kr({QStringLiteral("--file"), QStringLiteral("kdeglobals"), QStringLiteral("--group"), QStringLiteral("Colors:Window"), QStringLiteral("--key"), QStringLiteral("BackgroundNormal")}).split(QLatin1Char(','));
+            m_dark = rgb.size() == 3 && (rgb[0].toInt() + rgb[1].toInt() + rgb[2].toInt()) / 3 < 128;
+        }
+    }
+    const QString m_globals = QDir::homePath() + QStringLiteral("/.config/kdeglobals");
+    QFileSystemWatcher m_watch;
+    QTimer m_debounce;
     bool m_available = false, m_enabled = false, m_dark = true;
     int m_temp = 4500;
 };

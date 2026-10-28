@@ -227,7 +227,7 @@ private:
     }
     const QVariantList m_catalog = {
         tile("wifi", "Wi‑Fi", "wifi-3"), tile("bluetooth", "Bluetooth", "bluetooth"),
-        tile("nightlight", "Night Light", "moon"), tile("darktheme", "Dark theme", "contrast"), tile("airplane", "Airplane mode", "plane"),
+        tile("nightlight", "Night Light", "moon"), tile("darktheme", "Theme", "contrast"), tile("airplane", "Airplane mode", "plane"),
         tile("keepawake", "Keep awake", "coffee"), tile("micmute", "Microphone", "mic"), tile("powersaver", "Power saver", "leaf"),
         tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record")};
     const QVariantList m_widgetCatalog = connectInstalled() ? QVariantList{tile("media", "YouTube Music", "logo"), tile("connect", "KDE Connect", "phone")} : QVariantList{tile("media", "YouTube Music", "logo")};

@@ -27,9 +27,11 @@ Item {
         case "nightlight": return {
             glyph: "moon", label: I18n.tr("Night"), sub: displaySettings.nightEnabled ? I18n.tr("On") : I18n.tr("Off"),
             active: displaySettings.nightEnabled, panel: "display", tap: () => displaySettings.setNightEnabled(!displaySettings.nightEnabled) }
-        case "darktheme": return {
-            glyph: "contrast", label: I18n.tr("Dark"), sub: displaySettings.dark ? I18n.tr("On") : I18n.tr("Off"),
-            active: displaySettings.dark, panel: "display", tap: () => displaySettings.setDark(!displaySettings.dark) }
+        case "darktheme": {      // names the mode you are in now; a tap goes to the other one
+            const dk = displaySettings.dark
+            return { glyph: dk ? "moon" : "sun", label: dk ? I18n.tr("Dark") : I18n.tr("Light"), sub: dk ? I18n.tr("Tap for light") : I18n.tr("Tap for dark"),
+                active: false, panel: "display", tap: () => displaySettings.setDark(!displaySettings.dark) }
+        }
         case "airplane": {
             const on = !system.wifiEnabled && !system.bluetoothOn
             return { glyph: "plane", label: I18n.tr("Airplane"), sub: on ? I18n.tr("On") : I18n.tr("Off"), active: on, panel: "",
