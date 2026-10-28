@@ -8,6 +8,7 @@ Item {
     property string name
     property color color: Theme.text
     property int size: 16
+    property real stroke: 1.5             // the line weight in screen pixels - the same for every glyph at every size
     implicitWidth: size
     implicitHeight: size
     width: size
@@ -16,7 +17,7 @@ Item {
     Image {
         id: img
         anchors.fill: parent
-        source: root.name ? "assets/glyphs/" + root.name + ".svg" : ""
+        source: root.name ? glyphs.file(Qt.resolvedUrl("assets/glyphs/" + root.name + ".svg"), root.size, root.stroke) : ""
         sourceSize: Qt.size(root.size * 3, root.size * 3)
         visible: false
     }

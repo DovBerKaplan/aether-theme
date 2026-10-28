@@ -42,6 +42,7 @@
 #include "NetworkModel.h"
 #include "SystemPanels.h"
 #include "TileStore.h"
+#include "GlyphStore.h"
 #include "SystemInfo.h"
 
 #include <KWindowEffects>
@@ -394,6 +395,8 @@ int main(int argc, char **argv)
     view.rootContext()->setContextProperty(QStringLiteral("media"), &media);
     AudioLevels audio;
     view.rootContext()->setContextProperty(QStringLiteral("audioLevels"), &audio);
+    GlyphStore glyphStore;
+    view.rootContext()->setContextProperty(QStringLiteral("glyphs"), &glyphStore);
     NotificationStore notifStore;
     view.rootContext()->setContextProperty(QStringLiteral("notifStore"), &notifStore);
     SystemInfo system;

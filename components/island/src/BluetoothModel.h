@@ -82,7 +82,7 @@ class BluetoothModel : public QObject
     Q_PROPERTY(bool discovering READ discovering NOTIFY changed)
     Q_PROPERTY(QString adapterName READ adapterName NOTIFY changed)
     Q_PROPERTY(QString busy READ busy NOTIFY changed)                  // device path being connected/paired
-    // [{path, name, address, icon, paired, connected, trusted, battery (-1 if unknown), rssi}]
+    // [{path, name, address, icon, paired, connected, trusted, battery (-1 if unknown), level (0-4, -1 unknown)}]
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
     // {path, name, kind: "confirm"|"pin"|"passkey"|"display", code} or empty
     Q_PROPERTY(QVariantMap pairing READ pairing NOTIFY changed)
@@ -91,6 +91,16 @@ public:
     explicit BluetoothModel(QObject *parent = nullptr)
         : QObject(parent)
     {
+        // Fixture mode (AETHER_ISLAND_FAKE_BT=1): invented devices instead of BlueZ, so every
+        // screen can be built and shot without hardware. The D-Bus plumbing is skipped entirely.
+        if (qEnvironmentVariableIntValue("AETHER_ISLAND_FAKE_BT") != 0) {
+            m_fake = true;
+            m_adapter = QStringLiteral("/org/bluez/hci0");
+            m_adapterName = QStringLiteral("aether-fake");
+            m_powered = true;
+            applyFixture();
+            return;
+        }
         qDBusRegisterMetaType<BluezObjects>();
         m_debounce.setSingleShot(true);
         m_debounce.setInterval(250);
@@ -129,6 +139,15 @@ public:
 
     Q_INVOKABLE void setActive(bool on)
     {
+        if (m_fake) {
+            if (m_active == on) {
+                return;
+            }
+            m_active = on;
+            m_discovering = on;
+            Q_EMIT changed();
+            return;
+        }
         if (m_active == on) {
             return;
         }
@@ -156,6 +175,12 @@ public:
     }
     Q_INVOKABLE void setPowered(bool on)
     {
+        if (m_fake) {
+            m_powered = on;
+            Q_EMIT changed();
+            Q_EMIT devicesChanged();
+            return;
+        }
         setProp(m_adapter, QStringLiteral("org.bluez.Adapter1"), QStringLiteral("Powered"), on);
         m_powered = on;
         Q_EMIT changed();
@@ -163,6 +188,18 @@ public:
     // Connect when disconnected, disconnect when connected.
     Q_INVOKABLE void toggleConnect(const QString &path)
     {
+        if (m_fake) {
+            for (int i = 0; i < m_devices.size(); ++i) {
+                QVariantMap d = m_devices.at(i).toMap();
+                if (d.value(QStringLiteral("path")).toString() == path) {
+                    d.insert(QStringLiteral("connected"), !d.value(QStringLiteral("connected")).toBool());
+                    m_devices[i] = d;
+                }
+            }
+            Q_EMIT devicesChanged();
+            Q_EMIT changed();
+            return;
+        }
         if (!m_busy.isEmpty()) {
             return;
         }
@@ -189,6 +226,10 @@ public:
     }
     Q_INVOKABLE void pair(const QString &path)
     {
+        if (m_fake) {
+            toggleConnect(path);
+            return;
+        }
         if (!m_busy.isEmpty()) {
             return;
         }
@@ -213,6 +254,17 @@ public:
     // Per-device switch. On by default for every paired device; off is remembered.
     Q_INVOKABLE void setAutoConnect(const QString &path, bool on)
     {
+        if (m_fake) {
+            for (int i = 0; i < m_devices.size(); ++i) {
+                QVariantMap d = m_devices.at(i).toMap();
+                if (d.value(QStringLiteral("path")).toString() == path) {
+                    d.insert(QStringLiteral("auto"), on);
+                    m_devices[i] = d;
+                }
+            }
+            Q_EMIT devicesChanged();
+            return;
+        }
         const QString addr = find(path).value(QStringLiteral("address")).toString();
         if (addr.isEmpty()) {
             return;
@@ -236,6 +288,17 @@ public:
     }
     Q_INVOKABLE void forget(const QString &path)
     {
+        if (m_fake) {
+            for (int i = 0; i < m_devices.size(); ++i) {
+                if (m_devices.at(i).toMap().value(QStringLiteral("path")).toString() == path) {
+                    m_devices.removeAt(i);
+                    break;
+                }
+            }
+            Q_EMIT devicesChanged();
+            Q_EMIT changed();
+            return;
+        }
         const QString addr = find(path).value(QStringLiteral("address")).toString();
         m_userDisc.remove(addr); m_fails.remove(addr); m_nextTry.remove(addr);
         QDBusMessage m = method(m_adapter, QStringLiteral("org.bluez.Adapter1"), QStringLiteral("RemoveDevice"));
@@ -245,8 +308,49 @@ public:
     }
     Q_INVOKABLE void rename(const QString &path, const QString &alias)
     {
+        if (m_fake) {
+            for (int i = 0; i < m_devices.size(); ++i) {
+                QVariantMap d = m_devices.at(i).toMap();
+                if (d.value(QStringLiteral("path")).toString() == path) {
+                    d.insert(QStringLiteral("name"), alias.trimmed());
+                    m_devices[i] = d;
+                }
+            }
+            Q_EMIT devicesChanged();
+            return;
+        }
         setProp(path, QStringLiteral("org.bluez.Device1"), QStringLiteral("Alias"), alias.trimmed());
         m_debounce.start();
+    }
+    // Raw link quality in dBm for the detail page, read on demand: the devices list only carries
+    // the quantized level so it does not re-render on every drift of the signal.
+    Q_INVOKABLE void readRssi(const QString &path)
+    {
+        if (m_fake) {
+            static const int fake[] = {-88, -88, -74, -62, -49};   // indexed by level
+            const int level = find(path).value(QStringLiteral("level")).toInt();
+            if (level >= 1 && level <= 4) {
+                Q_EMIT rssiRead(path, fake[level]);
+            }
+            return;
+        }
+        QDBusMessage m = method(path, QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
+        m << QStringLiteral("org.bluez.Device1") << QStringLiteral("RSSI");
+        auto *w = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(m), this);
+        connect(w, &QDBusPendingCallWatcher::finished, this, [this, path](QDBusPendingCallWatcher *self) {
+            const QDBusMessage reply = self->reply();
+            self->deleteLater();
+            if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+                return;
+            }
+            QVariant v = reply.arguments().constFirst().value<QVariant>();
+            if (v.userType() == qMetaTypeId<QDBusVariant>()) {
+                v = v.value<QDBusVariant>().variant();
+            }
+            if (v.isValid()) {
+                Q_EMIT rssiRead(path, v.toInt());
+            }
+        });
     }
     Q_INVOKABLE void answerConfirm(bool accept) { m_agent.answer(accept); m_pairing.clear(); Q_EMIT changed(); }
     Q_INVOKABLE void answerPin(const QString &pin)
@@ -271,6 +375,7 @@ Q_SIGNALS:
     void changed();
     void devicesChanged();
     void opFailed(const QString &path, const QString &text);
+    void rssiRead(const QString &path, int rssi);
 
 private Q_SLOTS:
     void onSignal(const QDBusMessage &) { m_debounce.start(); }
@@ -320,6 +425,10 @@ private:
     }
     void refresh(bool first = false)
     {
+        if (m_fake) {
+            applyFixture();
+            return;
+        }
         auto *w = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(
             method(QStringLiteral("/"), QStringLiteral("org.freedesktop.DBus.ObjectManager"), QStringLiteral("GetManagedObjects"))), this);
         connect(w, &QDBusPendingCallWatcher::finished, this, [this, first](QDBusPendingCallWatcher *self) {
@@ -358,6 +467,11 @@ private:
                     if (!paired) { continue; }
                     name = addr;
                 }
+                // The link quality is the RSSI quantized into the same 0-4 bars as Wi-Fi. The raw dBm
+                // stays out of the list (it drifts on every refresh and would re-render for nothing);
+                // the detail page reads it on demand via readRssi().
+                const QVariant rssi = d.value(QStringLiteral("RSSI"));
+                const int level = rssi.isValid() ? (rssi.toInt() > -55 ? 4 : rssi.toInt() > -70 ? 3 : rssi.toInt() > -85 ? 2 : 1) : -1;
                 list << QVariantMap{{QStringLiteral("path"), path}, {QStringLiteral("name"), name}, {QStringLiteral("address"), addr},
                                     {QStringLiteral("icon"), d.value(QStringLiteral("Icon")).toString()},
                                     {QStringLiteral("paired"), paired},
@@ -367,8 +481,8 @@ private:
                                     {QStringLiteral("auto"), !m_manual.contains(addr)},
                                     {QStringLiteral("paused"), m_userDisc.contains(addr)},
                                     {QStringLiteral("battery"), it->contains(QStringLiteral("org.bluez.Battery1"))
-                                         ? int(it->value(QStringLiteral("org.bluez.Battery1")).value(QStringLiteral("Percentage")).toUInt()) : -1}};
-                // rssi is deliberately left out: it changes constantly and would re-render the list for nothing
+                                         ? int(it->value(QStringLiteral("org.bluez.Battery1")).value(QStringLiteral("Percentage")).toUInt()) : -1},
+                                    {QStringLiteral("level"), level}};
             }
         }
         const bool wasPowered = m_powered, wasDisc = m_discovering;
@@ -424,6 +538,10 @@ private:
     }
     void autoTick()
     {
+        if (m_fake) {
+            m_auto.stop();
+            return;
+        }
         if (!m_powered || m_adapter.isEmpty()) {
             m_auto.start(5 * 60 * 1000);
             return;
@@ -476,6 +594,27 @@ private:
         });
     }
 
+    // Invented devices for AETHER_ISLAND_FAKE_BT=1: a headset and a keyboard connected (one with
+    // a battery), a mouse and a phone saved, a speaker nearby - enough to shoot every screen.
+    void applyFixture()
+    {
+        auto dev = [](const char *p, const char *name, const char *icon, bool paired, bool connected, int battery, int level) {
+            return QVariantMap{{QStringLiteral("path"), QString::fromLatin1(p)}, {QStringLiteral("name"), QString::fromLatin1(name)},
+                               {QStringLiteral("address"), QString::fromLatin1(p)}, {QStringLiteral("icon"), QString::fromLatin1(icon)},
+                               {QStringLiteral("paired"), paired}, {QStringLiteral("connected"), connected}, {QStringLiteral("trusted"), paired},
+                               {QStringLiteral("blocked"), false}, {QStringLiteral("auto"), true}, {QStringLiteral("paused"), false},
+                               {QStringLiteral("battery"), battery}, {QStringLiteral("level"), level}};
+        };
+        m_devices = {dev("/dev/fake/headset", "WH-1000XM5 (fake)", "audio-headset", true, true, 80, 4),
+                     dev("/dev/fake/keyboard", "MX Keys (fake)", "input-keyboard", true, true, -1, 3),
+                     dev("/dev/fake/mouse", "MX Master 3S (fake)", "input-mouse", true, false, -1, -1),
+                     dev("/dev/fake/phone", "Pixel 9 (fake)", "phone", true, false, 64, -1),
+                     dev("/dev/fake/speaker", "JBL Flip 6 (fake)", "audio-speaker", false, false, -1, 2)};
+        m_discovering = m_active;
+        Q_EMIT devicesChanged();
+        Q_EMIT changed();
+    }
+
     QSettings m_prefs{QDir::homePath() + QStringLiteral("/.config/aetherislandrc"), QSettings::IniFormat};
     QTimer m_auto;
     QSet<QString> m_manual, m_userDisc, m_wasConnected;
@@ -486,6 +625,7 @@ private:
     BluezAgent m_agent;
     QTimer m_debounce;
     bool m_askedDiscovery = false;
+    bool m_fake = false;
     bool m_active = false, m_powered = false, m_discovering = false;
     QString m_adapter, m_adapterName, m_busy;
     QVariantList m_devices;

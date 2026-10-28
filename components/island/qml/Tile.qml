@@ -1,6 +1,7 @@
 import QtQuick
 import AetherShared
 import "."
+import "BtIcons.js" as BtIcons
 
 // One tile of the large island. `describe()` is the only place that knows what each tile id
 // shows and does; it reads the existing models, so the tile follows them without polling.
@@ -28,11 +29,19 @@ Item {
             label: I18n.tr("Wi‑Fi"), sub: !system.wifiEnabled ? I18n.tr("Off") : (system.wifiName || I18n.tr("Not connected")),
             active: system.wifiEnabled, panel: "wifi", tap: () => system.toggleWifi(),
             trail: system.wifiEnabled && system.network === "wifi" ? { kind: "signal", level: Math.max(1, Math.min(4, Math.ceil(system.wifiSignal / 25))) } : { kind: "chevron" } }
-        case "bluetooth": return {
-            glyph: system.bluetoothOn ? "bluetooth" : "bluetooth-off", label: I18n.tr("Bluetooth"),
-            sub: !system.bluetoothOn ? I18n.tr("Off") : (system.bluetoothDevices > 0 ? I18n.f("%1 connected", system.bluetoothDevices) : I18n.tr("On")),
-            active: system.bluetoothOn, panel: "bluetooth", tap: () => system.toggleBluetooth(),
-            trail: btBattery >= 0 ? { kind: "text", text: btBattery + "%" } : { kind: "chevron" } }
+        case "bluetooth": {      // a lone connected device gives the tile its face: its glyph and name
+            const conns = bluetooth.devices.filter(d => d.connected)
+            const one = conns.length === 1 ? conns[0] : null
+            const lvl = Math.max(-1, ...conns.map(d => d.level === undefined ? -1 : d.level))
+            return {
+                glyph: !system.bluetoothOn ? "bluetooth-off" : one ? BtIcons.glyph(one.icon) : "bluetooth",
+                label: one ? one.name : I18n.tr("Bluetooth"),
+                sub: !system.bluetoothOn ? I18n.tr("Off")
+                    : one ? I18n.tr("Connected") : (conns.length > 0 ? I18n.f("%1 connected", conns.length) : I18n.tr("On")),
+                active: system.bluetoothOn, panel: "bluetooth", tap: () => system.toggleBluetooth(),
+                trail: btBattery >= 0 ? { kind: "text", text: btBattery + "%" }
+                    : lvl > 0 ? { kind: "signal", level: lvl } : { kind: "chevron" } }
+        }
         case "nightlight": return {
             glyph: "moon", label: I18n.tr("Night"), sub: displaySettings.nightEnabled ? I18n.tr("On") : I18n.tr("Off"),
             active: displaySettings.nightEnabled, panel: "display", tap: () => displaySettings.setNightEnabled(!displaySettings.nightEnabled),
@@ -59,6 +68,10 @@ Item {
         case "keepawake": return {
             glyph: "coffee", label: I18n.tr("Awake"), sub: tiles.keepAwake ? I18n.tr("On") : I18n.tr("Off"),
             active: tiles.keepAwake, panel: "", tap: () => tiles.toggleKeepAwake() }
+        case "vibe": return {
+            glyph: "vibe", label: I18n.tr("Vibe"), sub: tiles.vibeOn ? I18n.tr("Agents run") : I18n.tr("Off"),
+            active: tiles.vibeOn, panel: "", tap: () => tiles.toggleVibe(),
+            trail: tiles.vibeOn ? { kind: "dot" } : {} }
         case "micmute": return {
             glyph: tiles.micMuted ? "mic-off" : "mic", label: I18n.tr("Mic"), sub: tiles.micMuted ? I18n.tr("Muted") : I18n.tr("On"),
             active: !tiles.micMuted, panel: "sound", tap: () => tiles.toggleMic(), trail: tiles.micMuted ? { kind: "dot" } : { kind: "chevron" } }

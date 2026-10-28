@@ -188,7 +188,16 @@ public:
     }
     Q_INVOKABLE void setDark(bool dark)
     {
-        QProcess::startDetached(QStringLiteral("lookandfeeltool"), {QStringLiteral("-a"), dark ? QStringLiteral("org.aether.glass.desktop") : QStringLiteral("org.aether.serenity.desktop")});
+        // plasma-apply-colorscheme is the only path that both writes the scheme and notifies every
+        // running app (KConfigWatcher over D-Bus), so open windows repaint live. It must run FIRST:
+        // lookandfeeltool switches the identity (wallpaper, icons) but leaves the live colors alone,
+        // and a stale ColorScheme in kdedefaults once made both tools believe the scheme was already
+        // active - the toggle flipped nothing and apps kept their old palette until restart.
+        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"),
+                                {dark ? QStringLiteral("AetherGlass") : QStringLiteral("AetherSerenity")});
+        QProcess::startDetached(QStringLiteral("lookandfeeltool"),
+                                {QStringLiteral("-a"), dark ? QStringLiteral("org.aether.glass.desktop")
+                                                            : QStringLiteral("org.aether.serenity.desktop")});
         m_dark = dark;
         Q_EMIT changed();
         QTimer::singleShot(2500, this, [this] { refresh(); });      // if the switch did not happen, the tile must not keep lying

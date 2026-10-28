@@ -1,6 +1,7 @@
 import QtQuick
 import AetherShared
 import "."
+import "BtIcons.js" as BtIcons
 
 // Bluetooth panel (docs/PANELS-SPEC.md section 5): connected, saved and discoverable devices,
 // inline pairing (confirm a code, type a PIN), and a detail page. Discovery and the pairing
@@ -21,6 +22,18 @@ PanelScaffold {
     onDetailDevChanged: if (onDetail && detailDev && renameField.text === "") renameField.text = detailDev.name
     property string errPath
     property string errText
+    property int detailRssi: -1000   // raw dBm fetched by the timer below; -1000 = no answer yet
+    onDetailPathChanged: detailRssi = -1000
+    function rssiLevel(r) { return r > -55 ? 4 : r > -70 ? 3 : r > -85 ? 2 : 1 }
+    // Raw RSSI for the detail page: the devices list only carries the quantized level, so this
+    // asks the adapter again every few seconds while a connected device's page is open.
+    Timer {
+        running: root.onDetail && root.detailDev !== null && root.detailDev.connected
+        interval: 3000
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: bluetooth.readRssi(root.detailPath)
+    }
 
     title: onDetail ? (detailDev ? detailDev.name : I18n.tr("Device")) : I18n.tr("Bluetooth")
     subtitle: onDetail ? I18n.tr("Device details")
@@ -44,13 +57,14 @@ PanelScaffold {
     Connections {
         target: bluetooth
         function onOpFailed(path, text) { root.errPath = path; root.errText = text; errTimer.restart() }
+        function onRssiRead(path, rssi) { if (path === root.detailPath) root.detailRssi = rssi }
     }
     Timer { id: errTimer; interval: 6000; onTriggered: root.errPath = "" }
 
     function stateOf(d) {
         if (errPath === d.path) return I18n.tr(errText)
         if (bluetooth.busy === d.path) return d.paired ? I18n.tr("Connecting…") : I18n.tr("Pairing…")
-        if (d.connected) return d.battery >= 0 ? I18n.f("Battery %1%", d.battery) : I18n.tr("Connected")
+        if (d.connected) return I18n.tr("Connected")
         return d.paired ? I18n.tr("Not connected") : I18n.tr("Tap to pair")
     }
 
@@ -153,9 +167,19 @@ PanelScaffold {
             width: listCol.width
             title: modelData.name
             subtitle: root.stateOf(modelData)
-            leadingGlyphSource: Qt.resolvedUrl("assets/glyphs/bluetooth.svg")
+            leadingGlyphSource: Qt.resolvedUrl("assets/glyphs/" + BtIcons.glyph(modelData.icon) + ".svg")
             enabled: bluetooth.busy.length === 0 || bluetooth.busy === modelData.path
             onClicked: modelData.paired ? bluetooth.toggleConnect(modelData.path) : bluetooth.pair(modelData.path)
+            BatteryGlyph {      // the device's own battery, when it reports one
+                visible: modelData.battery >= 0
+                percent: modelData.battery
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            SignalBars {        // link quality, when the adapter reports it (mostly while discovering)
+                visible: modelData.level >= 0
+                level: modelData.level
+                anchors.verticalCenter: parent.verticalCenter
+            }
             Item {      // disconnect: an icon, never forgets the pairing
                 visible: modelData.connected
                 width: 32; height: 32
@@ -196,9 +220,30 @@ PanelScaffold {
             }
             KeyValueRow { width: parent.width; key: I18n.tr("Status"); copyable: false
                 value: root.detailDev ? (root.detailDev.connected ? I18n.tr("Connected") : I18n.tr("Not connected")) : "" }
-            KeyValueRow { visible: root.detailDev && root.detailDev.battery >= 0; width: parent.width; key: I18n.tr("Battery"); copyable: false
-                value: root.detailDev ? root.detailDev.battery + " %" : "" }
-            KeyValueRow { width: parent.width; key: I18n.tr("Type"); copyable: false; value: root.detailDev ? root.detailDev.icon.replace("audio-", "").replace("input-", "") : "" }
+            ListRow {      // the battery as a ring with the number inside, when the device reports one
+                visible: root.detailDev && root.detailDev.battery >= 0
+                width: parent.width
+                title: I18n.tr("Battery")
+                BatteryRing { percent: root.detailDev ? root.detailDev.battery : -1; anchors.verticalCenter: parent.verticalCenter }
+            }
+            ListRow {      // link quality: the same bars as the list, plus the raw reading
+                visible: root.detailDev && root.detailDev.connected && root.detailRssi > -900
+                width: parent.width
+                title: I18n.tr("Signal")
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Tokens.space.sm
+                    SignalBars { anchors.verticalCenter: parent.verticalCenter; level: root.rssiLevel(root.detailRssi) }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.detailRssi + " dBm"; textFormat: Text.PlainText
+                        font { family: Theme.mono; pixelSize: Tokens.type.label }
+                        color: Theme.subtext
+                    }
+                }
+            }
+            KeyValueRow { width: parent.width; key: I18n.tr("Type"); copyable: false
+                value: root.detailDev ? I18n.tr(BtIcons.label(root.detailDev.icon)) : "" }
             KeyValueRow { width: parent.width; key: I18n.tr("Address"); value: root.detailDev ? root.detailDev.address : "" }
             Item { width: 1; height: Tokens.space.sm }
             Row {
