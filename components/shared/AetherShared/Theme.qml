@@ -9,10 +9,14 @@ QtObject {
 
     readonly property color text: Tokens.role.island.text
     readonly property color subtext: Tokens.role.island.textMuted
-    readonly property color accent: Tokens.role.island.accent
+    // The colour the user chose (island's Color panel), or "transparent" for the theme's own. It also tints the
+    // glass a little - the whole island leans toward it without turning into it.
+    property color accentOverride: "transparent"
+    readonly property color accent: accentOverride.a > 0 ? accentOverride : Tokens.role.island.accent
+    property real accentTint: 0                       // the island sets 0.07; the toasts and the dock keep the plain glass
     readonly property color chip: Tokens.role.island.chip
-    readonly property color bodyTop: Qt.alpha(Tokens.role.island.bodyTop, bodyAlpha)
-    readonly property color bodyBottom: Qt.alpha(Tokens.role.island.bodyBottom, bodyAlpha)
+    readonly property color bodyTop: Qt.alpha(Qt.tint(Tokens.role.island.bodyTop, Qt.alpha(accent, accentTint)), bodyAlpha)
+    readonly property color bodyBottom: Qt.alpha(Qt.tint(Tokens.role.island.bodyBottom, Qt.alpha(accent, accentTint * 1.4)), bodyAlpha)
     readonly property color rim: Qt.rgba(1, 1, 1, Tokens.material.rimAlpha)
     readonly property color bevel: Qt.rgba(0, 0, 0, Tokens.material.bevelAlpha)
     readonly property url grain: Qt.resolvedUrl("assets/grain.png")

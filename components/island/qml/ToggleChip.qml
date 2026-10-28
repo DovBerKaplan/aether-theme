@@ -66,7 +66,7 @@ Item {
         readonly property string kind: root.trail.kind || ""
         visible: !root.small && kind.length > 0
         anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
-        width: kind === "signal" ? 20 : kind === "text" ? tText.implicitWidth : kind === "dot" ? 10 : 10
+        width: kind === "signal" ? 20 : kind === "text" ? tText.implicitWidth : kind === "dot" ? 14 : 10
         height: 22
         readonly property color tone: root.active ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.7) : Theme.subtext
         Text {
@@ -93,8 +93,9 @@ Item {
         Rectangle {
             visible: trailing.kind === "dot"
             anchors.centerIn: parent
-            width: 8; height: 8; radius: 4
-            color: "#ff6b61"
+            width: root.trail.color !== undefined ? 14 : 8; height: width; radius: width / 2
+            color: root.trail.color !== undefined ? root.trail.color : "#ff6b61"
+            border { width: root.trail.color !== undefined ? 1 : 0; color: Qt.rgba(1, 1, 1, 0.5) }
         }
     }
 

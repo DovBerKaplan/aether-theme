@@ -67,6 +67,9 @@ Item {
             active: power.profile === "power-saver", panel: "battery",
             tap: () => power.setProfile(power.profile === "power-saver" ? "balanced" : "power-saver"),
             trail: { kind: "text", text: power.profile === "power-saver" ? I18n.tr("Saver") : power.profile === "performance" ? I18n.tr("Performance") : I18n.tr("Balanced") } }
+        case "accent": return {
+            glyph: "palette", label: I18n.tr("Color"), sub: I18n.tr("Accent"), active: false, panel: "color",
+            tap: () => host.panelRequested("color"), trail: { kind: "dot", color: Theme.accent } }
         case "screenshot": return {
             glyph: "camera", label: I18n.tr("Capture"), sub: I18n.tr("Area"), active: false, panel: "",
             tap: () => { tiles.screenshot(); host.closeRequested() } }

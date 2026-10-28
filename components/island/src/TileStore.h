@@ -21,6 +21,9 @@ class TileStore : public QObject
     Q_OBJECT
     Q_PROPERTY(QStringList order READ order NOTIFY orderChanged)
     Q_PROPERTY(QStringList sizes READ sizes NOTIFY orderChanged)             // "id:2" / "id:3" for tiles wider than the default one cell
+    Q_PROPERTY(bool accentCustom READ accentCustom NOTIFY accentChanged)      // a colour was chosen; otherwise the theme's own
+    Q_PROPERTY(int accentHue READ accentHue NOTIFY accentChanged)             // 0..359
+    Q_PROPERTY(qreal accentLight READ accentLight NOTIFY accentChanged)       // HSL lightness, 0.45..0.80
     Q_PROPERTY(QVariantList catalog READ catalog CONSTANT)           // every tile that can be shown
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)   // interface language: "en" | "he"
     Q_PROPERTY(bool hebrewDates READ hebrewDates WRITE setHebrewDates NOTIFY hebrewDatesChanged)   // Calendar panel
@@ -53,6 +56,17 @@ public:
         } else {
             m_sizes = defaultSizes();
         }
+        m_accentCustom = m_settings.value(QStringLiteral("Appearance/AccentSet")).toBool();
+        m_hue = qBound(0, m_settings.value(QStringLiteral("Appearance/AccentHue"), 183).toInt(), 359);
+        m_light = qBound(0.45, m_settings.value(QStringLiteral("Appearance/AccentLight"), 0.5).toDouble(), 0.8);
+        m_saveAccent.setSingleShot(true);
+        m_saveAccent.setInterval(400);          // dragging a slider changes it many times a second: write once it settles
+        connect(&m_saveAccent, &QTimer::timeout, this, [this] {
+            m_settings.setValue(QStringLiteral("Appearance/AccentSet"), m_accentCustom);
+            m_settings.setValue(QStringLiteral("Appearance/AccentHue"), m_hue);
+            m_settings.setValue(QStringLiteral("Appearance/AccentLight"), m_light);
+            m_settings.sync();
+        });
         QTimer::singleShot(0, this, [this] { refresh(); });
     }
     ~TileStore() override { release(); }
@@ -91,6 +105,25 @@ public:
         }
         m_settings.sync();
         Q_EMIT widgetsChanged();
+    }
+    bool accentCustom() const { return m_accentCustom; }
+    int accentHue() const { return m_hue; }
+    qreal accentLight() const { return m_light; }
+    Q_INVOKABLE void setAccent(int hue, qreal light)
+    {
+        m_hue = qBound(0, hue, 359);
+        m_light = qBound(0.45, light, 0.8);
+        m_accentCustom = true;
+        m_saveAccent.start();
+        Q_EMIT accentChanged();
+    }
+    Q_INVOKABLE void resetAccent()
+    {
+        m_accentCustom = false;
+        m_hue = 183;
+        m_light = 0.5;
+        m_saveAccent.start();
+        Q_EMIT accentChanged();
     }
     QStringList order() const { return m_order; }
     QStringList sizes() const { return m_sizes; }
@@ -186,6 +219,7 @@ Q_SIGNALS:
     void orderChanged();
     void widgetsChanged();
     void hebrewDatesChanged();
+    void accentChanged();
     void languageChanged();
     void stateChanged();
 
@@ -218,7 +252,7 @@ private:
     static QStringList defaults()
     {
         return {QStringLiteral("wifi"), QStringLiteral("bluetooth"), QStringLiteral("nightlight"), QStringLiteral("darktheme"),
-                QStringLiteral("airplane"), QStringLiteral("keepawake"), QStringLiteral("micmute"), QStringLiteral("powersaver")};
+                QStringLiteral("airplane"), QStringLiteral("keepawake"), QStringLiteral("micmute"), QStringLiteral("powersaver"), QStringLiteral("accent")};
     }
     static QStringList defaultSizes() { return {QStringLiteral("wifi:2"), QStringLiteral("bluetooth:2")}; }   // the two that carry words
     // "id:2" or "id:3": a known tile at two or three cells wide
@@ -262,9 +296,13 @@ private:
         tile("wifi", "Wi‑Fi", "wifi-3"), tile("bluetooth", "Bluetooth", "bluetooth"),
         tile("nightlight", "Night Light", "moon"), tile("darktheme", "Theme", "contrast"), tile("airplane", "Airplane mode", "plane"),
         tile("keepawake", "Keep awake", "coffee"), tile("micmute", "Microphone", "mic"), tile("powersaver", "Power saver", "leaf"),
-        tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record")};
+        tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record"), tile("accent", "Color", "palette")};
     const QVariantList m_widgetCatalog = connectInstalled() ? QVariantList{tile("media", "YouTube Music", "logo"), tile("connect", "KDE Connect", "phone")} : QVariantList{tile("media", "YouTube Music", "logo")};
     QSettings m_settings;
+    QTimer m_saveAccent;
+    bool m_accentCustom = false;
+    int m_hue = 183;
+    qreal m_light = 0.5;
     QStringList m_order, m_sizes;
     uint m_cookie = 0;
     bool m_micMuted = false, m_wifiBefore = true, m_btBefore = true;
