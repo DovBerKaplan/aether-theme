@@ -21,8 +21,47 @@ Item {
     readonly property real shelfY: edgeGap
     readonly property real shelfH: height - 2 * edgeGap
     property bool open: false
-    readonly property bool detailOpen: content.page === "detail"
+    // the workspace: everything lives INSIDE our window as tabs (VS Code style) - home is
+    // always first; cards, terminals and files are tabs that come and go
+    property var tabs: [{ id: "home", kind: "home", title: I18n.tr("Console") }]
+    property int activeIdx: 0
+    // bounds-proof: tabs mutates while handlers run, so clamp the index and never be undefined
+    readonly property var activeTab: tabs.length > 0 ? tabs[Math.max(0, Math.min(activeIdx, tabs.length - 1))] : ({ id: "home", kind: "home", title: I18n.tr("Console") })
+    readonly property var activeData: activeTab.data || {}
+    readonly property string activeKind: activeTab.kind
+    onActiveIdxChanged: syncWorkspace()
+    onTabsChanged: syncWorkspace()
+    readonly property bool detailOpen: activeKind === "card"
     readonly property int pw: detailOpen ? pwDetail : pwList
+    function openTab(kind, id, title, data, dtype) {
+        for (let i = 0; i < tabs.length; ++i) {
+            if (tabs[i].id === id) { activeIdx = i; return tabs[i] }
+        }
+        const t = { id: id, kind: kind, title: title, data: data || {}, dtype: dtype || "", path: "/", sid: (data || {}).id || "" }
+        tabs = tabs.concat([t])
+        activeIdx = tabs.length - 1
+        // the change handlers above fire mid-mutation and see a stale snapshot - sync once
+        // more now that the assignment has settled
+        syncWorkspace()
+        return t
+    }
+    function closeTab(i) {
+        if (i <= 0 || i >= tabs.length) return
+        const t = tabs[i]
+        if ((t.kind === "term" || t.kind === "local") && seats[t.id] > 0) {
+            if (seatPid === seats[t.id]) { ctl.hideSeat(); seatPid = 0; seatReady = false }
+            launcher.killPid(seats[t.id])   // the tmux session (server or local) survives
+            const sm = Object.assign({}, seats); delete sm[t.id]; seats = sm
+        }
+        if (sftpKey === t.id) sftpKey = ""
+        const arr = tabs.slice(); arr.splice(i, 1); tabs = arr
+        if (activeIdx >= tabs.length) activeIdx = tabs.length - 1
+    }
+    function sessionDown(sid) {
+        for (let i = 0; i < tabs.length; ++i)
+            if (tabs[i].sid === sid && downIds[tabs[i].id] === true) return true
+        return false
+    }
     // The window is exactly as wide as its content needs (the dock's way, not an overlay):
     // the rest of the screen stays free for terminals, editors and tiled apps. Inside it the
     // glass slides in from beyond the right edge and grows leftward for the card.
@@ -47,7 +86,7 @@ Item {
         ctl.setKeyboard(open)
         discovery.setPolling(open)
         if (open) ctl.setWindowSize(pw + edgeGap, ctl.screenHeight)
-        else content.page = "main"   // the width shrinks when the slide settles (onSlideChanged)
+        else content.page = "none"   // the width shrinks when the slide settles (onSlideChanged)
         report()
     }
     onWidthChanged: report()
@@ -85,9 +124,16 @@ Item {
     Timer {
         id: logsTimer
         interval: 3000
-        onTriggered:
-            if (testDetail === "cont") { root.detailView = root.logsIdx; root.syncDetail() }
-            else if (testDetail === "session") { root.detailView = root.termIdx; root.syncDetail() }
+        onTriggered: {
+            if (testDetail === "cont") { root.openTab("files", "files:fixture0",
+                "go2rtc · " + I18n.tr("Files"),
+                { id: "fixture", name: discovery.containers[0].name, host: discovery.containers[0].name }, "session")
+                root.syncWorkspace() }
+            else if (testDetail === "session") {
+                root.openTab("term", "term:fixture", "kot-prod · " + I18n.tr("Terminal"),
+                             { id: "fixture", name: "kot-prod", host: "kot-prod" }, "session")
+            }
+        }
     }
 
     Connections {
@@ -113,13 +159,17 @@ Item {
     Shortcut {
         sequences: [StandardKey.Cancel]
         enabled: root.open
-        onActivated: content.page !== "main" ? content.page = "main" : root.open = false
+        onActivated: {
+            if (content.page !== "none") content.page = "none"
+            else if (activeIdx > 0) closeTab(activeIdx)
+            else root.open = false
+        }
     }
 
     function report() {
         if (panelIn) {
             let hole = {}
-            if (content.page === "detail" && detailKind === "session" && detailView === termIdx && seatPid > 0) {
+            if (activeKind === "card" && detailKind === "session" && detailView === termIdx && seatPid > 0) {
                 const r = seatHost.mapToItem(root, 0, 0)
                 hole = { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(seatHost.width), h: Math.round(seatHost.height) }
             }
@@ -276,13 +326,15 @@ Item {
     readonly property int termIdx: detailKind === "pod" ? 1 : detailKind === "cont" ? 2 : 3
 
     // ---------- the detail card ----------
-    property string detailKind: ""            // "session" | "cont" | "pod"
-    property var detailData: ({})
+    // the data context of the active tab (cards, terminals and files all read from here)
+    readonly property string detailKind: activeKind === "card" || activeKind === "term" || activeKind === "files"
+                                         ? activeTab.dtype : ""
+    readonly property var detailData: activeData
     property int detailView: 0
     property string metricKey: ""
     property string streamKey: ""
     property string sftpKey: ""
-    property var seats: ({})        // session id -> the konsole window living for it
+    property var seats: ({})        // tab id -> the konsole window living for it
     property int seatPid: 0         // the one currently seated (for the hole and the frost)
     property bool seatReady: false  // the KWin script seated and revealed it
     property var downIds: ({})      // sessions whose terminal window died (orange dot)
@@ -291,24 +343,18 @@ Item {
         function onSeatReady() {
             root.seatReady = true
             const d = Object.assign({}, root.downIds)
-            for (const id in root.seats) {
-                if (root.seats[id] === root.seatPid) delete d[id]
-            }
+            delete d[root.activeTab.id]
             root.downIds = d
         }
         function onSeatClosed(pid) {
             const d = Object.assign({}, root.downIds)
-            let openId = ""
             for (const id in root.seats) {
-                if (root.seats[id] === pid) {
-                    d[id] = true
-                    if (id === root.detailData.id) openId = id
-                }
+                if (root.seats[id] === pid) d[id] = true
             }
             root.downIds = d
             // reconnect in place only when the user is looking at that terminal
-            if (openId !== "" && content.page === "detail" && root.detailKind === "session"
-                && root.detailView === root.termIdx) {
+            if (root.seats[root.activeTab.id] === pid
+                && (activeKind === "term" || activeKind === "local")) {
                 root.syncSeat()
             }
         }
@@ -318,21 +364,22 @@ Item {
     // A window the script reports dead (ssh drop, user close) is relaunched automatically
     // when its card is on screen, and marked with the orange dot otherwise.
     function syncSeat() {
-        const want = content.page === "detail" && detailKind === "session" && detailView === termIdx
+        const want = activeKind === "term" || activeKind === "local"
         if (!want) {
             if (seatPid > 0) ctl.hideSeat()
             seatReady = false
             return
         }
-        let pid = seats[detailData.id] || 0
-        if (pid === 0 || downIds[detailData.id] === true) {
+        let pid = seats[activeTab.id] || 0
+        if (pid === 0 || downIds[activeTab.id] === true) {
             if (pid > 0) ctl.hideSeat()   // the dead window may still be on stage
-            pid = launcher.sshSessionPid(detailData)
+            pid = activeKind === "local" ? launcher.localPid() : launcher.sshSessionPid(detailData)
+            console.warn("SEATLAUNCH kind=", activeKind, "host=", detailData.host, "pid=", pid, "detailKind=", detailKind)
             if (!pid) return
-            seats[detailData.id] = pid
+            seats[activeTab.id] = pid
             ctl.registerSeat(pid)
             const d = Object.assign({}, downIds)
-            delete d[detailData.id]
+            delete d[activeTab.id]
             downIds = d
         }
         seatPid = pid
@@ -343,10 +390,8 @@ Item {
     }
 
     function openDetail(kind, d) {
-        detailKind = kind
-        detailData = d
+        openTab("card", "card:" + (d.id || d.name || kind), d.name || d.host || d.name || "", d, kind)
         detailView = 0
-        content.page = "detail"
     }
     function launchTerminal(kind, d) {
         if (kind === "session") { if (launcher.sshSession(d)) store.markLaunched(d.id) }
@@ -355,22 +400,20 @@ Item {
     }
     // Starts/stops the pollers so they match exactly what is on screen: metrics for the
     // dashboard/overview views, a log stream for the logs view, nothing anywhere else.
-    function syncDetail() {
-        if (content.page !== "detail" || detailKind === "") {
-            if (metricKey !== "") { metrics.stop(); metricKey = "" }
-            if (streamKey !== "") { logStream.stop(); streamKey = "" }
-            sftpKey = ""
-            if (seatPid > 0) { ctl.hideSeat(); seatReady = false }
-            return
-        }
-        if (detailKind === "session" && detailView === 0) {
-            if (metricKey !== "s") { metrics.watchSession(detailData); metricKey = "s" }
-        } else if (detailKind === "cont" && detailView === 0) {
-            if (metricKey !== "c:" + detailData.name) { metrics.watchContainer(detailData.name); metricKey = "c:" + detailData.name }
+    function syncWorkspace() {
+        // metrics and logs live only in card tabs; they re-target when the active card changes
+        if (activeKind === "card") {
+            if (detailKind === "session" && detailView === 0) {
+                if (metricKey !== "s") { metrics.watchSession(detailData); metricKey = "s" }
+            } else if (detailKind === "cont" && detailView === 0) {
+                if (metricKey !== "c:" + detailData.name) { metrics.watchContainer(detailData.name); metricKey = "c:" + detailData.name }
+            } else if (metricKey !== "") {
+                metrics.stop(); metricKey = ""
+            }
         } else if (metricKey !== "") {
             metrics.stop(); metricKey = ""
         }
-        if (detailView === logsIdx) {
+        if (activeKind === "card" && detailView === logsIdx) {
             let k = "", begin = null
             if (detailKind === "session") { k = "s:" + detailData.id; begin = () => logStream.startSession(detailData) }
             else if (detailKind === "cont") { k = "c:" + detailData.name; begin = () => logStream.startContainer(detailData.name) }
@@ -379,18 +422,19 @@ Item {
         } else if (streamKey !== "") {
             logStream.stop(); streamKey = ""
         }
-        // the files view keeps its browsing position while the card is open; a new entry
-        // into the card (or another session) starts fresh at the home folder
-        if (detailKind === "session" && detailView === filesIdx) {
-            if (sftpKey !== "s:" + detailData.id) { sftp.open(detailData); sftpKey = "s:" + detailData.id }
+        // files: one sftp browser, re-targeted per tab; each tab remembers its folder
+        if (activeKind === "files") {
+            if (sftpKey !== activeTab.id) { sftp.open(detailData); sftpKey = activeTab.id }
+            if (activeTab.path && activeTab.path !== sftp.path) sftp.list(activeTab.path)
+        } else if (sftpKey !== "") {
+            sftpKey = ""
         }
-        // the terminal seat follows the view; leaving the view conceals the window
-        if (detailKind === "session" && detailView === termIdx) {
-            syncSeat()
-        } else if (seatPid > 0) {
-            ctl.hideSeat()
-            seatReady = false
-        }
+        syncSeat()
+    }
+    function navigate(path) {
+        sftp.list(path)
+        const arr = tabs.map(t => t.id === activeTab.id ? Object.assign({}, t, { path: path }) : t)
+        tabs = arr
     }
 
     // ---------- the list model: one flat block list, rebuilt on any data change ----------
@@ -585,9 +629,70 @@ Item {
 
         Item {
             id: content
-            property string page: "main"
-            onPageChanged: root.syncDetail()
+            property string page: "none"   // modal overlays only: editor / import
+            onPageChanged: root.syncWorkspace()
             anchors.fill: parent
+
+            // ---- tab bar: everything lives inside our window (VS Code style) ----
+            Item {
+                id: tabBar
+                width: parent.width; height: 34
+                Flickable {
+                    anchors.fill: parent
+                    contentWidth: trow.width
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    Row {
+                        id: trow
+                        spacing: 2
+                        Repeater {
+                            model: root.tabs
+                            Item {
+                                id: tabItem
+                                required property int index
+                                required property var modelData
+                                width: Math.min(150, 34 + tabTitle.implicitWidth + (index > 0 ? 14 : 0))
+                                height: 30
+                                Rectangle {
+                                    anchors { fill: parent; topMargin: 2 }
+                                    radius: 8
+                                    color: root.activeIdx === index ? Theme.chip : "transparent"
+                                }
+                                Rectangle {
+                                    anchors { bottom: parent.bottom; left: parent.left; right: parent.right; margins: 8 }
+                                    height: 2; radius: 1
+                                    color: Theme.accent
+                                    visible: root.activeIdx === index
+                                }
+                                Text {
+                                    id: tabTitle
+                                    x: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: Math.min(110, implicitWidth)
+                                    elide: Text.ElideRight
+                                    text: modelData.title
+                                    font { family: Theme.font; pixelSize: Tokens.type.label }
+                                    color: root.activeIdx === index ? Theme.text : Theme.subtext
+                                }
+                                Glyph {
+                                    visible: index > 0
+                                    name: "close"; size: 11
+                                    anchors { verticalCenter: parent.verticalCenter; left: tabTitle.right; leftMargin: 3 }
+                                    color: tabX.hovered ? Theme.text : Theme.subtext
+                                    HoverHandler { id: tabX; cursorShape: Qt.PointingHandCursor }
+                                    TapHandler { onTapped: root.closeTab(index) }
+                                }
+                                TapHandler { onTapped: root.activeIdx = index }
+                                HoverHandler { cursorShape: Qt.PointingHandCursor }
+                            }
+                        }
+                    }
+                }
+                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.rim; opacity: 0.4 }
+            }
+            Item {
+                id: body
+                anchors { top: tabBar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
             LayoutMirroring.enabled: I18n.rtl
             LayoutMirroring.childrenInherit: true
 
@@ -596,9 +701,8 @@ Item {
             // ---- main list: a fixed-width page; the detail card opens beside it ----
             Item {
                 id: listPage
-                anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
-                width: root.pwList
-                opacity: content.page === "detail" ? 0 : 1
+                anchors.fill: parent
+                opacity: activeKind === "home" ? 1 : 0
                 visible: opacity > 0.01
                 Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
 
@@ -613,7 +717,7 @@ Item {
                 subtitle: blocks.length === 0 ? I18n.tr("servers · containers · pods")
                                               : I18n.f("%1 destinations", blocks.filter(b => b.t === "session" || b.t === "cont" || b.t === "pod").length)
                 property alias filterField: filter
-                onBackRequested: content.page = "main"
+                onBackRequested: content.page = "none"
 
                 headerTrailing: Row {
                     spacing: Tokens.space.xs
@@ -711,16 +815,16 @@ Item {
                 id: detailPage
                 // the card owns the whole glass; the list fades out beneath it while the
                 // glass grows - the old 240px strip left the far half of the glass dead
-                anchors { left: parent.left; right: parent.right; top: parent.top; bottom: parent.bottom }
-                visible: content.page === "detail"
-                opacity: content.page === "detail" ? 1 : 0
+                anchors.fill: parent
+                visible: activeKind === "card"
+                opacity: activeKind === "card" ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
 
                 PanelScaffold {
                     anchors.fill: parent
                     showBack: true
                     maxHeight: root.shelfH
-                    onBackRequested: content.page = "main"
+                    onBackRequested: root.activeIdx = 0
                     title: root.detailKind === "session"
                            ? (root.detailData.name || root.detailData.host || "")
                            : (root.detailData.name || "")
@@ -752,10 +856,26 @@ Item {
                         width: Math.min(320, parent.width - 2 * Tokens.space.md)
                         x: Tokens.space.md
                         model: root.detailKind === "session" ? [I18n.tr("Dashboard"), I18n.tr("Files"), I18n.tr("Logs"), I18n.tr("Terminal")]
-                             : root.detailKind === "cont" ? [I18n.tr("Overview"), I18n.tr("Logs"), I18n.tr("Terminal")]
-                             : [I18n.tr("Logs"), I18n.tr("Terminal")]
+                             : root.detailKind === "cont" ? [I18n.tr("Overview"), I18n.tr("Logs")]
+                             : [I18n.tr("Logs")]
                         currentIndex: root.detailView
-                        onActivated: (i) => { root.detailView = i; root.syncDetail() }
+                        // Files and Terminal open as workspace tabs; Dashboard/Logs stay in the card
+                        onActivated: (i) => {
+                            if (root.detailKind === "session" && i === 1) {
+                                root.openTab("files", "files:" + root.detailData.id,
+                                             (root.detailData.name || root.detailData.host || "") + " · " + I18n.tr("Files"),
+                                             root.detailData, "session")
+                                root.detailView = 0
+                            } else if (root.detailKind === "session" && i === 3) {
+                                root.openTab("term", "term:" + root.detailData.id,
+                                             (root.detailData.name || root.detailData.host || "") + " · " + I18n.tr("Terminal"),
+                                             root.detailData, "session")
+                                root.detailView = 0
+                            } else {
+                                root.detailView = root.detailKind === "session" ? (i === 0 ? 0 : 1) : i
+                                root.syncWorkspace()
+                            }
+                        }
                     }
 
                     // ----- dashboard (ssh session) -----
@@ -888,113 +1008,9 @@ Item {
                         }
                     }
 
-                    // ----- files (ssh session): the stock sftp client over the same master -----
-                    Column {
-                        visible: root.detailKind === "session" && root.detailView === root.filesIdx && content.page === "detail"
-                        width: parent.width
-                        spacing: Tokens.space.sm
-                        topPadding: Tokens.space.sm
-                        Row {
-                            x: Tokens.space.md
-                            width: parent.width - 2 * Tokens.space.md
-                            spacing: Tokens.space.xs
-                            ActionGlyph { glyph: "up"; onAct: sftp.up() }
-                            ActionGlyph { glyph: "folder"; onAct: launcher.browseRemote(root.sftpUrl(sftp.path)) }
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: parent.width - 30
-                                text: I18n.ltr(sftp.path)
-                                textFormat: Text.PlainText
-                                elide: Text.ElideMiddle
-                                font { family: Theme.mono; pixelSize: Tokens.type.label }
-                                color: Theme.subtext
-                            }
-                        }
-                        LinearProgress {
-                            x: Tokens.space.md
-                            width: parent.width - 2 * Tokens.space.md
-                            running: sftp.busy
-                        }
-                        Text {
-                            visible: sftp.err.length > 0
-                            x: Tokens.space.md; width: parent.width - 2 * Tokens.space.md
-                            text: sftp.err
-                            wrapMode: Text.WrapAnywhere
-                            font { family: Theme.mono; pixelSize: Tokens.type.caption }
-                            color: Tokens.role.island.negative
-                        }
-                        Item {
-                            x: Tokens.space.md
-                            width: parent.width - 2 * Tokens.space.md
-                            height: Math.max(180, Math.min(360, root.height - 460))
-                            ListView {
-                                id: fileList
-                                anchors.fill: parent
-                                clip: true
-                                reuseItems: true
-                                boundsBehavior: Flickable.StopAtBounds
-                                LayoutMirroring.enabled: false
-                                model: sftp.entries
-                                delegate: ListRow {
-                                    required property var modelData
-                                    width: fileList.width
-                                    title: modelData.name
-                                    subtitle: modelData.dir ? I18n.tr("Folder") + " · " + I18n.ltr(modelData.date)
-                                                            : I18n.ltr(root.hsize(modelData.size) + "  ·  " + modelData.date)
-                                    leadingGlyphSource: Qt.resolvedUrl(modelData.dir ? "assets/glyphs/folder.svg"
-                                                                                     : "assets/glyphs/file.svg")
-                                    onClicked: if (modelData.dir) sftp.list(sftp.path + "/" + modelData.name)
-                                    trailing: [
-                                        ActionGlyph {
-                                            glyph: "edit"
-                                            visible: !modelData.dir
-                                            onAct: launcher.editRemote(root.sftpUrl(sftp.path + "/" + modelData.name))
-                                        },
-                                        ActionGlyph {
-                                            glyph: "download"
-                                            visible: !modelData.dir
-                                            onAct: sftp.download(modelData.name)
-                                        }
-                                    ]
-                                }
-                            }
-                            DropArea {
-                                id: fileDrop
-                                anchors.fill: parent
-                                onEntered: (d) => d.accepted = d.hasUrls
-                                onDropped: (d) => { if (d.hasUrls) d.urls.forEach(u => sftp.upload(u)); d.accept() }
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                visible: fileDrop.containsDrag
-                                text: I18n.tr("Drop to upload here")
-                                font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
-                                color: Theme.accent
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                visible: sftp.entries.length === 0 && !sftp.busy && sftp.err.length === 0
-                                text: I18n.tr("Empty folder")
-                                font { family: Theme.font; pixelSize: Tokens.type.label }
-                                color: Theme.subtext
-                            }
-                        }
-                        Row {
-                            x: Tokens.space.md
-                            spacing: Tokens.space.sm
-                            Button { text: I18n.tr("Upload…"); onClicked: sftp.chooseUpload() }
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: I18n.tr("or drop files here")
-                                font { family: Theme.font; pixelSize: Tokens.type.caption }
-                                color: Theme.subtext
-                            }
-                        }
-                    }
-
                     // ----- logs (all kinds) -----
                     Column {
-                        visible: root.detailView === root.logsIdx && content.page === "detail"
+                        visible: root.detailView === root.logsIdx && activeKind === "card"
                         width: parent.width
                         spacing: Tokens.space.sm
                         topPadding: Tokens.space.sm
@@ -1046,66 +1062,203 @@ Item {
                         }
                     }
 
-                    // ----- terminal: seated inside the glass (the media-seat handshake) -----
+                }
+
+                // ----- terminal tab: the seat lives here, one per tab -----
+                Item {
+                    id: termPage
+                    anchors.fill: parent
+                    visible: activeKind === "term" || activeKind === "local"
+
+                    Row {
+                        x: Tokens.space.md
+                        width: parent.width - 2 * Tokens.space.md
+                        spacing: Tokens.space.xs
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - 110
+                            text: activeTab.title
+                            textFormat: Text.PlainText
+                            elide: Text.ElideRight
+                            font { family: Theme.font; pixelSize: Tokens.type.label }
+                            color: Theme.subtext
+                        }
+                        ActionGlyph {
+                            glyph: "plus"
+                            anchors.verticalCenter: parent.verticalCenter
+                            onAct: root.openTab(root.activeKind,
+                                                root.activeKind + ":" + (root.detailData.id || "local") + ":" + Date.now(),
+                                                root.activeTab.title, root.detailData, root.detailKind || "local")
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: I18n.tr("another")
+                            font { family: Theme.font; pixelSize: Tokens.type.caption }
+                            color: Theme.subtext
+                        }
+                    }
                     Item {
-                        visible: root.detailKind === "session" && root.detailView === root.termIdx && content.page === "detail"
-                        width: parent.width
-                        height: Math.max(280, root.height - 430)
-                        Item {
-                            id: seatHost
-                            x: Tokens.space.md
-                            width: parent.width - 2 * Tokens.space.md
-                            height: parent.height
-                            // the frost: covers the seat until the script reports the window seated
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 12
-                                color: Theme.bodyTop
-                                visible: root.seatPid > 0 && !root.seatReady
-                                Column {
-                                    anchors.centerIn: parent
-                                    spacing: Tokens.space.sm
-                                    Text {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        text: I18n.tr("Opening the session…")
-                                        font { family: Theme.font; pixelSize: Tokens.type.label }
-                                        color: Theme.subtext
-                                    }
-                                    Text {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        text: I18n.tr("tmux on the server holds your place")
-                                        font { family: Theme.font; pixelSize: Tokens.type.caption }
-                                        color: Theme.subtext
-                                        opacity: 0.6
-                                    }
-                                }
-                            }
+                        id: seatHost
+                        x: Tokens.space.md
+                        y: 34
+                        width: parent.width - 2 * Tokens.space.md
+                        height: parent.height - 34
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 12
+                            color: Theme.bodyTop
+                            visible: root.seatPid > 0 && !root.seatReady
                             Column {
                                 anchors.centerIn: parent
-                                visible: root.seatPid === 0
                                 spacing: Tokens.space.sm
-                                Glyph {
-                                    name: "terminal"; size: 36; color: Theme.subtext
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
                                 Text {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    text: I18n.tr("The terminal could not open - check the host")
+                                    text: I18n.tr("Opening the session…")
                                     font { family: Theme.font; pixelSize: Tokens.type.label }
                                     color: Theme.subtext
                                 }
-                                Button {
+                                Text {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    text: I18n.tr("Try again")
-                                    onClicked: root.syncSeat()
+                                    text: I18n.tr("tmux on the server holds your place")
+                                    font { family: Theme.font; pixelSize: Tokens.type.caption }
+                                    color: Theme.subtext
+                                    opacity: 0.6
                                 }
+                            }
+                        }
+                        Column {
+                            anchors.centerIn: parent
+                            visible: root.seatPid === 0
+                            spacing: Tokens.space.sm
+                            Glyph {
+                                name: "terminal"; size: 36; color: Theme.subtext
+                                anchors.horizontalCenter: parent.horizontalCenter
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: I18n.tr("The terminal could not open - check the host")
+                                font { family: Theme.font; pixelSize: Tokens.type.label }
+                                color: Theme.subtext
+                            }
+                            Button {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: I18n.tr("Try again")
+                                onClicked: root.syncSeat()
                             }
                         }
                     }
                 }
-            }
 
-            // ---- sub-pages ----
+                // ----- files tab: the sftp browser, one per tab -----
+                Item {
+                    id: filesPage
+                    anchors.fill: parent
+                    visible: activeKind === "files"
+
+                    Column {
+                        anchors.fill: parent
+                        spacing: Tokens.space.sm
+                        topPadding: Tokens.space.sm
+                        Row {
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            spacing: Tokens.space.xs
+                            ActionGlyph { glyph: "up"; onAct: root.navigate(sftp.path + "/..") }
+                            ActionGlyph { glyph: "folder"; onAct: launcher.browseRemote(root.sftpUrl(sftp.path)) }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - 60
+                                text: I18n.ltr(sftp.path)
+                                textFormat: Text.PlainText
+                                elide: Text.ElideMiddle
+                                font { family: Theme.mono; pixelSize: Tokens.type.label }
+                                color: Theme.subtext
+                            }
+                        }
+                        LinearProgress {
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            running: sftp.busy
+                        }
+                        Text {
+                            visible: sftp.err.length > 0
+                            x: Tokens.space.md; width: parent.width - 2 * Tokens.space.md
+                            text: sftp.err
+                            wrapMode: Text.WrapAnywhere
+                            font { family: Theme.mono; pixelSize: Tokens.type.caption }
+                            color: Tokens.role.island.negative
+                        }
+                        Item {
+                            x: Tokens.space.md
+                            width: parent.width - 2 * Tokens.space.md
+                            height: Math.max(180, Math.min(430, root.height - 470))
+                            ListView {
+                                id: fileList
+                                anchors.fill: parent
+                                clip: true
+                                reuseItems: true
+                                boundsBehavior: Flickable.StopAtBounds
+                                LayoutMirroring.enabled: false
+                                model: sftp.entries
+                                delegate: ListRow {
+                                    required property var modelData
+                                    width: fileList.width
+                                    title: modelData.name
+                                    subtitle: modelData.dir ? I18n.tr("Folder") + " · " + I18n.ltr(modelData.date)
+                                                            : I18n.ltr(root.hsize(modelData.size) + "  ·  " + modelData.date)
+                                    leadingGlyphSource: Qt.resolvedUrl(modelData.dir ? "assets/glyphs/folder.svg"
+                                                                                     : "assets/glyphs/file.svg")
+                                    onClicked: if (modelData.dir) root.navigate(sftp.path + "/" + modelData.name)
+                                    trailing: [
+                                        ActionGlyph {
+                                            glyph: "edit"
+                                            visible: !modelData.dir
+                                            onAct: launcher.editRemote(root.sftpUrl(sftp.path + "/" + modelData.name))
+                                        },
+                                        ActionGlyph {
+                                            glyph: "download"
+                                            visible: !modelData.dir
+                                            onAct: sftp.download(modelData.name)
+                                        }
+                                    ]
+                                }
+                            }
+                            DropArea {
+                                id: fileDrop
+                                anchors.fill: parent
+                                onEntered: (d) => d.accepted = d.hasUrls
+                                onDropped: (d) => { if (d.hasUrls) d.urls.forEach(u => sftp.upload(u)); d.accept() }
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: fileDrop.containsDrag
+                                text: I18n.tr("Drop to upload here")
+                                font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
+                                color: Theme.accent
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: sftp.entries.length === 0 && !sftp.busy && sftp.err.length === 0
+                                text: I18n.tr("Empty folder")
+                                font { family: Theme.font; pixelSize: Tokens.type.label }
+                                color: Theme.subtext
+                            }
+                        }
+                        Row {
+                            x: Tokens.space.md
+                            spacing: Tokens.space.sm
+                            Button { text: I18n.tr("Upload…"); onClicked: sftp.chooseUpload() }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: I18n.tr("or drop files here")
+                                font { family: Theme.font; pixelSize: Tokens.type.caption }
+                                color: Theme.subtext
+                            }
+                        }
+                    }
+                }
+            }                      // body
+
             SessionEditor {
                 id: editorPage
                 anchors.fill: parent
@@ -1113,8 +1266,8 @@ Item {
                 opacity: content.page === "editor" ? 1 : 0
                 enabled: content.page === "editor"
                 visible: opacity > 0.01
-                onSaved: content.page = "main"
-                onBackRequested: content.page = "main"
+                onSaved: content.page = "none"
+                onBackRequested: content.page = "none"
             }
             ImportPage {
                 id: importPage
@@ -1123,11 +1276,10 @@ Item {
                 opacity: content.page === "import" ? 1 : 0
                 enabled: content.page === "import"
                 visible: opacity > 0.01
-                onBackRequested: content.page = "main"
+                onBackRequested: content.page = "none"
             }
-        }
-    }
-
+        }                          // content
+    }                              // shelf
     // ---------- block delegates ----------
     Component {
         id: lblComp
@@ -1264,4 +1416,5 @@ Item {
             }
         }
     }
+}
 }
