@@ -28,31 +28,40 @@ Item {
         return tiles.catalog.filter(c => !used[c.id])
     }
 
-    // Where every tile goes: [{ i, page, row, col, span }]. `perPage` rows per page; Infinity = one long grid (editing).
+    // Where every tile goes: [{ i, page, row, col, span }]. Each tile takes the first free spot (rows of `cols`
+    // cells, `perPage` rows per page), so a hole left by a wide tile is filled by a later small one and two wide
+    // tiles share a row when they can. Infinity rows = one long grid (editing).
     function place(perPage) {
         const out = []
-        let page = 0, row = 0, col = 0
+        const used = {}                      // "page,row,col" -> true
+        const free = (pg, r, c, span) => { for (let k = 0; k < span; ++k) if (used[pg + "," + r + "," + (c + k)]) return false; return true }
         for (let i = 0; i < work.count; ++i) {
             const span = work.get(i).wide ? 2 : 1
-            if (col + span > cols) { row++; col = 0 }
-            if (row >= perPage) { page++; row = 0; col = 0 }
-            out.push({ i: i, page: page, row: row, col: col, span: span })
-            col += span
-            if (col >= cols) { row++; col = 0 }
+            let done = false
+            for (let pg = 0; !done; ++pg) {
+                for (let r = 0; r < perPage && !done; ++r) {
+                    for (let c = 0; c + span <= cols && !done; ++c) {
+                        if (!free(pg, r, c, span)) continue
+                        for (let k = 0; k < span; ++k) used[pg + "," + r + "," + (c + k)] = true
+                        out.push({ i: i, page: pg, row: r, col: c, span: span })
+                        done = true
+                    }
+                }
+            }
         }
         return out
     }
     property var layout: []          // paged, for normal mode
     property var flat: []            // one grid, for editing
     function relayout() { layout = place(rowsPerPage); flat = place(1e9) }
-    readonly property int pages: layout.length > 0 ? layout[layout.length - 1].page + 1 : 1
+    readonly property int pages: layout.reduce((m, t) => Math.max(m, t.page + 1), 1)
     readonly property int pageRows: {
         let m = 1
         for (const t of layout) m = Math.max(m, t.row + 1)
         return m
     }
     readonly property real pagerH: pageRows * cellH + (pageRows - 1) * gap
-    readonly property int editRows: flat.length > 0 ? flat[flat.length - 1].row + 1 : 1
+    readonly property int editRows: flat.reduce((m, t) => Math.max(m, t.row + 1), 1)
     readonly property real gridH: editRows * cellH + (editRows - 1) * gap
 
     implicitHeight: editing ? editCol.implicitHeight : pagerH + (pages > 1 ? 18 : 0)
