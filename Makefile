@@ -1,17 +1,20 @@
 # Aether: a Plasma 6 desktop layer (theme, island, toasts). `make help` lists the targets.
 SHELL := /bin/bash
 GEN   := theme/generators
-APPS  := island toasts
+APPS  := island toasts dock
 
 .DEFAULT_GOAL := help
-.PHONY: help all theme components install install-island install-login install-gestures uninstall restore check clean
+.PHONY: help all tokens theme fonts components install install-island install-login install-gestures uninstall restore check clean
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-18s %s\n", $$1, $$2}'
 
-all: theme components ## Generate the theme and build the island and toasts
+all: theme components ## Generate the theme and build the island, toasts and dock
 
-theme: ## Generate colors, Kvantum, Plasma theme, global themes, Konsole, wallpapers, login backgrounds
+tokens: ## Regenerate the QML design tokens from theme/tokens.toml
+	python3 $(GEN)/build_tokens_qml.py
+
+theme: tokens ## Generate colors, Kvantum, Plasma theme, global themes, Konsole, wallpapers, login backgrounds
 	python3 $(GEN)/gen_grain.py
 	python3 $(GEN)/build_colors.py
 	python3 $(GEN)/build_kvantum.py
@@ -20,7 +23,10 @@ theme: ## Generate colors, Kvantum, Plasma theme, global themes, Konsole, wallpa
 	python3 $(GEN)/gen_wallpaper.py
 	python3 $(GEN)/gen_lock_wallpaper.py
 
-components: ## Build aether-island and aether-toasts (needs the Qt/KF6 dev packages, see docs/INSTALL.md)
+fonts: ## Fetch Inter and JetBrainsMono Nerd Font into ~/.local/share/fonts (skips what is present)
+	install/fonts.sh
+
+components: ## Build aether-island, aether-toasts and aether-dock (needs the Qt/KF6 dev packages, see docs/INSTALL.md)
 	@for app in $(APPS); do \
 	  cmake -S components/$$app -B components/$$app/build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null && \
 	  cmake --build components/$$app/build || exit 1; \
@@ -47,6 +53,7 @@ restore: ## Restore the KDE settings from the latest backup
 check: ## Syntax-check scripts and build both components
 	@for f in install/*.sh system/*.sh system/gestures/*.sh; do bash -n $$f || exit 1; done
 	python3 -m py_compile $(GEN)/*.py system/shortcuts/*.py tools/*.py
+	python3 $(GEN)/build_tokens_qml.py --check
 	node -e "new Function(require('fs').readFileSync('system/layout.js','utf8'))"
 	$(MAKE) components
 

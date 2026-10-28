@@ -6,6 +6,7 @@ A desktop layer for **KDE Plasma 6** (Wayland): a dark, blurred, rounded look, p
 |---|---|---|
 | **Theme** | Color schemes (Glass = dark, Serenity = light, switching by time of day), Kvantum widget style, Plasma desktop theme, global themes, Konsole profile, wallpapers | `theme/` |
 | **Island** | The top bar. Hidden until the pointer touches the top edge, then a full-width bar with a small notch (search, power). A click on the clock side opens a large panel: media, Wi-Fi, Bluetooth, sound, timer, volume, brightness | `components/island/` |
+| **Dock** | The app bar, hidden until the pointer touches the bottom edge (horizontal pill) or the left edge (vertical pill). The island's dark glass, rim and grain; pinned and running apps with a quiet dot | `components/dock/` |
 | **Toasts** | Notification cards that drop from the top edge. A separate program: it only listens, Plasma stays the notification server | `components/toasts/` |
 | **Login** | SDDM login screen in the same material | `login/` |
 | **System** | Windows-style keyboard shortcuts, touchpad gestures, panel layout, light/dark sync | `system/` |
@@ -32,7 +33,7 @@ plasmoids/    org.aether.appname/
 system/       shortcuts/  gestures/  layout.js  ...      per-user desktop configuration
 install/      install.sh  install-island.sh  backup.sh  restore.sh  ...
 tools/        pointer-test.py                           a virtual mouse for UI tests
-docs/         INSTALL, ARCHITECTURE, CONTRIBUTING, history/
+docs/         INSTALL, ARCHITECTURE, CONTRIBUTING, DOCK-SPEC, history/
 ```
 
 `make help` lists every target. To understand how the pieces fit, read **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**; to work on the code, **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)**.

@@ -3,11 +3,12 @@
 # banners and the global menu. To get the Plasma top bar back, run install/restore.sh
 # (it restores the panel layout from the latest backup) or system/layout.js with a top panel.
 set -euo pipefail
-systemctl --user disable --now aether-island.service aether-toasts.service 2>/dev/null || true
-rm -f "$HOME/.config/systemd/user/aether-island.service" "$HOME/.config/systemd/user/aether-toasts.service" \
+systemctl --user disable --now aether-island.service aether-toasts.service aether-dock.service 2>/dev/null || true
+rm -f "$HOME/.config/systemd/user/aether-island.service" "$HOME/.config/systemd/user/aether-toasts.service" "$HOME/.config/systemd/user/aether-dock.service" \
+      "$HOME/.local/share/applications/org.aether.dock.desktop" "$HOME/.local/bin/aether-dock" \
       "$HOME/.local/share/applications/aether-island-toggle.desktop" \
       "$HOME/.local/bin/aether-island" "$HOME/.local/bin/aether-toasts"
-rm -rf "$HOME/.local/share/aether-island" "$HOME/.local/share/aether-toasts"
+rm -rf "$HOME/.local/share/aether-island" "$HOME/.local/share/aether-toasts" "$HOME/.local/share/aether-dock"
 systemctl --user daemon-reload
 # The YouTube Music seat: KWin script and window rule
 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript aether-media >/dev/null 2>&1 || true

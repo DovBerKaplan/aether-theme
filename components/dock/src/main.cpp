@@ -7,7 +7,10 @@
 #include <QDebug>
 #include <QDBusConnection>
 #include <QDir>
+#include <QDateTime>
 #include <QFile>
+#include <QFileInfo>
+#include <QTimer>
 #include <QFileSystemWatcher>
 #include <QGuiApplication>
 #include <QIcon>
@@ -70,10 +73,28 @@ public:
     {
         m_kdeglobals = QStandardPaths::locate(QStandardPaths::GenericConfigLocation, QStringLiteral("kdeglobals"));
         m_watcher.addPath(m_kdeglobals);
-        connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this](const QString &path) {
-            m_watcher.addPath(path);   // editors replace the file, so re-arm the watch
+        // A scheme switch rewrites kdeglobals in several steps (and KDE replaces the file), so the
+        // change is read once things have settled, and the watch is re-armed afterwards. A slow poll
+        // is the safety net for a watch that got lost with the replaced file.
+        m_debounce.setSingleShot(true);
+        m_debounce.setInterval(300);
+        connect(&m_debounce, &QTimer::timeout, this, [this] {
+            if (!m_watcher.files().contains(m_kdeglobals)) {
+                m_watcher.addPath(m_kdeglobals);
+            }
             readScheme();
         });
+        connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this] { m_debounce.start(); });
+        m_poll.setInterval(2000);
+        connect(&m_poll, &QTimer::timeout, this, [this] {
+            const QDateTime t = QFileInfo(m_kdeglobals).lastModified();
+            if (t != m_lastModified) {
+                m_lastModified = t;
+                m_debounce.start();
+            }
+        });
+        m_poll.start();
+        m_lastModified = QFileInfo(m_kdeglobals).lastModified();
         readScheme();
     }
     bool dark() const { return m_dark; }
@@ -245,6 +266,9 @@ private:
     QQuickView *m_view;
     QString m_edge;
     QFileSystemWatcher m_watcher;
+    QTimer m_debounce;
+    QTimer m_poll;
+    QDateTime m_lastModified;
     QString m_kdeglobals;
     bool m_dark = true;
 };
