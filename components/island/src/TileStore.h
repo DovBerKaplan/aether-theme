@@ -20,7 +20,7 @@ class TileStore : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QStringList order READ order NOTIFY orderChanged)
-    Q_PROPERTY(QStringList wide READ wide NOTIFY orderChanged)               // tiles drawn 2 cells wide (the rest are 1)
+    Q_PROPERTY(QStringList sizes READ sizes NOTIFY orderChanged)             // "id:2" / "id:3" for tiles wider than the default one cell
     Q_PROPERTY(QVariantList catalog READ catalog CONSTANT)           // every tile that can be shown
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)   // interface language: "en" | "he"
     Q_PROPERTY(bool hebrewDates READ hebrewDates WRITE setHebrewDates NOTIFY hebrewDatesChanged)   // Calendar panel
@@ -44,14 +44,14 @@ public:
         if (m_order.isEmpty()) {
             m_order = defaults();
         }
-        if (m_settings.value(QStringLiteral("Tiles/WideSet")).toBool()) {
-            for (const QString &id : m_settings.value(QStringLiteral("Tiles/Wide")).toStringList()) {
-                if (known(id) && !m_wide.contains(id)) {
-                    m_wide << id;
+        if (m_settings.value(QStringLiteral("Tiles/SizesSet")).toBool()) {
+            for (const QString &e : m_settings.value(QStringLiteral("Tiles/Sizes")).toStringList()) {
+                if (validSize(e) && !m_sizes.contains(e)) {
+                    m_sizes << e;
                 }
             }
         } else {
-            m_wide = defaultWide();
+            m_sizes = defaultSizes();
         }
         QTimer::singleShot(0, this, [this] { refresh(); });
     }
@@ -93,7 +93,7 @@ public:
         Q_EMIT widgetsChanged();
     }
     QStringList order() const { return m_order; }
-    QStringList wide() const { return m_wide; }
+    QStringList sizes() const { return m_sizes; }
     QVariantList catalog() const { return m_catalog; }
     QString language() const { return m_settings.value(QStringLiteral("Interface/Language"), QStringLiteral("en")).toString(); }
     void setLanguage(const QString &code)
@@ -121,10 +121,10 @@ public:
     bool bluetoothBefore() const { return m_btBefore; }
 
     // Unknown and repeated ids are dropped; an empty list falls back to the default set.
-    Q_INVOKABLE void setOrder(const QStringList &ids) { setLayout(ids, m_wide); }
-    Q_INVOKABLE void setLayout(const QStringList &ids, const QStringList &wideIds)
+    Q_INVOKABLE void setOrder(const QStringList &ids) { setLayout(ids, m_sizes); }
+    Q_INVOKABLE void setLayout(const QStringList &ids, const QStringList &sizeList)
     {
-        QStringList clean, wide;
+        QStringList clean, sizes;
         for (const QString &id : ids) {
             if (known(id) && !clean.contains(id)) {
                 clean << id;
@@ -133,27 +133,29 @@ public:
         if (clean.isEmpty()) {
             clean = defaults();
         }
-        for (const QString &id : wideIds) {
-            if (clean.contains(id) && !wide.contains(id)) {
-                wide << id;
+        for (const QString &e : sizeList) {
+            if (validSize(e) && clean.contains(e.section(QLatin1Char(':'), 0, 0)) && !sizes.contains(e)) {
+                sizes << e;
             }
         }
-        if (clean == m_order && wide == m_wide) {
+        if (clean == m_order && sizes == m_sizes) {
             return;
         }
         m_order = clean;
-        m_wide = wide;
+        m_sizes = sizes;
         m_settings.setValue(QStringLiteral("Tiles/Order"), m_order);
-        m_settings.setValue(QStringLiteral("Tiles/WideSet"), true);          // an empty list is "none are wide", not "never set"
-        if (m_wide.isEmpty()) {
-            m_settings.remove(QStringLiteral("Tiles/Wide"));
+        m_settings.remove(QStringLiteral("Tiles/Wide"));
+        m_settings.remove(QStringLiteral("Tiles/WideSet"));
+        m_settings.setValue(QStringLiteral("Tiles/SizesSet"), true);       // an empty list is "all one cell", not "never set"
+        if (m_sizes.isEmpty()) {
+            m_settings.remove(QStringLiteral("Tiles/Sizes"));
         } else {
-            m_settings.setValue(QStringLiteral("Tiles/Wide"), m_wide);
+            m_settings.setValue(QStringLiteral("Tiles/Sizes"), m_sizes);
         }
         m_settings.sync();
         Q_EMIT orderChanged();
     }
-    Q_INVOKABLE void reset() { setLayout(defaults(), defaultWide()); }
+    Q_INVOKABLE void reset() { setLayout(defaults(), defaultSizes()); }
     Q_INVOKABLE void refresh() { readMic(); }
 
     Q_INVOKABLE void toggleKeepAwake()
@@ -218,7 +220,13 @@ private:
         return {QStringLiteral("wifi"), QStringLiteral("bluetooth"), QStringLiteral("nightlight"), QStringLiteral("darktheme"),
                 QStringLiteral("airplane"), QStringLiteral("keepawake"), QStringLiteral("micmute"), QStringLiteral("powersaver")};
     }
-    static QStringList defaultWide() { return {}; }
+    static QStringList defaultSizes() { return {QStringLiteral("wifi:2"), QStringLiteral("bluetooth:2")}; }   // the two that carry words
+    // "id:2" or "id:3": a known tile at two or three cells wide
+    bool validSize(const QString &e) const
+    {
+        const QString size = e.section(QLatin1Char(':'), 1, 1);
+        return known(e.section(QLatin1Char(':'), 0, 0)) && (size == QLatin1String("2") || size == QLatin1String("3"));
+    }
     void release()
     {
         if (m_cookie != 0) {
@@ -257,7 +265,7 @@ private:
         tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record")};
     const QVariantList m_widgetCatalog = connectInstalled() ? QVariantList{tile("media", "YouTube Music", "logo"), tile("connect", "KDE Connect", "phone")} : QVariantList{tile("media", "YouTube Music", "logo")};
     QSettings m_settings;
-    QStringList m_order, m_wide;
+    QStringList m_order, m_sizes;
     uint m_cookie = 0;
     bool m_micMuted = false, m_wifiBefore = true, m_btBefore = true;
 };

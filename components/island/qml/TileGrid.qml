@@ -2,11 +2,11 @@ import QtQuick
 import AetherShared
 import "."
 
-// The tile set. A tile is 1 cell (a round button with its label under it) or 2 cells wide (a pill);
-// cells flow left to right in 4 columns, a wide tile never straddles a row, and two rows make a page,
-// so how many buttons fit follows their sizes. Normal: pages with dots when there is more than one.
+// The tile set. A tile is a rounded square of 1, 2 or 3 cells wide on a grid of 6 square cells, so every
+// edge in every row falls on the same lines. Tiles take the first free spot, two rows make a page, and
+// how many buttons fit follows their sizes. Normal: pages with dots when there is more than one.
 // Editing: every tile is shown at once; drag one onto another to reorder, minus removes it, the corner
-// badge turns it wide or round, tap one under "Available" to add it. Every change is saved at once.
+// badge changes its width, tap one under "Available" to add it. Every change is saved at once.
 Item {
     id: root
     property bool editing: false
@@ -14,11 +14,11 @@ Item {
     signal closeRequested()
     signal doneRequested()
 
-    readonly property int cols: 8          // half-cells: a round tile is 2, a wide one 3 (one and a half cells)
-    readonly property int gap: 2
-    readonly property int cellH: 74
+    readonly property int cols: 6          // cells: a tile is 1, 2 or 3 cells wide and always one cell high, so a cell is a square
+    readonly property int gap: 6
     readonly property int rowsPerPage: 2
     readonly property real unitW: (width - (cols - 1) * gap) / cols
+    readonly property real cellH: unitW
     function spanW(span) { return span * unitW + (span - 1) * gap }
     function colX(c, span) { const x = c * (unitW + gap); return I18n.rtl ? width - spanW(span) - x : x }
     readonly property int count: work.count
@@ -36,7 +36,7 @@ Item {
         const used = {}                      // "page,row,col" -> true
         const free = (pg, r, c, span) => { for (let k = 0; k < span; ++k) if (used[pg + "," + r + "," + (c + k)]) return false; return true }
         for (let i = 0; i < work.count; ++i) {
-            const span = work.get(i).wide ? 3 : 2
+            const span = work.get(i).size
             let done = false
             for (let pg = 0; !done; ++pg) {
                 for (let r = 0; r < perPage && !done; ++r) {
@@ -71,18 +71,20 @@ Item {
     ListModel { id: work }
     function load() {
         work.clear()
-        for (const id of tiles.order) work.append({ tid: id, wide: tiles.wide.indexOf(id) >= 0 })
+        const sizeOf = {}
+        for (const e of tiles.sizes) sizeOf[e.split(":")[0]] = parseInt(e.split(":")[1])
+        for (const id of tiles.order) work.append({ tid: id, size: sizeOf[id] || 1 })
         relayout()
     }
     function save() {
-        const ids = [], wide = []
-        for (let i = 0; i < work.count; ++i) { ids.push(work.get(i).tid); if (work.get(i).wide) wide.push(work.get(i).tid) }
+        const ids = [], sizes = []
+        for (let i = 0; i < work.count; ++i) { ids.push(work.get(i).tid); if (work.get(i).size > 1) sizes.push(work.get(i).tid + ":" + work.get(i).size) }
         relayout()
-        tiles.setLayout(ids, wide)
+        tiles.setLayout(ids, sizes)
     }
     function removeAt(i) { work.remove(i); save() }
-    function addId(id) { work.append({ tid: id, wide: false }); save() }   // see WidgetStack: the delegate dies with its row
-    function toggleWide(i) { work.setProperty(i, "wide", !work.get(i).wide); save() }
+    function addId(id) { work.append({ tid: id, size: 1 }); save() }   // see WidgetStack: the delegate dies with its row
+    function cycleSize(i) { work.setProperty(i, "size", work.get(i).size % 3 + 1); save() }
     Component.onCompleted: load()
     Connections { target: tiles; function onOrderChanged() { if (!root.editing) root.load() } }
     onEditingChanged: if (!editing) load()
@@ -108,7 +110,7 @@ Item {
                 delegate: Tile {
                     required property var modelData
                     tileId: work.get(modelData.i).tid
-                    wide: modelData.span === 3
+                    size: modelData.span
                     host: root
                     x: root.colX(modelData.col, modelData.span)
                     y: modelData.row * (root.cellH + root.gap)
@@ -194,8 +196,8 @@ Item {
                     id: slotItem
                     required property int index
                     required property string tid
-                    required property bool wide
-                    readonly property var cell: root.flat[index] || ({ row: 0, col: 0, span: 2 })
+                    required property int size
+                    readonly property var cell: root.flat[index] || ({ row: 0, col: 0, span: 1 })
                     x: root.colX(cell.col, cell.span)
                     y: cell.row * (root.cellH + root.gap)
                     width: root.spanW(cell.span); height: root.cellH
@@ -213,7 +215,7 @@ Item {
                         Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.micro } }
                         Behavior on x { enabled: !held.dragging; NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
                         Behavior on y { enabled: !held.dragging; NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
-                        Tile { anchors.fill: parent; tileId: slotItem.tid; wide: slotItem.wide; host: root; editing: true }
+                        Tile { anchors.fill: parent; tileId: slotItem.tid; size: slotItem.size; host: root; editing: true }
                         MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton }
                         DragHandler {
                             id: drag
@@ -232,7 +234,7 @@ Item {
                     }
                     Rectangle {      // remove badge
                         visible: root.count > 1 && !held.dragging
-                        x: slotItem.wide ? (I18n.rtl ? -4 : parent.width - width + 4) : (I18n.rtl ? (parent.width - 42) / 2 - 8 : (parent.width + 42) / 2 - 12); y: slotItem.wide ? 8 : -4
+                        x: I18n.rtl ? -4 : parent.width - width + 4; y: -4
                         width: 20; height: 20; radius: 10
                         color: Theme.chip
                         border { width: 1; color: Theme.rim }
@@ -240,20 +242,20 @@ Item {
                         HoverHandler { cursorShape: Qt.PointingHandCursor }
                         TapHandler { onTapped: root.removeAt(slotItem.index) }
                     }
-                    Rectangle {      // size badge: a wide shape to widen a round tile, a square to make a wide one round again
+                    Rectangle {      // size badge: tap to go 1 -> 2 -> 3 cells wide and back; the shape inside shows the width
                         visible: !held.dragging
-                        x: slotItem.wide ? (I18n.rtl ? parent.width - width + 4 : -4) : (I18n.rtl ? (parent.width + 42) / 2 - 12 : (parent.width - 42) / 2 - 8); y: slotItem.wide ? 8 : -4
+                        x: I18n.rtl ? parent.width - width + 4 : -4; y: -4
                         width: 20; height: 20; radius: 10
                         color: Theme.chip
                         border { width: 1; color: Theme.rim }
                         Rectangle {
                             anchors.centerIn: parent
-                            width: slotItem.wide ? 7 : 12; height: 7; radius: 2
+                            width: 4 + slotItem.size * 4; height: 7; radius: 2
                             color: "transparent"
                             border { width: 1.5; color: Theme.text }
                         }
                         HoverHandler { cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: root.toggleWide(slotItem.index) }
+                        TapHandler { onTapped: root.cycleSize(slotItem.index) }
                     }
                 }
             }

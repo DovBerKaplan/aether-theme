@@ -9,10 +9,10 @@ Item {
     required property string tileId
     required property var host           // the TileGrid: timer state and the signals back to the island
     property bool editing: false
-    property bool wide: false
+    property int size: 1
 
     readonly property var d: describe(tileId)
-    implicitHeight: 74
+    implicitHeight: 68
 
     function pct(v) { return v + "%" }
     function describe(id) {
@@ -70,7 +70,7 @@ Item {
     ToggleChip {
         anchors.fill: parent
         enabled: !root.editing
-        wide: root.wide
+        size: root.size
         glyph: root.d.glyph
         label: root.d.label
         sublabel: root.d.sub
