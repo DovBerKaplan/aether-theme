@@ -1,0 +1,12 @@
+[Desktop Entry]
+# Autostart for Pear Desktop (unofficial YouTube Music client), unpacked to
+# ~/.local/opt/pear-desktop because the deb needs sudo to install system-wide.
+# Copy to ~/.config/autostart/. The $HOME indirection keeps this file portable;
+# the quotes matter: the path contains a space.
+Type=Application
+Name=YouTube Music
+Exec=sh -c "exec \"\$HOME/.local/opt/pear-desktop/opt/YouTube Music/youtube-music\" --no-sandbox --ozone-platform=x11"
+Terminal=false
+Icon=youtube-music
+StartupWMClass=com.github.th-ch.youtube-music
+X-GNOME-Autostart-enabled=true
