@@ -1,6 +1,7 @@
 # Local state
 backups/
 **/.claude-flow/
+.zcode/
 __pycache__/
 *.tar.gz
 

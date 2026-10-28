@@ -17,6 +17,13 @@ fi
 
 echo "== backup"; "$ROOT/install/backup.sh"
 
+echo "== fonts"
+# Non-fatal: a machine without network still installs, just with fallback fonts.
+if ! "$ROOT/install/fonts.sh"; then
+  echo "warning: font fetch failed; run 'make fonts' later or install Inter and" >&2
+  echo "         JetBrainsMono Nerd Font by hand" >&2
+fi
+
 echo "== build"
 python3 "$ROOT/theme/generators/build_colors.py"
 python3 "$ROOT/theme/generators/build_kvantum.py"
