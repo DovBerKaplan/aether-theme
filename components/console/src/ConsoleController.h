@@ -28,6 +28,9 @@ class ConsoleController : public QObject
     Q_PROPERTY(int screenHeight READ screenHeight CONSTANT)
     Q_PROPERTY(QColor accent READ accent NOTIFY accentChanged)   // "transparent" = the theme's own
     Q_PROPERTY(QString lang READ lang NOTIFY langChanged)
+    // Where the resting tab sits along the right edge, as a fraction of the usable height
+    // (0 = top edge, 1 = bottom) - the phone's Smart-Sidebar handle, dragged and saved.
+    Q_PROPERTY(qreal tabRatio READ tabRatio WRITE setTabRatio NOTIFY tabRatioChanged)
 
 public:
     explicit ConsoleController(QQuickView *view)
@@ -58,6 +61,22 @@ public:
     int screenHeight() const { return m_view->screen() ? m_view->screen()->size().height() : 1080; }
     QColor accent() const { return m_accent; }
     QString lang() const { return m_lang; }
+    qreal tabRatio() const
+    {
+        QSettings s(consoleCfg(), QSettings::IniFormat);
+        return qBound(0.0, s.value(QStringLiteral("General/ConsoleTabY"), 0.18).toReal(), 1.0);
+    }
+    void setTabRatio(qreal r)
+    {
+        r = qBound(0.0, r, 1.0);
+        if (qFuzzyCompare(r, tabRatio())) {
+            return;
+        }
+        QSettings s(consoleCfg(), QSettings::IniFormat);
+        s.setValue(QStringLiteral("General/ConsoleTabY"), r);
+        s.sync();
+        Q_EMIT tabRatioChanged();
+    }
 
     Q_INVOKABLE void setWindowSize(int w, int h)
     {
@@ -121,8 +140,14 @@ Q_SIGNALS:
     void stateRequested(const QString &state);
     void accentChanged();
     void langChanged();
+    void tabRatioChanged();
 
 private:
+    static QString consoleCfg()
+    {
+        return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+               + QStringLiteral("/aetherconsolerc");
+    }
     void reread()
     {
         m_lastModified = QFileInfo(m_cfg).lastModified();
