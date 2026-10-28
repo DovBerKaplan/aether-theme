@@ -15,12 +15,12 @@ Item {
     signal tapped()
     signal panelRequested()
 
-    readonly property int disc: 34
-    height: 66
+    readonly property int disc: 42
+    height: 74
     Rectangle {      // the pill behind a wide tile
         visible: root.wide
         anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
-        height: 46; radius: 23
+        height: 54; radius: 27
         color: Theme.chip
     }
     Rectangle {
@@ -35,7 +35,7 @@ Item {
         Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.micro } }
         Glyph {
             anchors.centerIn: parent
-            name: root.glyph; size: 22
+            name: root.glyph; size: 24
             color: root.active ? Theme.accent : Theme.text
         }
         HoverHandler { id: iconHover; cursorShape: Qt.PointingHandCursor }

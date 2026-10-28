@@ -12,7 +12,7 @@ Item {
     property bool wide: false
 
     readonly property var d: describe(tileId)
-    implicitHeight: 66
+    implicitHeight: 74
 
     function pct(v) { return v + "%" }
     function describe(id) {
@@ -31,7 +31,7 @@ Item {
         case "darktheme": {      // names the mode you are in now; a tap goes to the other one
             const dk = displaySettings.dark
             return { glyph: dk ? "moon" : "sun", label: dk ? I18n.tr("Dark") : I18n.tr("Light"), sub: dk ? I18n.tr("Tap for light") : I18n.tr("Tap for dark"),
-                active: false, panel: "display", tap: () => displaySettings.setDark(!displaySettings.dark) }
+                active: !dk, panel: "display", tap: () => displaySettings.setDark(!displaySettings.dark) }
         }
         case "airplane": {
             const on = !system.wifiEnabled && !system.bluetoothOn
