@@ -23,6 +23,18 @@ Item {
     Binding { target: I18n; property: "lang"; value: tiles.language }
     Binding { target: Theme; property: "accentOverride"; value: tiles.accentCustom ? Qt.hsla(tiles.accentHue / 360, tiles.accentSat, tiles.accentLight, 1) : "transparent" }
     Binding { target: Theme; property: "accentTint"; value: 0.07 }
+    // The system follows the bar: the accent is baked into the color scheme, so the selections,
+    // focus rings and sliders outside the island change with it. A short settle, because a
+    // slider drag changes the accent dozens of times and the push should run once it rests.
+    Timer {
+        id: systemAccentSync
+        interval: 600
+        onTriggered: tiles.applySystemAccent(Theme.accent)
+    }
+    Connections {
+        target: Theme
+        function onAccentChanged() { systemAccentSync.restart() }
+    }
     // The YouTube Music widget: on = the card, the "bar becomes the app" mode and the app itself;
     // off = none of it exists (no card, no mode, no app process, no tray icon, no autostart).
     readonly property bool mediaOn: tiles.widgets.indexOf("media") >= 0
@@ -189,7 +201,7 @@ Item {
     // in YouTube Music almost every card click starts playback, so the old
     // auto-collapse kept shutting the bar mid-browsing. Closing is deliberate -
     // handle, wheel, outside click, Win+N, or pointer-leave when idle.
-    Component.onCompleted: { media.setEnabled(mediaOn); refreshApp(); island.setWindowSize(curWin.width, curWin.height); syncLayout() }
+    Component.onCompleted: { media.setEnabled(mediaOn); refreshApp(); island.setWindowSize(curWin.width, curWin.height); syncLayout(); systemAccentSync.restart() }
 
     // ---- window sizing: grow before the shape animates, shrink after ----------------
     property size curWin: Qt.size(screenW, 10)
@@ -623,19 +635,34 @@ Item {
                 glyph: "search"
                 onTapped: island.openSearch()
             }
-            Text {
-                text: timerState.done ? I18n.tr("Time's up") : (timerState.active ? timerState.text : Qt.formatTime(root.now, "H:mm"))
-                anchors.verticalCenter: parent.verticalCenter
-                font { family: Theme.mono; pixelSize: Tokens.type.body; weight: Font.Medium }
-                color: timerState.done || timerState.active ? Theme.accent : Theme.text
-                HoverHandler { cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: root.openPanel("calendar") }
-                SequentialAnimation on scale {
-                    running: timerState.done
-                    loops: Animation.Infinite
-                    NumberAnimation { to: 1.1; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
-                    NumberAnimation { to: 1.0; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
+            // The clock is a button like the others: the same hover seat, the same press squish.
+            // Its seat is a stadium (the text is wider than a 30 px circle); the timer's own
+            // pulse lives on the text, the press on the cell, so the two never fight.
+            Item {
+                id: clockCell
+                width: clockText.implicitWidth + 16; height: 30
+                scale: clockTap.pressed ? 0.92 : 1
+                Behavior on scale { SpringAnimation { spring: 4; damping: 0.45; mass: 0.6 } }
+                Rectangle {
+                    anchors.fill: parent; radius: height / 2
+                    color: Qt.rgba(1, 1, 1, clockTap.pressed ? Tokens.tint.strong : clockHover.hovered ? Tokens.tint.soft : 0)
+                    Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
                 }
+                Text {
+                    id: clockText
+                    anchors.centerIn: parent
+                    text: timerState.done ? I18n.tr("Time's up") : (timerState.active ? timerState.text : Qt.formatTime(root.now, "H:mm"))
+                    font { family: Theme.mono; pixelSize: Tokens.type.body; weight: Font.Medium }
+                    color: timerState.done || timerState.active ? Theme.accent : Theme.text
+                    SequentialAnimation on scale {
+                        running: timerState.done
+                        loops: Animation.Infinite
+                        NumberAnimation { to: 1.1; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
+                        NumberAnimation { to: 1.0; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.ambient }
+                    }
+                }
+                HoverHandler { id: clockHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { id: clockTap; onTapped: root.openPanel("calendar") }
             }
             // Language: shows the current one, a tap moves to the next
             Item {
@@ -650,6 +677,8 @@ Item {
                     text: I18n.languages.find(l => l.code === I18n.lang).short
                     font { family: Theme.font; pixelSize: Tokens.type.label; weight: Font.DemiBold }
                     color: Theme.text
+                    scale: langTap.pressed ? 0.92 : 1
+                    Behavior on scale { SpringAnimation { spring: 4; damping: 0.45; mass: 0.6 } }
                 }
                 HoverHandler { id: langHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { id: langTap; onTapped: tiles.language = I18n.next() }
@@ -671,22 +700,22 @@ Item {
         }
     }
 
-    // The pull handle. One pill for every state of the bar: a faint hint on the top edge while the
-    // bar is hidden, then the same line slides down with the tab's bottom edge and grows into the
-    // handle; it fades out as the curtain opens (the large island's own handle takes over).
+    // The pull handle. One line for every state of the bar: a faint hint on the top edge while the
+    // bar is hidden, then the same 2 px line slides down with the tab's bottom edge and widens a
+    // little; it fades out as the curtain opens (the large island's own handle takes over).
+    // The dock's bottom edge hint is 34 x 2 at 0.22 - the two grab lines speak one quiet dialect.
     Rectangle {
         id: edgeHint
         readonly property bool resting: root.mode === "hidden"
         x: (root.width - width) / 2
-        y: resting ? 6 : Math.max(6, surface.notchBottom - 12)    // 6 = inset from the edge; input stays on the 2 px strip
-        width: resting ? 22 : 32
-        height: resting ? 2 : 4
-        radius: height / 2
-        color: resting ? "white" : Theme.subtext
-        opacity: resting ? 0.22 : 0.7 * (root.mode === "media" || root.mode === "activity" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
+        y: resting ? 6 : Math.max(6, surface.notchBottom - 7)   // 5 px above the tab's bottom edge: air under the clock
+        width: resting ? 22 : 34
+        height: 2
+        radius: 1
+        color: resting ? "white" : Theme.text
+        opacity: resting ? 0.22 : 0.3 * (root.mode === "media" || root.mode === "activity" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
         visible: opacity > 0
         Behavior on width { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
-        Behavior on height { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
         Behavior on color { ColorAnimation { duration: Tokens.motion.duration.base } }
         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
     }
