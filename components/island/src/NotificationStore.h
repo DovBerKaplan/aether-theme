@@ -17,6 +17,8 @@
 #include <QTimer>
 #include <QVariantList>
 
+#include <NotificationIcon.h>
+
 class NotificationStore : public QObject
 {
     Q_OBJECT
@@ -128,13 +130,6 @@ private:
             return;
         }
         const QJsonObject hints = d.at(6).toObject();
-        QString icon = d.at(2).toString();
-        if (icon.isEmpty()) {
-            icon = hints.value(QStringLiteral("image-path")).toObject().value(QStringLiteral("data")).toString();
-        }
-        if (icon.isEmpty()) {
-            icon = hints.value(QStringLiteral("desktop-entry")).toObject().value(QStringLiteral("data")).toString();
-        }
         if (hints.value(QStringLiteral("transient")).toObject().value(QStringLiteral("data")).toBool()
             && d.at(1).toInt() != 0) {
             return;   // progress-style updates (replaces_id set) would spam the list
@@ -143,6 +138,7 @@ private:
         if (isIgnored(app)) {
             return;
         }
+        const QString icon = NotificationIcon::resolve(app, d.at(2).toString(), hints);
         const QString summary = d.at(3).toString();
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
         // replaces_id refers to ids Plasma handed out, which we never see; update the most

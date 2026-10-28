@@ -16,6 +16,7 @@ qt_add_executable(aether-toasts src/main.cpp)
 target_link_libraries(aether-toasts PRIVATE
     Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus
     KF6::WindowSystem LayerShellQt::Interface)
+target_include_directories(aether-toasts PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src)
 target_compile_definitions(aether-toasts PRIVATE
     AETHER_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
     AETHER_SHARED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../shared")

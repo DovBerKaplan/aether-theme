@@ -3,12 +3,14 @@
 // A separate program from the island on purpose: it only *watches* org.freedesktop.Notifications
 // (Plasma stays the notification server, so history and do-not-disturb keep working) and mutes
 // Plasma's own banner while it runs. Quit it and Plasma's banners return.
+#include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>
 #include <QDBusServiceWatcher>
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileSystemWatcher>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QJsonArray>
@@ -21,11 +23,123 @@
 #include <QQuickImageProvider>
 #include <QQuickView>
 #include <QRegion>
+#include <QRegularExpression>
 #include <QScreen>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QTimer>
+#include <QUrl>
 
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
+
+#include <NotificationIcon.h>
+
+// ---- phone (KDE Connect) notifications -----------------------------------------------
+// The daemon forwards a phone notification as a normal one from app "kdeconnect": the
+// phone's title and text travel, but the phone app's icon never does. The daemon's own
+// notification objects do have it (appName plus iconPath, the icon downloaded from the
+// phone), so find the object matching what was forwarded and take its app name and icon.
+
+struct PhoneMatch
+{
+    QString app;
+    QString icon;
+};
+
+static bool isPhoneApp(const QString &app)
+{
+    const QString a = app.simplified().remove(QLatin1Char(' ')).toLower();
+    return a.startsWith(QLatin1String("kdeconnect")) || a.startsWith(QLatin1String("org.kde.kdeconnect"));
+}
+
+static QString cleanPhoneText(QString s)
+{
+    s = s.simplified();
+    QString out;
+    out.reserve(s.size());
+    for (const QChar c : s) {
+        if (c.category() == QChar::Other_Format || c.category() == QChar::Mark_NonSpacing
+            || c.category() == QChar::Mark_Enclosing) {
+            continue;   // direction and joining marks: phones sprinkle them per field
+        }
+        out.append(c);
+    }
+    // Tag stripping and entity unescaping: one side of the pair may arrive HTML-escaped.
+    out.replace(QRegularExpression(QStringLiteral("<[^>]*>")), QStringLiteral(" "));
+    const struct { const char *entity; const char *ch; } entities[] = {
+        { "&quot;", "\"" }, { "&apos;", "'" }, { "&#39;", "'" }, { "&lt;", "<" },
+        { "&gt;", ">" }, { "&nbsp;", " " }, { "&amp;", "&" } };
+    for (const auto &e : entities) {
+        out.replace(QLatin1String(e.entity), QLatin1String(e.ch));
+    }
+    return out.trimmed();
+}
+
+static PhoneMatch phoneMatch(const QString &summary, const QString &body)
+{
+    const QString sum = cleanPhoneText(summary).toLower();
+    const QString bod = cleanPhoneText(body).toLower();
+    if (sum.isEmpty() && bod.isEmpty()) {
+        return {};
+    }
+    auto eq = [](const QString &a, const QString &b) { return !a.isEmpty() && a == b; };
+    PhoneMatch best;
+    int bestScore = 0;
+    QDBusMessage devs = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kdeconnect"), QStringLiteral("/modules/kdeconnect"),
+                                                       QStringLiteral("org.kde.kdeconnect.daemon"), QStringLiteral("devices"));
+    devs << false << false;
+    const QDBusReply<QStringList> devReply = QDBusConnection::sessionBus().call(devs, QDBus::Block, 800);
+    for (const QString &id : devReply.value()) {
+        const QString base = QStringLiteral("/modules/kdeconnect/devices/") + id + QStringLiteral("/notifications");
+        QDBusMessage list = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kdeconnect"), base,
+                                                           QStringLiteral("org.kde.kdeconnect.device.notifications"),
+                                                           QStringLiteral("activeNotifications"));
+        const QDBusReply<QStringList> ids = QDBusConnection::sessionBus().call(list, QDBus::Block, 800);
+        for (const QString &nid : ids.value()) {
+            QDBusMessage get = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kdeconnect"), base + QLatin1Char('/') + nid,
+                                                              QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("GetAll"));
+            get << QStringLiteral("org.kde.kdeconnect.device.notifications.notification");
+            const QDBusMessage r = QDBusConnection::sessionBus().call(get, QDBus::Block, 800);
+            if (r.type() != QDBusMessage::ReplyMessage || r.arguments().isEmpty()) {
+                continue;
+            }
+            const QVariantMap p = qdbus_cast<QVariantMap>(r.arguments().first().value<QDBusArgument>());
+            const QString app = cleanPhoneText(p.value(QStringLiteral("appName")).toString()).toLower();
+            const QString title = cleanPhoneText(p.value(QStringLiteral("title")).toString()).toLower();
+            const QString ticker = cleanPhoneText(p.value(QStringLiteral("ticker")).toString()).toLower();
+            const QString text = cleanPhoneText(p.value(QStringLiteral("text")).toString()).toLower();
+            int score = 0;
+            if (eq(title, sum) || eq(ticker, bod)) {
+                score += 4;   // the forwarded title is the phone title, or its body the ticker
+            }
+            if (eq(app, sum)) {
+                score += 3;   // or the title is the phone app name (KNotifications without the appname hint)
+            }
+            if (eq(text, bod)) {
+                score += 3;
+            }
+            if (eq(title, bod)) {
+                score += 2;
+            }
+            if (!sum.isEmpty() && ticker.startsWith(sum)) {
+                score += 1;
+            }
+            if (!app.isEmpty() && sum.startsWith(app)) {
+                score += 1;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best.app = p.value(QStringLiteral("appName")).toString();
+                best.icon = p.value(QStringLiteral("hasIcon")).toBool() ? p.value(QStringLiteral("iconPath")).toString() : QString();
+            }
+            if (bestScore >= 6) {   // an exact title/text pair cannot be beaten
+                return best;
+            }
+        }
+    }
+    return bestScore >= 2 ? best : PhoneMatch{};
+}
 
 // Watches org.freedesktop.Notifications.Notify as a bus *monitor* (via busctl's JSON output),
 // so Plasma keeps owning the notification server (history, do-not-disturb) while we only read.
@@ -99,17 +213,23 @@ private:
             return;
         }
         const QJsonObject hints = d.at(6).toObject();
-        QString icon = d.at(2).toString();
-        if (icon.isEmpty()) {
-            icon = hints.value(QStringLiteral("image-path")).toObject().value(QStringLiteral("data")).toString();
-        }
-        if (icon.isEmpty()) {
-            icon = hints.value(QStringLiteral("desktop-entry")).toObject().value(QStringLiteral("data")).toString();
-        }
         if (hints.value(QStringLiteral("transient")).toObject().value(QStringLiteral("data")).toBool()
             && d.at(1).toInt() != 0) {
             // progress-style updates (replaces_id set) would spam the stack; show only fresh ones
             return;
+        }
+        QString app = d.at(0).toString();
+        QString summary = d.at(3).toString();
+        QString body = d.at(4).toString();
+        QString icon = NotificationIcon::resolve(app, d.at(2).toString(), hints);
+        if (isPhoneApp(app)) {
+            const PhoneMatch phone = phoneMatch(summary, body);
+            if (!phone.app.isEmpty()) {
+                app = phone.app;   // the card speaks the phone app's name, with its icon
+            }
+            if (!phone.icon.isEmpty()) {
+                icon = phone.icon;
+            }
         }
         // Where should this card land? The island owns the top of the screen: while its
         // double bar (expanded) is open, the history list shows it there and no card is
@@ -126,7 +246,7 @@ private:
         if (bottom.isValid()) {
             islandBottom = bottom.value();
         }
-        Q_EMIT received(d.at(0).toString(), icon, d.at(3).toString(), d.at(4).toString(),
+        Q_EMIT received(app, icon, summary, body,
                         hints.value(QStringLiteral("urgency")).toObject().value(QStringLiteral("data")).toInt(1),
                         d.at(7).toInt(-1), islandBottom, islandOpen);
     }
@@ -136,7 +256,7 @@ private:
     uint m_cookie = 0;
 };
 
-// image://icon/<theme-name or absolute path>
+// image://icon/<theme-name or absolute path or data:<n> decoded by NotificationIcon>
 class IconProvider : public QQuickImageProvider
 {
 public:
@@ -147,12 +267,15 @@ public:
     QPixmap requestPixmap(const QString &id, QSize *size, const QSize &requested) override
     {
         const int px = requested.width() > 0 ? requested.width() : 64;
+        const QString key = QUrl::fromPercentEncoding(id.toUtf8());
         QPixmap pm;
-        if (id.startsWith(QLatin1Char('/'))) {
-            pm.load(id);
+        if (key.startsWith(QLatin1String("data:"))) {
+            pm = NotificationIcon::decoded().value(key);
+        } else if (key.startsWith(QLatin1Char('/'))) {
+            pm.load(key);
         }
         if (pm.isNull()) {
-            QIcon icon = QIcon::fromTheme(id);
+            QIcon icon = QIcon::fromTheme(key);
             if (icon.isNull()) {
                 icon = QIcon::fromTheme(QStringLiteral("dialog-information"));
             }
@@ -169,16 +292,32 @@ class ToastsController : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(int screenWidth READ screenWidth CONSTANT)
-    Q_PROPERTY(qreal bodyAlpha READ bodyAlpha CONSTANT)
+    Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
+    Q_PROPERTY(qreal bodyAlpha READ bodyAlpha NOTIFY darkChanged)
 
 public:
     explicit ToastsController(QQuickView *view)
         : QObject(view)
         , m_view(view)
     {
+        m_kdeglobals = QStandardPaths::locate(QStandardPaths::GenericConfigLocation, QStringLiteral("kdeglobals"));
+        m_watcher.addPath(m_kdeglobals);
+        connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this](const QString &path) {
+            m_watcher.addPath(path);   // editors replace the file, so re-arm the watch
+            readScheme();
+        });
+        readScheme();
     }
     int screenWidth() const { return m_view->screen() ? m_view->screen()->size().width() : 1920; }
-    qreal bodyAlpha() const { return qEnvironmentVariableIsSet("AETHER_BODY_ALPHA") ? qEnvironmentVariable("AETHER_BODY_ALPHA").toDouble() : 0.75; }
+    bool dark() const { return m_dark; }
+    // Light mode is the dock's white-veil alpha; dark keeps the island glass (or the env override).
+    qreal bodyAlpha() const
+    {
+        if (!m_dark) {
+            return 0.50;
+        }
+        return qEnvironmentVariableIsSet("AETHER_BODY_ALPHA") ? qEnvironmentVariable("AETHER_BODY_ALPHA").toDouble() : 0.75;
+    }
 
     Q_INVOKABLE void setWindowHeight(int h)
     {
@@ -207,8 +346,29 @@ public:
         }
     }
 
+Q_SIGNALS:
+    void darkChanged();
+
 private:
+    // Same rule as the island: AetherSerenity is our light scheme, everything else is dark.
+    // The key sits at the top level: QSettings maps an INI [General] section to the root.
+    void readScheme()
+    {
+        QSettings kde(m_kdeglobals, QSettings::IniFormat);
+        const QString scheme = kde.value(QStringLiteral("ColorScheme")).toString();
+        const bool dark = !scheme.contains(QLatin1String("Serenity"), Qt::CaseInsensitive)
+            && !scheme.contains(QLatin1String("Light"), Qt::CaseInsensitive);
+        if (dark != m_dark) {
+            qInfo().noquote() << "scheme:" << scheme << "dark:" << dark;
+            m_dark = dark;
+            Q_EMIT darkChanged();
+        }
+    }
+
     QQuickView *m_view;
+    QFileSystemWatcher m_watcher;
+    QString m_kdeglobals;
+    bool m_dark = true;
 };
 
 // Installed copy first (~/.local/share/aether-toasts/qml next to ~/.local/bin), development tree as fallback.

@@ -16,6 +16,7 @@ qt_add_executable(aether-island src/main.cpp src/SystemInfo.h src/MediaControlle
 target_link_libraries(aether-island PRIVATE
     Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus
     KF6::WindowSystem LayerShellQt::Interface)
+target_include_directories(aether-island PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src)
 
 install(TARGETS aether-island RUNTIME DESTINATION bin)
 target_compile_definitions(aether-island PRIVATE
