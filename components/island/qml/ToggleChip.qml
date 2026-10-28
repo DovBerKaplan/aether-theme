@@ -13,6 +13,7 @@ Item {
     property bool active: false
     property bool hasPanel: false
     property int size: 1                      // cells wide: 1, 2 or 3
+    property var trail: ({})                  // a wider tile's far end: { kind: "chevron" | "signal" | "text" | "dot", level, text }
     signal tapped()
     signal panelRequested()
 
@@ -46,7 +47,7 @@ Item {
     }
     Column {    // two or three cells: name and state beside the icon
         visible: !root.small
-        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: 14 + 24 + 10; rightMargin: 12 }
+        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: 14 + 24 + 10; rightMargin: 12 + (trailing.visible ? trailing.width + 6 : 0) }
         Text {
             width: parent.width; text: root.label; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
             font { family: Theme.font; pixelSize: Tokens.type.label; weight: Font.Medium }
@@ -57,6 +58,43 @@ Item {
             width: parent.width; text: root.sublabel; textFormat: Text.PlainText; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft
             font { family: Theme.font; pixelSize: Tokens.type.caption }
             color: root.active ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.65) : Theme.subtext
+        }
+    }
+
+    Item {      // the far end of a wide tile: one quiet, glanceable detail, or a chevron that says "the text opens the panel"
+        id: trailing
+        readonly property string kind: root.trail.kind || ""
+        visible: !root.small && kind.length > 0
+        anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
+        width: kind === "signal" ? 20 : kind === "text" ? tText.implicitWidth : kind === "dot" ? 10 : 10
+        height: 22
+        readonly property color tone: root.active ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.7) : Theme.subtext
+        Text {
+            visible: trailing.kind === "chevron"
+            anchors.centerIn: parent
+            text: I18n.rtl ? "‹" : "›"
+            font { family: Theme.font; pixelSize: Tokens.type.title }
+            color: trailing.tone
+        }
+        SignalBars {
+            visible: trailing.kind === "signal"
+            level: root.trail.level === undefined ? -1 : root.trail.level
+            color: root.active ? root.ink : Theme.text
+            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 3 }
+        }
+        Text {
+            id: tText
+            visible: trailing.kind === "text"
+            anchors.centerIn: parent
+            text: root.trail.text || ""; textFormat: Text.PlainText
+            font { family: Theme.mono; pixelSize: Tokens.type.caption; weight: Font.Medium }
+            color: trailing.tone
+        }
+        Rectangle {
+            visible: trailing.kind === "dot"
+            anchors.centerIn: parent
+            width: 8; height: 8; radius: 4
+            color: "#ff6b61"
         }
     }
 
