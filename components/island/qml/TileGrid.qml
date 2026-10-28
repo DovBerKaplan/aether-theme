@@ -100,9 +100,11 @@ Item {
         highlightMoveDuration: 240
         flickDeceleration: 6000
         boundsBehavior: Flickable.StopAtBounds
-        interactive: root.pages > 1
+        interactive: false          // pages turn on our own, lower threshold (see the DragHandler below), not at half a page
         clip: true
         model: root.pages
+        property real dragX: 0
+        transform: Translate { x: pager.dragX; Behavior on x { enabled: !pageDrag.active; NumberAnimation { duration: Tokens.motion.duration.fast; easing.type: Tokens.motion.easing.enter } } }
         delegate: Item {
             id: pageItem
             required property int index
@@ -118,6 +120,26 @@ Item {
                     y: modelData.row * (root.cellH + root.gap)
                     width: root.spanW(modelData.span); height: root.cellH
                 }
+            }
+        }
+    }
+    // Turning the page by hand: a short, slow drag is enough (28 px, or a flick), not half a page. The page
+    // follows the finger a little, then the list moves on (or settles back) with its own animation.
+    DragHandler {
+        id: pageDrag
+        enabled: !root.editing && root.pages > 1
+        target: null
+        xAxis.enabled: true; yAxis.enabled: false
+        property real lastTx: 0
+        onTranslationChanged: if (active) { lastTx = translation.x; pager.dragX = translation.x * 0.35 }
+        onActiveChanged: {
+            if (active) return
+            const tx = lastTx, v = centroid.velocity.x       // the translation is already back at 0 once the drag is over
+            lastTx = 0
+            pager.dragX = 0
+            if (Math.abs(tx) > 28 || Math.abs(v) > 220) {
+                const dir = ((tx < 0 || (Math.abs(tx) <= 28 && v < 0)) !== I18n.rtl) ? 1 : -1
+                pager.currentIndex = Math.max(0, Math.min(root.pages - 1, pager.currentIndex + dir))
             }
         }
     }
