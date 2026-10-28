@@ -16,11 +16,18 @@ Item {
 
     readonly property int pwList: 400             // the list
     readonly property int pwDetail: 640           // a destination's visual card
-    readonly property real rad: 26                // the left corners
+    readonly property real rad: 26                // every corner - the glass floats, dock-style
+    readonly property real edgeGap: 14            // the dock's rest distance from the edges
+    readonly property real shelfY: edgeGap
+    readonly property real shelfH: height - 2 * edgeGap
     property bool open: false
-    property bool detailOpen: false
+    readonly property bool detailOpen: content.page === "detail"
     readonly property int pw: detailOpen ? pwDetail : pwList
-    property real px: open ? root.width - pw : root.width
+    // The glass width springs alongside px with the same constants, so while the card grows the
+    // right edge stays pinned at width - edgeGap and only the far edge moves.
+    property real gw: pw
+    Behavior on gw { SpringAnimation { spring: 3.6; damping: 0.22; epsilon: 3 } }
+    property real px: open ? root.width - edgeGap - pw : root.width
     readonly property bool panelIn: px < root.width - 1
     property real closedAt: 0
     Behavior on px {
@@ -28,11 +35,13 @@ Item {
         SpringAnimation { spring: 3.6; damping: root.open ? 0.22 : 0.36; epsilon: 3 }
     }
     onPxChanged: report()
+    onGwChanged: report()
     onOpenChanged: {
         closedAt = open ? 0 : Date.now()
         ctl.setKeyboard(open)
         discovery.setPolling(open)
         if (open) mainPage.filterField.forceFocus()
+        else content.page = "main"
         report()
     }
     onWidthChanged: report()
@@ -98,26 +107,31 @@ Item {
 
     function report() {
         if (panelIn) {
-            ctl.setLayout(panelCmds(px, root.width - px, root.height, rad), Qt.rect(0, 0, 0, 0), true)
+            ctl.setLayout(panelCmds(root.px, root.shelfY, root.gw, root.shelfH, root.rad),
+                          Qt.rect(0, 0, 0, 0), true)
         } else {
-            ctl.setLayout(earCmds(), Qt.rect(root.width - 5, 14, 5, 64), false)
+            ctl.setLayout(earCmds(), Qt.rect(root.width - root.edgeGap - 8, 10, 10, 72), false)
         }
     }
-    function panelCmds(x, w, h, r) {
+    // The floating panel silhouette: rounded at all four corners.
+    function panelCmds(x, y, w, h, r) {
         return [
-            { t: "M", x: x + r, y: 0 },
-            { t: "L", x: x + w, y: 0 },
-            { t: "L", x: x + w, y: h },
-            { t: "L", x: x + r, y: h },
-            { t: "C", x: x, y: h - r, x1: x, y1: h, x2: x, y2: h },
-            { t: "L", x: x, y: r },
-            { t: "C", x: x + r, y: 0, x1: x, y1: r, x2: x, y2: r },
+            { t: "M", x: x + r, y: y },
+            { t: "L", x: x + w - r, y: y },
+            { t: "C", x: x + w, y: y + r, x1: x + w, y1: y, x2: x + w, y2: y + r },
+            { t: "L", x: x + w, y: y + h - r },
+            { t: "C", x: x + w - r, y: y + h, x1: x + w, y1: y + h, x2: x + w - r, y2: y + h },
+            { t: "L", x: x + r, y: y + h },
+            { t: "C", x: x, y: y + h - r, x1: x, y1: y + h, x2: x, y2: y + h - r },
+            { t: "L", x: x, y: y + r },
+            { t: "C", x: x + r, y: y, x1: x, y1: y, x2: x + r, y2: y },
         ]
     }
     function earCmds() {
-        const x = root.width - 5
-        return [{ t: "M", x: x, y: 14 }, { t: "L", x: x + 4, y: 14 },
-                { t: "L", x: x + 4, y: 78 }, { t: "L", x: x, y: 78 }]
+        const x = root.width - root.edgeGap - 5
+        const y = root.edgeGap
+        return [{ t: "M", x: x, y: y }, { t: "L", x: x + 4, y: y },
+                { t: "L", x: x + 4, y: y + 64 }, { t: "L", x: x, y: y + 64 }]
     }
 
     function connectSession(s) { if (launcher.sshSession(s)) store.markLaunched(s.id) }
@@ -303,7 +317,7 @@ Item {
     Rectangle {
         id: ear
         visible: !root.panelIn
-        x: root.width - 5; y: 14; width: 4; height: 64; radius: 2
+        x: root.width - root.edgeGap - 5; y: root.edgeGap; width: 4; height: 64; radius: 2
         color: Theme.bodyTop
         border { width: 1; color: Theme.rim }
         opacity: earHover.hovered ? 0.9 : 0.3
@@ -323,7 +337,7 @@ Item {
     }
     Item {
         id: shelf
-        x: root.px; y: 0; width: root.width - root.px; height: root.height
+        x: root.px; y: root.shelfY; width: root.gw; height: root.shelfH
         clip: true
 
         TapHandler { onTapped: (e) => e.accepted = true }   // the glass eats its own clicks
@@ -340,8 +354,10 @@ Item {
                     GradientStop { position: 1; color: Theme.bodyBottom }
                 }
                 startX: root.rad; startY: 0
-                PathLine { x: glass.width; y: 0 }
-                PathLine { x: glass.width; y: glass.height }
+                PathLine { x: glass.width - root.rad; y: 0 }
+                PathQuad { x: glass.width; y: root.rad; controlX: glass.width; controlY: 0 }
+                PathLine { x: glass.width; y: glass.height - root.rad }
+                PathQuad { x: glass.width - root.rad; y: glass.height; controlX: glass.width; controlY: glass.height }
                 PathLine { x: root.rad; y: glass.height }
                 PathQuad { x: 0; y: glass.height - root.rad; controlX: 0; controlY: glass.height }
                 PathLine { x: 0; y: root.rad }
@@ -356,8 +372,10 @@ Item {
             ShapePath {
                 fillColor: "#fff"
                 startX: root.rad; startY: 0
-                PathLine { x: glassMask.width; y: 0 }
-                PathLine { x: glassMask.width; y: glassMask.height }
+                PathLine { x: glassMask.width - root.rad; y: 0 }
+                PathQuad { x: glassMask.width; y: root.rad; controlX: glassMask.width; controlY: 0 }
+                PathLine { x: glassMask.width; y: glassMask.height - root.rad }
+                PathQuad { x: glassMask.width - root.rad; y: glassMask.height; controlX: glassMask.width; controlY: glassMask.height }
                 PathLine { x: root.rad; y: glassMask.height }
                 PathQuad { x: 0; y: glassMask.height - root.rad; controlX: 0; controlY: glassMask.height }
                 PathLine { x: 0; y: root.rad }
@@ -402,7 +420,7 @@ Item {
                     id: mainPage
                     anchors.fill: parent
                     showBack: false
-                    maxHeight: root.height
+                    maxHeight: root.shelfH
                     footerHeight: 56
                     busy: discovery.busy
                     title: I18n.tr("Console")
@@ -500,7 +518,7 @@ Item {
                 PanelScaffold {
                     anchors.fill: parent
                     showBack: true
-                    maxHeight: root.height
+                    maxHeight: root.shelfH
                     onBackRequested: content.page = "main"
                     title: root.detailKind === "session"
                            ? (root.detailData.name || root.detailData.host || "")
@@ -742,7 +760,7 @@ Item {
             SessionEditor {
                 id: editorPage
                 anchors.fill: parent
-                maxHeight: root.height
+                maxHeight: root.shelfH
                 opacity: content.page === "editor" ? 1 : 0
                 enabled: content.page === "editor"
                 visible: opacity > 0.01
@@ -752,7 +770,7 @@ Item {
             ImportPage {
                 id: importPage
                 anchors.fill: parent
-                maxHeight: root.height
+                maxHeight: root.shelfH
                 opacity: content.page === "import" ? 1 : 0
                 enabled: content.page === "import"
                 visible: opacity > 0.01
