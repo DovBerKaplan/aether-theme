@@ -101,6 +101,40 @@ Item {
     function connectPod(p) { launcher.pod(p.name, p.ns, discovery.context) }
     function openEditor(s) { editorPage.begin(s); content.page = "editor" }
 
+    // A row-level lifecycle action: a quiet glyph revealed on hover. Destructive ones arm
+    // first - accent colour, a second tap within 2.5s executes - ConfirmTile's language
+    // in miniature.
+    component ActionGlyph: Item {
+        id: ag
+        property string glyph
+        property bool needsArm: false
+        property bool armed: false
+        signal act()
+        width: 20; height: 28
+        Rectangle {
+            anchors.fill: parent; radius: 8
+            color: Qt.rgba(1, 1, 1, seat.hovered ? Tokens.material.tintHover : 0)
+        }
+        Glyph {
+            anchors.centerIn: parent
+            name: ag.glyph; size: 13
+            color: ag.armed ? Theme.accent : Theme.subtext
+        }
+        HoverHandler { id: seat; cursorShape: Qt.PointingHandCursor }
+        TapHandler {
+            onTapped: {
+                if (!ag.needsArm || ag.armed) {
+                    ag.armed = false
+                    ag.act()
+                } else {
+                    ag.armed = true
+                    armTimer.restart()
+                }
+            }
+        }
+        Timer { id: armTimer; interval: 2500; onTriggered: ag.armed = false }
+    }
+
     // ---------- the list model: one flat block list, rebuilt on any data change ----------
     property var blocks: []
     function rebuild() {
@@ -401,8 +435,34 @@ Item {
             subtitle: I18n.ltr(c.image + (c.ports && c.ports.length > 0 ? "  ·  " + c.ports : ""))
             leadingGlyphSource: Qt.resolvedUrl("assets/glyphs/container.svg")
             onClicked: root.connectContainer(c)
+            HoverHandler { id: rowHover }
             trailing: [
-                Rectangle { width: 8; height: 8; radius: 4; color: c.running ? Theme.accent : Theme.subtext; opacity: c.running ? 1 : 0.45; anchors.verticalCenter: parent.verticalCenter }
+                Row {
+                    spacing: Tokens.space.xs
+                    anchors.verticalCenter: parent.verticalCenter
+                    Row {
+                        id: acts
+                        spacing: Tokens.space.xs
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: rowHover.hovered ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+                        ActionGlyph {
+                            glyph: "restart"
+                            visible: c.running
+                            onAct: discovery.containerAction("restart", c.name)
+                        }
+                        ActionGlyph {
+                            glyph: c.running ? "stop" : "play"
+                            onAct: discovery.containerAction(c.running ? "stop" : "start", c.name)
+                        }
+                    }
+                    Rectangle {
+                        width: 8; height: 8; radius: 4
+                        color: c.running ? Theme.accent : Theme.subtext
+                        opacity: c.running ? 1 : 0.45
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
             ]
         }
     }
@@ -415,8 +475,29 @@ Item {
             subtitle: I18n.ltr(p.ns + "  ·  " + p.phase + (p.restarts > 0 ? "  ·  " + I18n.f("%1 restarts", p.restarts) : ""))
             leadingGlyphSource: Qt.resolvedUrl("assets/glyphs/pod.svg")
             onClicked: root.connectPod(p)
+            HoverHandler { id: rowHover }
             trailing: [
-                Rectangle { width: 8; height: 8; radius: 4; color: p.phase === "Running" ? Theme.accent : Theme.subtext; opacity: p.phase === "Running" ? 1 : 0.45; anchors.verticalCenter: parent.verticalCenter }
+                Row {
+                    spacing: Tokens.space.xs
+                    anchors.verticalCenter: parent.verticalCenter
+                    Row {
+                        spacing: Tokens.space.xs
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: rowHover.hovered ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+                        ActionGlyph {
+                            glyph: "restart"
+                            needsArm: true
+                            onAct: discovery.deletePod(p.name, p.ns)
+                        }
+                    }
+                    Rectangle {
+                        width: 8; height: 8; radius: 4
+                        color: p.phase === "Running" ? Theme.accent : Theme.subtext
+                        opacity: p.phase === "Running" ? 1 : 0.45
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
             ]
         }
     }

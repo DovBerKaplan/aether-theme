@@ -1,5 +1,8 @@
 #pragma once
 
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusPendingCall>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSettings>
@@ -74,6 +77,38 @@ public:
         refreshContexts();
     }
 
+    // Row-level lifecycle, no terminal window: the row flips when discovery settles, and only
+    // a failure speaks up (through the island's notification pipeline).
+    Q_INVOKABLE void containerAction(const QString &action, const QString &name)
+    {
+        if (m_docker.isEmpty() || name.isEmpty()) {
+            return;
+        }
+        run(m_docker, { action, name }, [this, action, name](const QString &, bool ok, const QString &err) {
+            if (!ok) {
+                sendNotify(QStringLiteral("Console: failed to %1 %2").arg(action, name), err);
+            }
+            settle();
+        });
+    }
+    Q_INVOKABLE void deletePod(const QString &name, const QString &ns)
+    {
+        if (m_kubectl.isEmpty() || name.isEmpty()) {
+            return;
+        }
+        QStringList args{ QStringLiteral("delete"), QStringLiteral("pod"), name,
+                          QStringLiteral("-n"), ns };
+        if (!m_context.isEmpty()) {
+            args << QStringLiteral("--context") << m_context;
+        }
+        run(m_kubectl, args, [this, name](const QString &, bool ok, const QString &err) {
+            if (!ok) {
+                sendNotify(QStringLiteral("Console: failed to delete pod %1").arg(name), err);
+            }
+            settle();
+        });
+    }
+
 Q_SIGNALS:
     void containersChanged();
     void podsChanged();
@@ -82,31 +117,58 @@ Q_SIGNALS:
     void busyChanged();
 
 private:
-    // One short-lived QProcess with a kill timer; the callback gets stdout (empty on failure).
-    void run(const QString &prog, const QStringList &args, const std::function<void(const QString &)> &done)
+    // One short-lived QProcess with a kill timer; the callback gets stdout, success and stderr.
+    void run(const QString &prog, const QStringList &args,
+             const std::function<void(const QString &, bool, const QString &)> &done)
     {
         auto *p = new QProcess(this);
         m_busy++;
         Q_EMIT busyChanged();
-        auto finish = [this, p, done](const std::function<void(const QString &)> &cb) {
-            cb(QString::fromUtf8(p->readAllStandardOutput()));
+        auto finish = [this, p, done](bool ok, const QString &err) {
+            done(ok ? QString::fromUtf8(p->readAllStandardOutput()) : QString(), ok,
+                 ok ? QString() : err);
             m_busy--;
             Q_EMIT busyChanged();
             p->deleteLater();
         };
-        connect(p, &QProcess::errorOccurred, p, [finish, done, p](QProcess::ProcessError) { finish(done); });
+        connect(p, &QProcess::errorOccurred, p,
+                [finish](QProcess::ProcessError) { finish(false, QStringLiteral("command not found")); });
         connect(p, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), p,
-                [finish, done, p](int, QProcess::ExitStatus st) {
+                [finish, p](int code, QProcess::ExitStatus st) {
                     if (st != QProcess::NormalExit) {
-                        p->setReadChannel(QProcess::StandardOutput);   // kill path: read what arrived
+                        finish(false, QStringLiteral("timed out"));
+                    } else {
+                        finish(code == 0, code == 0 ? QString() : QStringLiteral("exit %1: %2")
+                                              .arg(code).arg(QString::fromUtf8(p->readAllStandardError().trimmed())));
                     }
-                    finish(done);
                 });
         auto *t = new QTimer(p);
         t->setSingleShot(true);
         connect(t, &QTimer::timeout, p, [p] { p->kill(); });
         t->start(8000);
         p->start(prog, args);
+    }
+
+    // The engine needs a beat to reflect the change; then both lists come back fresh.
+    void settle()
+    {
+        QTimer::singleShot(500, this, [this] {
+            refreshContainers();
+            if (!m_kubectl.isEmpty()) {
+                refreshPods();
+            }
+        });
+    }
+
+    // A plain freedesktop Notify: the island is the server, so a toast card drops from the bar.
+    void sendNotify(const QString &summary, const QString &body)
+    {
+        QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.Notifications"),
+            QStringLiteral("/org/freedesktop/Notifications"), QStringLiteral("org.freedesktop.Notifications"),
+            QStringLiteral("Notify"));
+        m << QStringLiteral("Aether Console") << 0u << QStringLiteral("utilities-terminal") << summary
+          << body.left(300) << QStringList() << QVariantMap() << 6000;
+        QDBusConnection::sessionBus().asyncCall(m);
     }
 
     void refreshContainers()
@@ -120,7 +182,7 @@ private:
         }
         run(m_docker, { QStringLiteral("ps"), QStringLiteral("-a"),
                         QStringLiteral("--format"), QStringLiteral("{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}") },
-            [this](const QString &out) {
+            [this](const QString &out, bool, const QString &) {
                 QVariantList rows;
                 const QStringList lines = out.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
                 for (const QString &line : lines) {
@@ -148,7 +210,7 @@ private:
             return;
         }
         run(m_kubectl, { QStringLiteral("config"), QStringLiteral("get-contexts"), QStringLiteral("-o"), QStringLiteral("name") },
-            [this](const QString &out) {
+            [this](const QString &out, bool, const QString &) {
                 QStringList ctx;
                 for (const QString &line : out.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
                     ctx << line.trimmed();
@@ -177,7 +239,7 @@ private:
                           QStringLiteral("--context"), m_context, QStringLiteral("--no-headers"),
                           QStringLiteral("-o"),
                           QStringLiteral("custom-columns=N:.metadata.name,S:.metadata.namespace,P:.status.phase,R:.status.containerStatuses[*].restartCount") };
-        run(m_kubectl, args, [this](const QString &out) {
+        run(m_kubectl, args, [this](const QString &out, bool, const QString &) {
             QVariantList rows;
             const QStringList lines = out.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
             for (const QString &line : lines) {
