@@ -12,7 +12,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: Qt.rgba(1, 1, 1, tap.pressed ? Tokens.tint.strong : hover.hovered ? Tokens.tint.soft : 0)
+        color: Qt.rgba(1, 1, 1, tap.pressed ? Tokens.tint.strong : hover.hovered ? Tokens.tint.soft : Tokens.tint.faint)
         Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
     }
     Glyph {

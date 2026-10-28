@@ -23,6 +23,8 @@
 #include <QUrl>
 #include <QDateTime>
 #include <QFile>
+#include <QImage>
+#include <QMimeDatabase>
 #include <QHash>
 #include <QDir>
 #include <QObject>
@@ -443,7 +445,7 @@ Q_SIGNALS:
     void lowBattery(const QString &device, int percent);
     void filesChanged();
     void receivedChanged();
-    void fileReceived(const QString &device, const QString &name, const QString &url);
+    void fileReceived(const QString &device, const QString &name, const QString &url, bool copied);
     void notificationsChanged();
 
 private Q_SLOTS:
@@ -596,6 +598,28 @@ private:
             }
         }
     }
+    // A picture sent from the phone goes onto the clipboard too (as PNG, which every app accepts), so
+    // "paste" anywhere puts it in. Only pictures: other files never touch the clipboard. wl-copy uses the
+    // data-control protocol, so it works without the island having keyboard focus; where it is missing,
+    // xclip serves X11 apps only (KWin does not carry an X11 image selection over to Wayland apps).
+    bool copyImage(const QString &path)
+    {
+        const QString wlCopy = QStandardPaths::findExecutable(QStringLiteral("wl-copy"));
+        const QString xclip = QStandardPaths::findExecutable(QStringLiteral("xclip"));
+        if (m_fake || (wlCopy.isEmpty() && xclip.isEmpty()) || !QMimeDatabase().mimeTypeForFile(path).name().startsWith(QLatin1String("image/"))) {
+            return false;
+        }
+        const QImage img(path);
+        const QString png = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/clipboard-image.png");
+        QDir().mkpath(QFileInfo(png).absolutePath());
+        if (img.isNull() || !img.save(png, "PNG")) {
+            return false;
+        }
+        if (!wlCopy.isEmpty()) {
+            return QProcess::startDetached(QStringLiteral("sh"), {QStringLiteral("-c"), QStringLiteral("exec \"$1\" --type image/png < \"$2\""), QStringLiteral("sh"), wlCopy, png});
+        }
+        return QProcess::startDetached(xclip, {QStringLiteral("-selection"), QStringLiteral("clipboard"), QStringLiteral("-t"), QStringLiteral("image/png"), QStringLiteral("-i"), png});
+    }
     void noteReceived(const QString &deviceId, const QString &url)
     {
         const QUrl q(url);
@@ -610,7 +634,7 @@ private:
         }
         qInfo().noquote() << "kdeconnect: file received from" << device;   // never the name: file names can be private
         Q_EMIT receivedChanged();
-        Q_EMIT fileReceived(device, name, url);
+        Q_EMIT fileReceived(device, name, url, copyImage(q.toLocalFile()));
     }
     void readFiles()
     {

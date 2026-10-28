@@ -2,9 +2,11 @@ import QtQuick
 import AetherShared
 import "."
 
-// The tile set. Normal: pages of 8 (4 x 2) with dots when there is more than one page.
-// Editing: every tile is shown at once; drag one onto another slot to reorder, tap the minus
-// badge to remove it, tap a tile in I18n.tr("Available") to add it. Every change is saved at once.
+// The tile set. A tile is 1 cell (a round button with its label under it) or 2 cells wide (a pill);
+// cells flow left to right in 4 columns, a wide tile never straddles a row, and two rows make a page,
+// so how many buttons fit follows their sizes. Normal: pages with dots when there is more than one.
+// Editing: every tile is shown at once; drag one onto another to reorder, minus removes it, the corner
+// badge turns it wide or round, tap one under "Available" to add it. Every change is saved at once.
 Item {
     id: root
     property bool editing: false
@@ -14,38 +16,64 @@ Item {
 
     readonly property int cols: 4
     readonly property int gap: 10
-    readonly property int cellH: 58
+    readonly property int cellH: 88
+    readonly property int rowsPerPage: 2
     readonly property real cellW: (width - (cols - 1) * gap) / cols
-    function colX(c) { const x = c * (cellW + gap); return I18n.rtl ? width - cellW - x : x }
-    readonly property int perPage: 8
+    function spanW(span) { return span * cellW + (span - 1) * gap }
+    function colX(c, span) { const x = c * (cellW + gap); return I18n.rtl ? width - spanW(span) - x : x }
     readonly property int count: work.count
-    readonly property int pages: Math.max(1, Math.ceil(count / perPage))
-    readonly property int pageRows: Math.max(1, Math.min(2, Math.ceil(Math.min(count, perPage) / cols)))
-    readonly property real pagerH: pageRows * cellH + (pageRows - 1) * gap
-    readonly property real editRows: Math.max(1, Math.ceil(count / cols))
-    readonly property real gridH: editRows * cellH + (editRows - 1) * gap
     readonly property var available: {
         const used = {}
         for (let i = 0; i < work.count; ++i) used[work.get(i).tid] = true
         return tiles.catalog.filter(c => !used[c.id])
     }
 
+    // Where every tile goes: [{ i, page, row, col, span }]. `perPage` rows per page; Infinity = one long grid (editing).
+    function place(perPage) {
+        const out = []
+        let page = 0, row = 0, col = 0
+        for (let i = 0; i < work.count; ++i) {
+            const span = work.get(i).wide ? 2 : 1
+            if (col + span > cols) { row++; col = 0 }
+            if (row >= perPage) { page++; row = 0; col = 0 }
+            out.push({ i: i, page: page, row: row, col: col, span: span })
+            col += span
+            if (col >= cols) { row++; col = 0 }
+        }
+        return out
+    }
+    property var layout: []          // paged, for normal mode
+    property var flat: []            // one grid, for editing
+    function relayout() { layout = place(rowsPerPage); flat = place(1e9) }
+    readonly property int pages: layout.length > 0 ? layout[layout.length - 1].page + 1 : 1
+    readonly property int pageRows: {
+        let m = 1
+        for (const t of layout) m = Math.max(m, t.row + 1)
+        return m
+    }
+    readonly property real pagerH: pageRows * cellH + (pageRows - 1) * gap
+    readonly property int editRows: flat.length > 0 ? flat[flat.length - 1].row + 1 : 1
+    readonly property real gridH: editRows * cellH + (editRows - 1) * gap
+
     implicitHeight: editing ? editCol.implicitHeight : pagerH + (pages > 1 ? 18 : 0)
     Behavior on implicitHeight { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
 
-    // The working copy of the order; the store is the saved one.
+    // The working copy of the order and sizes; the store is the saved one.
     ListModel { id: work }
     function load() {
         work.clear()
-        for (const id of tiles.order) work.append({ tid: id })
+        for (const id of tiles.order) work.append({ tid: id, wide: tiles.wide.indexOf(id) >= 0 })
+        relayout()
     }
     function save() {
-        const ids = []
-        for (let i = 0; i < work.count; ++i) ids.push(work.get(i).tid)
-        tiles.setOrder(ids)
+        const ids = [], wide = []
+        for (let i = 0; i < work.count; ++i) { ids.push(work.get(i).tid); if (work.get(i).wide) wide.push(work.get(i).tid) }
+        relayout()
+        tiles.setLayout(ids, wide)
     }
     function removeAt(i) { work.remove(i); save() }
-    function addId(id) { work.append({ tid: id }); save() }   // see WidgetStack: the delegate dies with its row
+    function addId(id) { work.append({ tid: id, wide: false }); save() }   // see WidgetStack: the delegate dies with its row
+    function toggleWide(i) { work.setProperty(i, "wide", !work.get(i).wide); save() }
     Component.onCompleted: load()
     Connections { target: tiles; function onOrderChanged() { if (!root.editing) root.load() } }
     onEditingChanged: if (!editing) load()
@@ -63,18 +91,19 @@ Item {
         clip: true
         model: root.pages
         delegate: Item {
+            id: pageItem
             required property int index
             width: pager.width; height: pager.height
             Repeater {
-                model: Math.min(root.perPage, root.count - index * root.perPage)
+                model: root.layout.filter(t => t.page === pageItem.index)
                 delegate: Tile {
-                    required property int index
-                    readonly property int slot: index
-                    tileId: work.get(parent.index * root.perPage + slot).tid
+                    required property var modelData
+                    tileId: work.get(modelData.i).tid
+                    wide: modelData.span === 2
                     host: root
-                    x: root.colX(slot % root.cols)
-                    y: Math.floor(slot / root.cols) * (root.cellH + root.gap)
-                    width: root.cellW; height: root.cellH
+                    x: root.colX(modelData.col, modelData.span)
+                    y: modelData.row * (root.cellH + root.gap)
+                    width: root.spanW(modelData.span); height: root.cellH
                 }
             }
         }
@@ -129,17 +158,22 @@ Item {
         Item {
             id: gridArea
             width: parent.width; height: root.gridH
-            property int target: -1            // slot under the dragged tile, -1 when none
-            function slotAt(px, py) {
-                const c = Math.max(0, Math.min(root.cols - 1, Math.floor((I18n.rtl ? root.width - px : px) / (root.cellW + root.gap))))
-                const r = Math.max(0, Math.min(root.editRows - 1, Math.floor(py / (root.cellH + root.gap))))
-                return Math.min(root.count - 1, r * root.cols + c)
+            property int target: -1            // index the dragged tile would take, -1 when none
+            function rectOf(t) { return { x: root.colX(t.col, t.span), y: t.row * (root.cellH + root.gap), w: root.spanW(t.span), h: root.cellH } }
+            function slotAt(px, py) {          // the tile under the pointer, else the nearest one
+                let best = -1, bd = 1e12
+                for (const t of root.flat) {
+                    const r = rectOf(t)
+                    const dx = Math.max(r.x - px, 0, px - (r.x + r.w)), dy = Math.max(r.y - py, 0, py - (r.y + r.h))
+                    const d = dx * dx + dy * dy
+                    if (d < bd) { bd = d; best = t.i }
+                }
+                return best
             }
             Rectangle {      // where the dragged tile will land
-                visible: gridArea.target >= 0
-                x: root.colX(gridArea.target % root.cols)
-                y: Math.floor(gridArea.target / root.cols) * (root.cellH + root.gap)
-                width: root.cellW; height: root.cellH; radius: Tokens.radius.xl
+                visible: gridArea.target >= 0 && gridArea.target < root.flat.length
+                readonly property var r: visible ? gridArea.rectOf(root.flat[gridArea.target]) : ({ x: 0, y: 0, w: 0, h: 0 })
+                x: r.x; y: r.y; width: r.w; height: r.h; radius: Tokens.radius.xl
                 color: "transparent"
                 border { width: 2; color: Theme.accent }
                 Behavior on x { NumberAnimation { duration: Tokens.motion.duration.fast; easing.type: Tokens.motion.easing.enter } }
@@ -151,12 +185,15 @@ Item {
                     id: slotItem
                     required property int index
                     required property string tid
-                    x: root.colX(index % root.cols)
-                    y: Math.floor(index / root.cols) * (root.cellH + root.gap)
-                    width: root.cellW; height: root.cellH
+                    required property bool wide
+                    readonly property var cell: root.flat[index] || ({ row: 0, col: 0, span: 1 })
+                    x: root.colX(cell.col, cell.span)
+                    y: cell.row * (root.cellH + root.gap)
+                    width: root.spanW(cell.span); height: root.cellH
                     z: held.dragging ? 10 : 0
                     Behavior on x { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
                     Behavior on y { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
+                    Behavior on width { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
 
                     Item {
                         id: held
@@ -167,7 +204,7 @@ Item {
                         Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.micro } }
                         Behavior on x { enabled: !held.dragging; NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
                         Behavior on y { enabled: !held.dragging; NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
-                        Tile { anchors.fill: parent; tileId: slotItem.tid; host: root; editing: true }
+                        Tile { anchors.fill: parent; tileId: slotItem.tid; wide: slotItem.wide; host: root; editing: true }
                         MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton }
                         DragHandler {
                             id: drag
@@ -186,13 +223,28 @@ Item {
                     }
                     Rectangle {      // remove badge
                         visible: root.count > 1 && !held.dragging
-                        x: I18n.rtl ? -4 : parent.width - width + 4; y: -4
+                        x: slotItem.wide ? (I18n.rtl ? -4 : parent.width - width + 4) : (I18n.rtl ? (parent.width - 52) / 2 - 8 : (parent.width + 52) / 2 - 12); y: slotItem.wide ? 8 : -4
                         width: 20; height: 20; radius: 10
                         color: Theme.chip
                         border { width: 1; color: Theme.rim }
                         Glyph { anchors.centerIn: parent; name: "minus"; size: 12 }
                         HoverHandler { cursorShape: Qt.PointingHandCursor }
                         TapHandler { onTapped: root.removeAt(slotItem.index) }
+                    }
+                    Rectangle {      // size badge: a wide shape to widen a round tile, a square to make a wide one round again
+                        visible: !held.dragging
+                        x: slotItem.wide ? (I18n.rtl ? parent.width - width + 4 : -4) : (I18n.rtl ? (parent.width + 52) / 2 - 12 : (parent.width - 52) / 2 - 8); y: slotItem.wide ? 8 : -4
+                        width: 20; height: 20; radius: 10
+                        color: Theme.chip
+                        border { width: 1; color: Theme.rim }
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: slotItem.wide ? 7 : 12; height: 7; radius: 2
+                            color: "transparent"
+                            border { width: 1.5; color: Theme.text }
+                        }
+                        HoverHandler { cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: root.toggleWide(slotItem.index) }
                     }
                 }
             }
