@@ -4,10 +4,13 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCall>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 #include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
+#include <QSet>
 #include <QObject>
 #include <QPainterPath>
 #include <QQuickView>
@@ -39,6 +42,9 @@ class ConsoleController : public QObject
     // the island's dark object, but the little tab lives directly on the desktop and should
     // rim itself against what is actually behind it.
     Q_PROPERTY(bool systemDark READ systemDark NOTIFY systemDarkChanged)
+    // NetworkManager's reachability: when the machine loses the network, every open session's
+    // dot goes orange (the tmux on the server kept the work); back online, they return green.
+    Q_PROPERTY(bool online READ online NOTIFY onlineChanged)
 
 public:
     explicit ConsoleController(QQuickView *view)
@@ -64,6 +70,7 @@ public:
         });
         m_poll.start();
         reread();
+        nmWatch();
     }
 
     int screenWidth() const { return m_view->screen() ? m_view->screen()->size().width() : 1920; }
@@ -71,6 +78,11 @@ public:
     QColor accent() const { return m_accent; }
     QString lang() const { return m_lang; }
     bool systemDark() const { return m_systemDark; }
+    bool online() const { return m_online; }
+
+    // Every launched terminal registers its pid, so the KWin script can ask (synchronously,
+    // from its windowAdded) whether a mapping window is one of ours.
+    Q_INVOKABLE void registerSeat(int pid) { m_seatPids.insert(pid); }
     qreal tabRatio() const
     {
         QSettings s(consoleCfg(), QSettings::IniFormat);
@@ -174,6 +186,13 @@ public Q_SLOTS:
             .arg(m_seatRect.width()).arg(m_seatRect.height());
     }
     void SeatReady() { Q_EMIT seatReady(); }   // seated and visible: the frost may clear
+    bool ownsWindow(const QString &pid) { return m_seatPids.contains(pid.toInt()); }
+    void SeatClosed(const QString &pid)       // a terminal window is gone (ssh died, user closed)
+    {
+        qWarning("SEATCLOSED %s (registered: %d)", qPrintable(pid), m_seatPids.contains(pid.toInt()));
+        m_seatPids.remove(pid.toInt());
+        Q_EMIT seatClosed(pid.toInt());
+    }
 
 Q_SIGNALS:
     void stateRequested(const QString &state);
@@ -182,8 +201,34 @@ Q_SIGNALS:
     void tabRatioChanged();
     void systemDarkChanged();
     void seatReady();
+    void seatClosed(int pid);
+    void onlineChanged();
 
 private:
+    void nmWatch()
+    {
+        QDBusConnection::systemBus().connect(QStringLiteral("org.freedesktop.NetworkManager"),
+            QStringLiteral("/org/freedesktop/NetworkManager"), QStringLiteral("org.freedesktop.NetworkManager"),
+            QStringLiteral("StateChanged"), this, SLOT(nmStateChanged(quint32)));
+        auto msg = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.NetworkManager"),
+            QStringLiteral("/org/freedesktop/NetworkManager"), QStringLiteral("org.freedesktop.NetworkManager"),
+            QStringLiteral("state"));
+        auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(msg), this);
+        connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher] {
+            QDBusPendingReply<uint> r = *watcher;
+            if (!r.isError()) {
+                setOnline(r.value() == 70);
+            }
+            watcher->deleteLater();
+        });
+    }
+    void setOnline(bool on)
+    {
+        if (on != m_online) {
+            m_online = on;
+            Q_EMIT onlineChanged();
+        }
+    }
     static void invokeKwinShortcut(const QString &name)
     {
         auto msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kglobalaccel"), QStringLiteral("/component/kwin"),
@@ -266,4 +311,12 @@ private:
     bool m_systemDark = true;
     int m_seatPid = 0;
     QRect m_seatRect;
+    QSet<int> m_seatPids;
+    bool m_online = true;
+
+private Q_SLOTS:
+    void nmStateChanged(quint32 state)
+    {
+        setOnline(state == 70);   // NM_STATE_CONNECTED_GLOBAL
+    }
 };

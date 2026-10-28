@@ -3,6 +3,8 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCall>
+#include <QDateTime>
+#include <QHash>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSettings>
@@ -40,6 +42,7 @@ public:
         m_context = m_settings.value(QStringLiteral("Discovery/context")).toString();
         m_poll.setInterval(20000);
         connect(&m_poll, &QTimer::timeout, this, &Discovery::refresh);
+        startWatchers();
     }
 
     QVariantList containers() const { return m_containers; }
@@ -59,6 +62,7 @@ public:
         m_settings.setValue(QStringLiteral("Discovery/context"), c);
         Q_EMIT contextChanged();
         refreshPods();
+        startPodWatch();   // the watcher streams the context the user chose
     }
 
     Q_INVOKABLE void setPolling(bool on)
@@ -69,6 +73,7 @@ public:
         } else {
             m_poll.stop();
         }
+        // the event watchers keep streaming with the shelf closed - that is the point
     }
 
     Q_INVOKABLE void refresh()
@@ -117,6 +122,100 @@ Q_SIGNALS:
     void busyChanged();
 
 private:
+    // ---------- background life: death watchers for the whole session ----------
+    // Streams, not polls: docker events and kubectl get -w sit idle at ~0 CPU and wake only
+    // when something dies. They run with the shelf closed - a crash toast is exactly for the
+    // moment you are not looking. Watchdogs restart them after any exit.
+    void startWatchers()
+    {
+        startDockerEvents();
+        startPodWatch();
+    }
+    void startDockerEvents()
+    {
+        if (m_docker.isEmpty()) {
+            return;
+        }
+        delete m_dockerEvents;
+        m_dockerEvents = new QProcess(this);
+        connect(m_dockerEvents, &QProcess::readyReadStandardOutput, this, [this] {
+            while (m_dockerEvents->canReadLine()) {
+                const QStringList f = QString::fromUtf8(m_dockerEvents->readLine()).trimmed().split(QLatin1Char('\t'));
+                if (f.value(0) != QLatin1String("container")) {
+                    continue;
+                }
+                const QString action = f.value(1);
+                const QString name = f.value(2);
+                if (name.isEmpty()) {
+                    continue;
+                }
+                if (action == QLatin1String("oom")) {
+                    eventToast(name, QStringLiteral("killed by the kernel - out of memory"));
+                } else if (action == QLatin1String("die")) {
+                    bool ok = false;
+                    const int exit = f.value(3).toInt(&ok);
+                    // a clean exit 0 is somebody stopping it on purpose; only crashes speak
+                    if (ok && exit != 0) {
+                        eventToast(name, QStringLiteral("crashed (exit %1)").arg(exit));
+                    }
+                }
+            }
+        });
+        connect(m_dockerEvents, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](int, QProcess::ExitStatus) {
+            QTimer::singleShot(5000, this, [this] { startDockerEvents(); });
+        });
+        m_dockerEvents->start(m_docker, { QStringLiteral("events"), QStringLiteral("--format"),
+                                          QStringLiteral("{{.Type}}\t{{.Action}}\t{{.Actor.Attributes.name}}\t{{.Actor.Attributes.exitCode}}") });
+    }
+    void startPodWatch()
+    {
+        delete m_podWatch;
+        m_podWatch = nullptr;
+        m_podStates.clear();
+        if (m_kubectl.isEmpty() || m_context.isEmpty()) {
+            return;
+        }
+        m_podWatch = new QProcess(this);
+        connect(m_podWatch, &QProcess::readyReadStandardOutput, this, [this] {
+            while (m_podWatch->canReadLine()) {
+                const QStringList f = QString::fromUtf8(m_podWatch->readLine()).trimmed().split(QRegularExpression(QStringLiteral("\\s+")));
+                if (f.size() < 3) {
+                    continue;
+                }
+                const QString ns = f[0], name = f[1], phase = f[2], reason = f.value(3);
+                const QString key = ns + QLatin1Char('/') + name;
+                const QString bad = reason == QLatin1String("CrashLoopBackOff") || reason == QLatin1String("Error")
+                    || reason == QLatin1String("ImagePullBackOff") || reason == QLatin1String("Evicted")
+                        ? reason : phase == QLatin1String("Failed") ? QStringLiteral("Failed") : QString();
+                const QString prev = m_podStates.value(key);
+                m_podStates.insert(key, bad.isEmpty() ? phase : bad);
+                if (!bad.isEmpty() && bad != prev && !prev.isEmpty()) {
+                    eventToast(QStringLiteral("pod %1").arg(key), bad);
+                }
+            }
+        });
+        connect(m_podWatch, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](int, QProcess::ExitStatus) {
+            QTimer::singleShot(5000, this, [this] { startPodWatch(); });
+        });
+        m_podWatch->start(m_kubectl, { QStringLiteral("get"), QStringLiteral("pods"), QStringLiteral("-A"),
+                                       QStringLiteral("-w"), QStringLiteral("--context"), m_context,
+                                       QStringLiteral("--no-headers"), QStringLiteral("-o"),
+                                       QStringLiteral("custom-columns=NS:.metadata.namespace,N:.metadata.name,P:.status.phase,W:.status.containerStatuses[0].state.waiting.reason") });
+    }
+    // One toast per dying thing per minute, however it thrashes.
+    void eventToast(const QString &name, const QString &why)
+    {
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (now - m_lastToast.value(name, 0) < 60000) {
+            return;
+        }
+        m_lastToast.insert(name, now);
+        qWarning("EVENT %s: %s", qPrintable(name), qPrintable(why));
+        sendNotify(QStringLiteral("%1 is down").arg(name),
+                   QStringLiteral("%1 - open the console shelf to take a look").arg(why));
+    }
+
+    // ---------- discovery polling (while the shelf is open) ----------
     // One short-lived QProcess with a kill timer; the callback gets stdout, success and stderr.
     void run(const QString &prog, const QStringList &args,
              const std::function<void(const QString &, bool, const QString &)> &done)
@@ -276,5 +375,9 @@ private:
     QStringList m_contexts;
     QVariantList m_containers;
     QVariantList m_pods;
+    QProcess *m_dockerEvents = nullptr;
+    QProcess *m_podWatch = nullptr;
+    QHash<QString, QString> m_podStates;
+    QHash<QString, qint64> m_lastToast;
     int m_busy = 0;
 };
