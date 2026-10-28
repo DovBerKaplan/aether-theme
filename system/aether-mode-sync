@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keep Kvantum and Konsole in step with the active KDE color scheme.
+# Keep Kvantum, Konsole and the GTK/browser apps in step with the active KDE color scheme.
 # Triggered by aether-mode-sync.path whenever ~/.config/kdeglobals changes.
 set -euo pipefail
 scheme="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme)"
@@ -8,6 +8,22 @@ case "$scheme" in
   AetherSerenity) kv=AetherSerenity ;;
   *) exit 0 ;;  # not one of ours: leave the user's choice alone
 esac
+# GTK, libadwaita, Firefox, Chromium and Electron do not read KDE colors: they follow the freedesktop
+# color-scheme (gsettings) and the GTK settings. Move them together with the KDE scheme.
+if [[ $scheme == AetherGlass ]]; then
+  prefer=prefer-dark gtkdark=true gtktheme=WhiteSur-dark
+else
+  prefer=prefer-light gtkdark=false gtktheme=Adwaita
+fi
+if command -v gsettings >/dev/null; then
+  [[ "$(gsettings get org.gnome.desktop.interface color-scheme)" == "'$prefer'" ]] || { gsettings set org.gnome.desktop.interface color-scheme "$prefer"; echo "gsettings color-scheme -> $prefer"; }
+  [[ "$(gsettings get org.gnome.desktop.interface gtk-theme)" == "'$gtktheme'" ]] || gsettings set org.gnome.desktop.interface gtk-theme "$gtktheme"
+fi
+for v in 3.0 4.0; do
+  ini="$HOME/.config/gtk-$v/settings.ini"
+  [[ -f $ini ]] || continue
+  sed -i -e "s/^gtk-application-prefer-dark-theme=.*/gtk-application-prefer-dark-theme=$gtkdark/" -e "s/^gtk-theme-name=.*/gtk-theme-name=$gtktheme/" "$ini"
+done
 current="$(kreadconfig6 --file "$HOME/.config/Kvantum/kvantum.kvconfig" --group General --key theme)"
 if [[ "$current" != "$kv" ]]; then
   kwriteconfig6 --file "$HOME/.config/Kvantum/kvantum.kvconfig" --group General --key theme "$kv"

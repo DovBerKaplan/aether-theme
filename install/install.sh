@@ -37,13 +37,15 @@ cp "$GEN"/konsole/*.colorscheme "$D/konsole/"
 for k in "$GEN"/kvantum/*; do rm -rf "$HOME/.config/Kvantum/$(basename "$k")"; cp -r "$k" "$HOME/.config/Kvantum/"; done
 install -m 755 "$ROOT/system/aether-mode-sync" "$HOME/.local/bin/aether-mode-sync"
 mkdir -p "$D/plasma/plasmoids" "$D/icons/hicolor/scalable/apps"
-rm -rf "$D/plasma/plasmoids/org.aether.appname"; cp -r "$ROOT/plasmoids/org.aether.appname" "$D/plasma/plasmoids/"
+for p in org.aether.appname; do rm -rf "$D/plasma/plasmoids/$p"; cp -r "$ROOT/plasmoids/$p" "$D/plasma/plasmoids/"; done
 cp "$ROOT"/theme/icons/*.svg "$D/icons/hicolor/scalable/apps/"
 
 echo "== mode sync service"
 cat > "$HOME/.config/systemd/user/aether-mode-sync.service" <<EOF
 [Unit]
-Description=Sync Kvantum/Konsole with the AetherOS light/dark theme
+Description=Sync Kvantum, Konsole and GTK/browser apps with the AetherOS light/dark theme
+# a theme switch rewrites kdeglobals many times in a second
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
@@ -52,6 +54,7 @@ EOF
 cat > "$HOME/.config/systemd/user/aether-mode-sync.path" <<EOF
 [Unit]
 Description=Watch kdeglobals for AetherOS theme switches
+StartLimitIntervalSec=0
 
 [Path]
 PathChanged=$HOME/.config/kdeglobals
