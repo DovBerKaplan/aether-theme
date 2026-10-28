@@ -1,4 +1,5 @@
 import QtQuick
+import AetherShared
 import "."
 
 // Notification cards: they drop in just below the aether island, stack up to three, and
@@ -12,6 +13,7 @@ Item {
     property int topGap: 10          // repositioned below the island on every arrival
     property int nextUid: 1
 
+    Binding { target: Theme; property: "dark"; value: toasts.dark }
     Binding { target: Theme; property: "bodyAlpha"; value: toasts.bodyAlpha }
     ListModel { id: cards }
 

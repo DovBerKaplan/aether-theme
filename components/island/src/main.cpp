@@ -30,6 +30,7 @@
 #include <QScreen>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QUrl>
 
 #include "AudioLevels.h"
 #include "MediaController.h"
@@ -46,6 +47,8 @@
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
 
+#include <NotificationIcon.h>
+
 static QRegion roundedRegion(const QRectF &r, qreal radius)
 {
     QPainterPath path;
@@ -53,7 +56,7 @@ static QRegion roundedRegion(const QRectF &r, qreal radius)
     return QRegion(path.toFillPolygon().toPolygon());
 }
 
-// image://icon/<theme-name or absolute path>
+// image://icon/<theme-name or absolute path or data:<n> decoded by NotificationIcon>
 class IconProvider : public QQuickImageProvider
 {
 public:
@@ -64,12 +67,15 @@ public:
     QPixmap requestPixmap(const QString &id, QSize *size, const QSize &requested) override
     {
         const int px = requested.width() > 0 ? requested.width() : 64;
+        const QString key = QUrl::fromPercentEncoding(id.toUtf8());
         QPixmap pm;
-        if (id.startsWith(QLatin1Char('/'))) {
-            pm.load(id);
+        if (key.startsWith(QLatin1String("data:"))) {
+            pm = NotificationIcon::decoded().value(key);
+        } else if (key.startsWith(QLatin1Char('/'))) {
+            pm.load(key);
         }
         if (pm.isNull()) {
-            QIcon icon = QIcon::fromTheme(id);
+            QIcon icon = QIcon::fromTheme(key);
             if (icon.isNull()) {
                 icon = QIcon::fromTheme(QStringLiteral("dialog-information"));
             }
@@ -287,7 +293,8 @@ private:
     void readScheme()
     {
         QSettings kde(m_kdeglobals, QSettings::IniFormat);
-        const QString scheme = kde.value(QStringLiteral("General/ColorScheme")).toString();
+        // The key sits at the top level: QSettings maps an INI [General] section to the root.
+        const QString scheme = kde.value(QStringLiteral("ColorScheme")).toString();
         // AetherSerenity is our light scheme; everything else counts as dark.
         const bool dark = !scheme.contains(QLatin1String("Serenity"), Qt::CaseInsensitive)
             && !scheme.contains(QLatin1String("Light"), Qt::CaseInsensitive);
