@@ -7,6 +7,7 @@ var dict = {
     "Mic": "מיקרופון", "Saver": "חיסכון", "Capture": "צילום", "Record": "הקלטה", "Area": "אזור",
     "Night Light": "תאורת לילה", "Dark theme": "ערכה כהה", "Airplane mode": "מצב טיסה", "Keep awake": "השארת המסך דולק",
     "Microphone": "מיקרופון", "Power saver": "חיסכון בחשמל", "Screenshot": "צילום מסך", "Screen record": "הקלטת מסך",
+    "Vibe": "וייב", "Vibe coding": "וייב קודינג", "Agents run": "סוכנים רצים",
     "Off": "כבוי", "On": "פועל", "Muted": "מושתק", "Not connected": "לא מחובר", "%1 connected": "%1 מחוברים",
     "Available": "זמינות", "Available widgets": "ווידג'טים זמינים", "Done": "סיום", "Reset": "איפוס",
     // island
@@ -70,6 +71,8 @@ var dict = {
     "Enter the code for %1": "הזן את הקוד של %1", "Code": "קוד", "Pair": "הצמד", "Allow": "אפשר",
     "Saved devices": "מכשירים שמורים", "Pair new device": "הצמדת מכשיר חדש", "Looking for devices…": "מחפש מכשירים…",
     "Status": "מצב", "Battery": "סוללה", "Type": "סוג", "Address": "כתובת", "Name": "שם", "Rename": "שנה שם",
+    "Headphones": "אוזניות", "Speaker": "רמקול", "Mouse": "עכבר", "Gamepad": "גיימפד", "Tablet": "טאבלט",
+    "Phone": "טלפון", "Watch": "שעון", "Printer": "מדפסת", "Computer": "מחשב", "Camera": "מצלמה",
     "Forget device": "שכח מכשיר", "Pairing failed": "ההצמדה נכשלה", "Paired, but couldn't connect": "הוצמד, אך לא ניתן להתחבר",
     // Sound
     "Sound": "שמע", "No output device": "אין התקן פלט", "Unmute": "בטל השתקה", "Mute": "השתק", "Sound settings ↗": "הגדרות שמע ↗",
@@ -107,5 +110,14 @@ var dict = {
     "Opens a Konsole window: the password (if any) is typed there, once. After that the agent and ControlMaster connect silently.":
         "נפתח חלון Konsole: את הסיסמה (אם יש) מקלידים שם, פעם אחת. מאז ה-agent וה-ControlMaster מתחברים בשקט.",
     "Select all": "בחר הכל", "Clear selection": "ניקוי בחירה",
-    "Nothing to import - no new hosts in ~/.ssh/config": "אין מה לייבא - אין מארחים חדשים ב-~/.ssh/config"
+    "Nothing to import - no new hosts in ~/.ssh/config": "אין מה לייבא - אין מארחים חדשים ב-~/.ssh/config",
+    "Dashboard": "דשבורד", "Overview": "מבט כללי", "Logs": "לוגים", "Terminal": "מסוף",
+    "Top processes": "תהליכים מובילים", "CPU": "מעבד", "Memory": "זיכרון", "Disk": "דיסק",
+    "Stop": "עצירה", "Start": "הפעלה", "Open terminal": "פתיחת מסוף",
+    "Search in logs": "חיפוש בלוגים", "Live": "חי",
+    "Waiting for the first reading…": "ממתין למדידה הראשונה…",
+    "Could not read metrics - connect once so the host knows the key.":
+        "לא ניתן לקרוא מדדים - התחבר פעם אחת כדי שהשרת יכיר את המפתח.",
+    "The full session opens in Konsole with the Aether profile - tmux on the server keeps everything alive.":
+        "הסשן המלא נפתח ב-Konsole עם פרופיל Aether - ה-tmux בשרת שומר על הכל חי."
 }

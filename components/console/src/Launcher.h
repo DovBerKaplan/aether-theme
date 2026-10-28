@@ -19,30 +19,49 @@ class Launcher : public QObject
 public:
     explicit Launcher(QObject *parent = nullptr) : QObject(parent) {}
 
+    // The ssh argument list for a session's host. batch: no prompts at all (background
+    // readers fail fast instead of hanging); tty: allocate a terminal (interactive sessions
+    // in Konsole). ControlMaster multiplexes everything over one authenticated socket.
+    static QStringList sshArgs(const QVariantMap &s, const QString &remote, bool tty, bool batch)
+    {
+        const QString home = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
+        QStringList args{
+            QStringLiteral("-o"), QStringLiteral("ControlMaster=auto"),
+            QStringLiteral("-o"), QStringLiteral("ControlPath=%1/.ssh/cm-%r@%h-%p").arg(home),
+            QStringLiteral("-o"), QStringLiteral("ControlPersist=10m"),
+            QStringLiteral("-o"), QStringLiteral("ServerAliveInterval=15"),
+            QStringLiteral("-o"), QStringLiteral("ServerAliveCountMax=3"),
+        };
+        if (batch) {
+            args << QStringLiteral("-o") << QStringLiteral("BatchMode=yes")
+                 << QStringLiteral("-o") << QStringLiteral("ConnectTimeout=5");
+        }
+        if (tty) {
+            args << QStringLiteral("-t");
+        }
+        const QString identity = expanded(s.value(QStringLiteral("identity")).toString());
+        if (!identity.isEmpty()) {
+            args << QStringLiteral("-i") << identity;
+        }
+        const QString port = s.value(QStringLiteral("port")).toString().trimmed();
+        if (!port.isEmpty() && port != QLatin1String("22")) {
+            args << QStringLiteral("-p") << port;
+        }
+        const QString user = s.value(QStringLiteral("user")).toString().trimmed();
+        const QString host = s.value(QStringLiteral("host")).toString().trimmed();
+        args << (user.isEmpty() ? host : user + QLatin1Char('@') + host);
+        if (!remote.isEmpty()) {
+            args << remote;
+        }
+        return args;
+    }
+
     Q_INVOKABLE bool sshSession(const QVariantMap &s)
     {
         const QString host = s.value(QStringLiteral("host")).toString().trimmed();
         if (host.isEmpty() || konsole().isEmpty()) {
             return false;
         }
-        QStringList opts{
-            QStringLiteral("-o"), QStringLiteral("ControlMaster=auto"),
-            QStringLiteral("-o"), QStringLiteral("ControlPath=%1/.ssh/cm-%r@%h-%p")
-                                      .arg(QStandardPaths::writableLocation(QStandardPaths::HomeLocation)),
-            QStringLiteral("-o"), QStringLiteral("ControlPersist=10m"),
-            QStringLiteral("-o"), QStringLiteral("ServerAliveInterval=15"),
-            QStringLiteral("-o"), QStringLiteral("ServerAliveCountMax=3"),
-        };
-        const QString identity = expanded(s.value(QStringLiteral("identity")).toString());
-        if (!identity.isEmpty()) {
-            opts << QStringLiteral("-i") << identity;
-        }
-        const QString port = s.value(QStringLiteral("port")).toString().trimmed();
-        if (!port.isEmpty() && port != QLatin1String("22")) {
-            opts << QStringLiteral("-p") << port;
-        }
-        const QString user = s.value(QStringLiteral("user")).toString().trimmed();
-        const QString target = user.isEmpty() ? host : user + QLatin1Char('@') + host;
         const QString sess = QStringLiteral("aether_") + sanitize(host);
 
         // Self-healing: without tmux the server still gives a login shell (and the row keeps a
@@ -52,12 +71,7 @@ public:
             "if command -v tmux >/dev/null 2>&1; then exec tmux new -A -s %1; "
             "else echo \"tmux not found - plain shell (sessions will not survive disconnects)\"; exec $SHELL; fi").arg(sess);
 
-        QStringList args{ QStringLiteral("-e"), QStringLiteral("ssh"), QStringLiteral("-t") };
-        for (const QString &o : opts) {
-            args << o;
-        }
-        args << target << remote;
-        return launch(args);
+        return launch(QStringList{ QStringLiteral("-e"), QStringLiteral("ssh") } + sshArgs(s, remote, true, false));
     }
 
     // The row's fallback when a server turns out to have no tmux: copy, ssh, paste, done.

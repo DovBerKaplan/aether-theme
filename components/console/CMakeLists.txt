@@ -18,7 +18,9 @@ qt_add_executable(aether-console
     src/SessionStore.h
     src/SshConfig.h
     src/Discovery.h
-    src/Launcher.h)
+    src/Launcher.h
+    src/Metrics.h
+    src/LogStream.h)
 target_link_libraries(aether-console PRIVATE
     Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus
     KF6::WindowSystem LayerShellQt::Interface)
