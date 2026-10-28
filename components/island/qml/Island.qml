@@ -142,9 +142,9 @@ Item {
     }
     function openPanel(id) {
         if (!id) return
-        const parts = id.split(":")          // "connect:notifications" opens that page directly
-        panelHost.panelId = parts[0]
-        panelHost.page = parts.length > 1 ? parts[1] : ""
+        const i = id.indexOf(":")             // "connect:notifications" opens that page directly;
+        panelHost.panelId = i < 0 ? id : id.substring(0, i)   // a page id may carry colons itself
+        panelHost.page = i < 0 ? "" : id.substring(i + 1)     // ("bluetooth:detail:<path>")
         panelFrom = (mode === "bar" || mode === "hidden" || mode === "activity") ? "bar" : "large"
         setMode("panel")
     }
@@ -700,22 +700,22 @@ Item {
         }
     }
 
-    // The pull handle. One line for every state of the bar: a faint hint on the top edge while the
-    // bar is hidden, then the same 2 px line slides down with the tab's bottom edge and widens a
-    // little; it fades out as the curtain opens (the large island's own handle takes over).
-    // The dock's bottom edge hint is 34 x 2 at 0.22 - the two grab lines speak one quiet dialect.
+    // The pull handle. One pill for every state of the bar: a faint hint on the top edge while the
+    // bar is hidden, then the same line slides down with the tab's bottom edge and grows into the
+    // handle; it fades out as the curtain opens (the large island's own handle takes over).
     Rectangle {
         id: edgeHint
         readonly property bool resting: root.mode === "hidden"
         x: (root.width - width) / 2
-        y: resting ? 6 : Math.max(6, surface.notchBottom - 7)   // 5 px above the tab's bottom edge: air under the clock
-        width: resting ? 22 : 34
-        height: 2
-        radius: 1
-        color: resting ? "white" : Theme.text
-        opacity: resting ? 0.22 : 0.3 * (root.mode === "media" || root.mode === "activity" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
+        y: resting ? 6 : Math.max(6, surface.notchBottom - 8)     // 4 px clear of the tab's bottom edge: air under the buttons
+        width: resting ? 22 : 32
+        height: resting ? 2 : 4
+        radius: height / 2
+        color: resting ? "white" : Theme.subtext
+        opacity: resting ? 0.22 : 0.7 * (root.mode === "media" || root.mode === "activity" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
         visible: opacity > 0
         Behavior on width { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
+        Behavior on height { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
         Behavior on color { ColorAnimation { duration: Tokens.motion.duration.base } }
         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
     }

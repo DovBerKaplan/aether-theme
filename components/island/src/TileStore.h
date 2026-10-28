@@ -4,10 +4,12 @@
 // What a tile *shows* is decided in QML (Tile.qml) from the models that already exist.
 #pragma once
 
+#include <QColor>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusReply>
 #include <QDir>
+#include <QFile>
 #include <QObject>
 #include <QProcess>
 #include <QSettings>
@@ -15,6 +17,8 @@
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
+
+#include <signal.h>         // ::kill - the vibe session's pid liveness
 
 class TileStore : public QObject
 {
@@ -31,6 +35,7 @@ class TileStore : public QObject
     Q_PROPERTY(QStringList widgets READ widgets NOTIFY widgetsChanged)         // large-island widgets that are on, in order
     Q_PROPERTY(QVariantList widgetCatalog READ widgetCatalog CONSTANT)          // every widget that can be on
     Q_PROPERTY(bool keepAwake READ keepAwake NOTIFY stateChanged)
+    Q_PROPERTY(bool vibeOn READ vibeOn NOTIFY stateChanged)     // the aether-vibe session (lid-safe agents) is running
     Q_PROPERTY(bool micMuted READ micMuted NOTIFY stateChanged)
     Q_PROPERTY(bool wifiBefore READ wifiBefore NOTIFY stateChanged)  // radios as they were before airplane mode
     Q_PROPERTY(bool bluetoothBefore READ bluetoothBefore NOTIFY stateChanged)
@@ -47,6 +52,14 @@ public:
         }
         if (m_order.isEmpty()) {
             m_order = defaults();
+        }
+        if (!m_settings.contains(QStringLiteral("Tiles/VibeAdded"))) {        // one-time: surface the new tile to existing setups
+            m_settings.setValue(QStringLiteral("Tiles/VibeAdded"), true);
+            if (!m_order.contains(QLatin1String("vibe"))) {
+                m_order << QStringLiteral("vibe");
+                m_settings.setValue(QStringLiteral("Tiles/Order"), m_order);
+            }
+            m_settings.sync();
         }
         if (m_settings.value(QStringLiteral("Tiles/SizesSet")).toBool()) {
             for (const QString &e : m_settings.value(QStringLiteral("Tiles/Sizes")).toStringList()) {
@@ -70,7 +83,13 @@ public:
             m_settings.setValue(QStringLiteral("Appearance/AccentSat"), m_sat);
             m_settings.sync();
         });
-        QTimer::singleShot(0, this, [this] { refresh(); });
+        m_vibePoll.setInterval(2000);           // a vibe session can end by itself (the lid opened): follow it
+        connect(&m_vibePoll, &QTimer::timeout, this, [this] { readVibe(); });
+        QTimer::singleShot(0, this, [this] {
+            refresh();
+            readVibe();
+            m_vibePoll.start();
+        });
     }
     ~TileStore() override { release(); }
 
@@ -131,6 +150,21 @@ public:
         m_saveAccent.start();
         Q_EMIT accentChanged();
     }
+    // Bake the accent into the system color scheme (plasma-apply-colorscheme rewrites the
+    // scheme colors in kdeglobals): selections, focus rings, sliders and Kirigami apps all
+    // follow the bar's picker. Passing the theme's own accent restores the scheme's default.
+    Q_INVOKABLE void applySystemAccent(const QColor &color)
+    {
+        const QString hex = color.toRgb().name(QColor::HexRgb);
+        if (!color.alpha() || hex == m_systemAccent) {
+            return;
+        }
+        m_systemAccent = hex;
+        QSettings kde(QDir::homePath() + QStringLiteral("/.config/kdeglobals"), QSettings::IniFormat);
+        const QString scheme = kde.value(QStringLiteral("ColorScheme")).toString();     // INI [General] keys sit at the root
+        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"),
+                                {scheme.isEmpty() ? QStringLiteral("AetherGlass") : scheme, QStringLiteral("--accent-color"), hex});
+    }
     QStringList order() const { return m_order; }
     QStringList sizes() const { return m_sizes; }
     QVariantList catalog() const { return m_catalog; }
@@ -155,6 +189,7 @@ public:
         Q_EMIT hebrewDatesChanged();
     }
     bool keepAwake() const { return m_cookie != 0; }
+    bool vibeOn() const { return m_vibeOn; }
     bool micMuted() const { return m_micMuted; }
     bool wifiBefore() const { return m_wifiBefore; }
     bool bluetoothBefore() const { return m_btBefore; }
@@ -209,6 +244,13 @@ public:
             m_cookie = r.isValid() ? r.value() : 0;
         }
         Q_EMIT stateChanged();
+    }
+    // Vibe coding: aether-vibe holds the logind inhibitors and manages the panel's DPMS;
+    // the tile only flips it and follows the state file, since the session can end by itself.
+    Q_INVOKABLE void toggleVibe()
+    {
+        QProcess::execute(vibeTool(), {QStringLiteral("toggle")});
+        readVibe();
     }
     Q_INVOKABLE void toggleMic()
     {
@@ -294,6 +336,25 @@ private:
     {
         QTimer::singleShot(450, this, [args] { QProcess::startDetached(QStringLiteral("spectacle"), args); });
     }
+    // The systemd user service has no ~/.local/bin on PATH, so the tool is addressed absolutely.
+    static QString vibeTool()
+    {
+        const QString local = QDir::homePath() + QStringLiteral("/.local/bin/aether-vibe");
+        return QFile::exists(local) ? local : QStandardPaths::findExecutable(QStringLiteral("aether-vibe"));
+    }
+    void readVibe()
+    {
+        QFile f(QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + QStringLiteral("/aether-vibe.state"));
+        bool on = false;
+        if (f.open(QIODevice::ReadOnly)) {
+            const long long pid = f.readAll().trimmed().toLongLong();
+            on = pid > 0 && ::kill(static_cast<pid_t>(pid), 0) == 0;
+        }
+        if (on != m_vibeOn) {
+            m_vibeOn = on;
+            Q_EMIT stateChanged();
+        }
+    }
 
     static QVariantMap tile(const char *id, const char *label, const char *glyph) {
         return {{QStringLiteral("id"), QString::fromLatin1(id)}, {QStringLiteral("label"), QString::fromLatin1(label)}, {QStringLiteral("glyph"), QString::fromLatin1(glyph)}};
@@ -301,15 +362,18 @@ private:
     const QVariantList m_catalog = {
         tile("wifi", "Wi‑Fi", "wifi-3"), tile("bluetooth", "Bluetooth", "bluetooth"),
         tile("nightlight", "Night Light", "moon"), tile("darktheme", "Theme", "contrast"), tile("airplane", "Airplane mode", "plane"),
-        tile("keepawake", "Keep awake", "coffee"), tile("micmute", "Microphone", "mic"), tile("powersaver", "Power saver", "leaf"),
+        tile("keepawake", "Keep awake", "coffee"), tile("vibe", "Vibe coding", "vibe"), tile("micmute", "Microphone", "mic"), tile("powersaver", "Power saver", "leaf"),
         tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record"), tile("accent", "Color", "palette")};
     const QVariantList m_widgetCatalog = connectInstalled() ? QVariantList{tile("media", "YouTube Music", "logo"), tile("connect", "KDE Connect", "phone")} : QVariantList{tile("media", "YouTube Music", "logo")};
     QSettings m_settings;
     QTimer m_saveAccent;
+    QString m_systemAccent;                 // the accent last pushed into the color scheme, to skip identical pushes
     bool m_accentCustom = false;
     int m_hue = 183;
     qreal m_light = 0.5, m_sat = 1.0;
     QStringList m_order, m_sizes;
+    QTimer m_vibePoll;
+    bool m_vibeOn = false;
     uint m_cookie = 0;
     bool m_micMuted = false, m_wifiBefore = true, m_btBefore = true;
 };
