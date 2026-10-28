@@ -12,7 +12,7 @@ Item {
     property bool wide: false
 
     readonly property var d: describe(tileId)
-    implicitHeight: 70
+    implicitHeight: 66
 
     function pct(v) { return v + "%" }
     function describe(id) {
