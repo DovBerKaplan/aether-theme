@@ -13,6 +13,8 @@ QtObject {
     // glass a little - the whole island leans toward it without turning into it.
     property color accentOverride: "transparent"
     readonly property color accent: accentOverride.a > 0 ? accentOverride : Tokens.role.island.accent
+    // Ink on top of the accent: dark on a light accent, white on a dark one.
+    readonly property color onAccent: (0.299 * accent.r + 0.587 * accent.g + 0.114 * accent.b) > 0.5 ? Tokens.role.dark.textOnAccent : "#ffffff"
     property real accentTint: 0                       // the island sets 0.07; the toasts and the dock keep the plain glass
     readonly property color chip: Tokens.role.island.chip
     readonly property color bodyTop: Qt.alpha(Qt.tint(Tokens.role.island.bodyTop, Qt.alpha(accent, accentTint)), bodyAlpha)

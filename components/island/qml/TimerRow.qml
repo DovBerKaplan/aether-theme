@@ -25,7 +25,7 @@ Item {
                     anchors.centerIn: parent
                     text: I18n.f("%1 min", modelData)
                     font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
-                    color: presetTap.pressed ? Tokens.role.dark.textOnAccent : Theme.text
+                    color: presetTap.pressed ? Theme.onAccent : Theme.text
                 }
                 TapHandler { id: presetTap; onTapped: root.timer.start(modelData * 60) }
             }

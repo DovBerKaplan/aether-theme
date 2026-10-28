@@ -60,7 +60,7 @@ Item {
             echoMode: root.password && !root.revealed ? TextInput.Password : TextInput.Normal
             persistentSelection: false
             selectionColor: Theme.accent
-            selectedTextColor: Tokens.role.dark.textOnAccent
+            selectedTextColor: Theme.onAccent
             font { family: Theme.font; pixelSize: Tokens.type.body }
             color: Theme.text
             onAccepted: root.accepted()

@@ -19,7 +19,7 @@ PanelScaffold {
     ]
 
     readonly property var presets: [183, 215, 265, 325, 5, 28, 48, 140]     // cyan, blue, violet, pink, red, orange, yellow, green
-    function swatch(h, l) { return Qt.hsla(h / 360, 1.0, l, 1) }
+    function swatch(h, l, sat) { return Qt.hsla(h / 360, sat === undefined ? tiles.accentSat : sat, l, 1) }
 
     Column {
         x: 22; width: parent.width - 44
@@ -53,7 +53,7 @@ PanelScaffold {
                     scale: sTap.pressed ? 0.92 : 1
                     Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.micro } }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
-                    TapHandler { id: sTap; onTapped: tiles.setAccent(modelData, tiles.accentLight) }
+                    TapHandler { id: sTap; onTapped: tiles.setAccent(modelData, tiles.accentLight, tiles.accentSat) }
                 }
             }
         }
@@ -82,18 +82,18 @@ PanelScaffold {
                 x: tiles.accentHue / 359 * (hueTrack.width - width)
                 anchors.verticalCenter: parent.verticalCenter
                 width: 22; height: 22; radius: 11
-                color: root.swatch(tiles.accentHue, 0.5)
+                color: root.swatch(tiles.accentHue, 0.5, 1.0)
                 border { width: 2; color: "white" }
             }
             MouseArea {
                 anchors.fill: parent
                 preventStealing: true
-                function set(mx) { tiles.setAccent(Math.round(Math.max(0, Math.min(1, (mx - 11) / (width - 22))) * 359), tiles.accentLight) }
+                function set(mx) { tiles.setAccent(Math.round(Math.max(0, Math.min(1, (mx - 11) / (width - 22))) * 359), tiles.accentLight, tiles.accentSat) }
                 onPressed: (m) => set(m.x)
                 onPositionChanged: (m) => { if (pressed) set(m.x) }
             }
         }
-        SectionLabel { width: parent.width; text: I18n.tr("Brightness") }
+        SectionLabel { width: parent.width; text: I18n.tr("Lightness") }
         Item {
             id: lightBar
             width: parent.width; height: 28
@@ -105,12 +105,12 @@ PanelScaffold {
                 height: 10; radius: 5
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: root.swatch(tiles.accentHue, 0.45) }
+                    GradientStop { position: 0.0; color: root.swatch(tiles.accentHue, 0.25) }
                     GradientStop { position: 1.0; color: root.swatch(tiles.accentHue, 0.8) }
                 }
             }
             Rectangle {
-                x: (tiles.accentLight - 0.45) / 0.35 * (lightTrack.width - width)
+                x: (tiles.accentLight - 0.25) / 0.55 * (lightTrack.width - width)
                 anchors.verticalCenter: parent.verticalCenter
                 width: 22; height: 22; radius: 11
                 color: root.swatch(tiles.accentHue, tiles.accentLight)
@@ -119,7 +119,38 @@ PanelScaffold {
             MouseArea {
                 anchors.fill: parent
                 preventStealing: true
-                function set(mx) { tiles.setAccent(tiles.accentHue, 0.45 + Math.max(0, Math.min(1, (mx - 11) / (width - 22))) * 0.35) }
+                function set(mx) { tiles.setAccent(tiles.accentHue, 0.25 + Math.max(0, Math.min(1, (mx - 11) / (width - 22))) * 0.55, tiles.accentSat) }
+                onPressed: (m) => set(m.x)
+                onPositionChanged: (m) => { if (pressed) set(m.x) }
+            }
+        }
+        SectionLabel { width: parent.width; text: I18n.tr("Vividness") }
+        Item {
+            id: satBar
+            width: parent.width; height: 28
+            LayoutMirroring.enabled: false
+            LayoutMirroring.childrenInherit: true
+            Rectangle {
+                id: satTrack
+                anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
+                height: 10; radius: 5
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0.0; color: root.swatch(tiles.accentHue, tiles.accentLight, 0.15) }
+                    GradientStop { position: 1.0; color: root.swatch(tiles.accentHue, tiles.accentLight, 1.0) }
+                }
+            }
+            Rectangle {
+                x: (tiles.accentSat - 0.15) / 0.85 * (satTrack.width - width)
+                anchors.verticalCenter: parent.verticalCenter
+                width: 22; height: 22; radius: 11
+                color: root.swatch(tiles.accentHue, tiles.accentLight)
+                border { width: 2; color: "white" }
+            }
+            MouseArea {
+                anchors.fill: parent
+                preventStealing: true
+                function set(mx) { tiles.setAccent(tiles.accentHue, tiles.accentLight, 0.15 + Math.max(0, Math.min(1, (mx - 11) / (width - 22))) * 0.85) }
                 onPressed: (m) => set(m.x)
                 onPositionChanged: (m) => { if (pressed) set(m.x) }
             }

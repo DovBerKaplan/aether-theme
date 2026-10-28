@@ -117,7 +117,7 @@ Item {
                         id: cnt; anchors.centerIn: parent
                         text: root.d.notifications > 99 ? "99+" : root.d.notifications
                         font { family: Theme.mono; pixelSize: Tokens.type.caption; weight: Font.Medium }
-                        color: Tokens.role.dark.textOnAccent
+                        color: Theme.onAccent
                     }
                 }
                 HoverHandler { id: bellHover; cursorShape: Qt.PointingHandCursor }

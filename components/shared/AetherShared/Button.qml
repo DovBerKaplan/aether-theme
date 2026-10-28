@@ -33,7 +33,7 @@ Item {
         anchors.centerIn: parent
         text: root.text; textFormat: Text.PlainText
         font { family: Theme.font; pixelSize: Tokens.type.label; weight: Font.DemiBold }
-        color: root.kind === "filled" ? Tokens.role.dark.textOnAccent
+        color: root.kind === "filled" ? Theme.onAccent
              : root.kind === "negative" ? Tokens.role.island.negative : Theme.text
     }
     HoverHandler { id: hover; enabled: root.enabled; cursorShape: Qt.PointingHandCursor }
