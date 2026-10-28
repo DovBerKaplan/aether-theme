@@ -16,7 +16,7 @@ Item {
 
     readonly property int cols: 4
     readonly property int gap: 2
-    readonly property int cellH: 66
+    readonly property int cellH: 74
     readonly property int rowsPerPage: 2
     readonly property real cellW: (width - (cols - 1) * gap) / cols
     function spanW(span) { return span * cellW + (span - 1) * gap }
@@ -223,7 +223,7 @@ Item {
                     }
                     Rectangle {      // remove badge
                         visible: root.count > 1 && !held.dragging
-                        x: slotItem.wide ? (I18n.rtl ? -4 : parent.width - width + 4) : (I18n.rtl ? (parent.width - 34) / 2 - 8 : (parent.width + 34) / 2 - 12); y: slotItem.wide ? 8 : -4
+                        x: slotItem.wide ? (I18n.rtl ? -4 : parent.width - width + 4) : (I18n.rtl ? (parent.width - 42) / 2 - 8 : (parent.width + 42) / 2 - 12); y: slotItem.wide ? 8 : -4
                         width: 20; height: 20; radius: 10
                         color: Theme.chip
                         border { width: 1; color: Theme.rim }
@@ -233,7 +233,7 @@ Item {
                     }
                     Rectangle {      // size badge: a wide shape to widen a round tile, a square to make a wide one round again
                         visible: !held.dragging
-                        x: slotItem.wide ? (I18n.rtl ? parent.width - width + 4 : -4) : (I18n.rtl ? (parent.width + 34) / 2 - 12 : (parent.width - 34) / 2 - 8); y: slotItem.wide ? 8 : -4
+                        x: slotItem.wide ? (I18n.rtl ? parent.width - width + 4 : -4) : (I18n.rtl ? (parent.width + 42) / 2 - 12 : (parent.width - 42) / 2 - 8); y: slotItem.wide ? 8 : -4
                         width: 20; height: 20; radius: 10
                         color: Theme.chip
                         border { width: 1; color: Theme.rim }
