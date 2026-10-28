@@ -110,7 +110,7 @@ Item {
             ctl.setLayout(panelCmds(root.px, root.shelfY, root.gw, root.shelfH, root.rad),
                           Qt.rect(0, 0, 0, 0), true)
         } else {
-            ctl.setLayout(earCmds(), Qt.rect(root.width - root.edgeGap - 8, 10, 10, 72), false)
+            ctl.setLayout(earCmds(), Qt.rect(root.width - 14, ear.y - 10, 16, ear.height + 20), false)
         }
     }
     // The floating panel silhouette: rounded at all four corners.
@@ -128,10 +128,17 @@ Item {
         ]
     }
     function earCmds() {
-        const x = root.width - root.edgeGap - 5
-        const y = root.edgeGap
-        return [{ t: "M", x: x, y: y }, { t: "L", x: x + 4, y: y },
-                { t: "L", x: x + 4, y: y + 64 }, { t: "L", x: x, y: y + 64 }]
+        const x = root.width - 5
+        return [{ t: "M", x: x, y: ear.y }, { t: "L", x: x + 5, y: ear.y },
+                { t: "L", x: x + 5, y: ear.y + ear.height }, { t: "L", x: x, y: ear.y + ear.height }]
+    }
+    function yFromRatio(r) {
+        const minY = root.edgeGap, maxY = root.height - 72 - root.edgeGap
+        return minY + (maxY - minY) * Math.min(1, Math.max(0, r))
+    }
+    function ratioFromY(y) {
+        const minY = root.edgeGap, maxY = root.height - 72 - root.edgeGap
+        return Math.min(1, Math.max(0, (y - minY) / Math.max(1, maxY - minY)))
     }
 
     function connectSession(s) { if (launcher.sshSession(s)) store.markLaunched(s.id) }
@@ -313,17 +320,64 @@ Item {
         blocks = out
     }
 
-    // ---------- the resting ear ----------
+    // ---------- the resting tab: the phone's Smart-Sidebar handle, in our glass ----------
+    // A thin capsule hugging the right edge in the screen's upper quarter (drag it along the
+    // edge - the position is saved), pull it inward to open the drawer, or click / hover it.
     Rectangle {
         id: ear
         visible: !root.panelIn
-        x: root.width - root.edgeGap - 5; y: root.edgeGap; width: 4; height: 64; radius: 2
+        x: root.width - width + pull
+        y: root.yFromRatio(ctl.tabRatio)
+        width: 5; height: 72; radius: width / 2
         color: Theme.bodyTop
         border { width: 1; color: Theme.rim }
-        opacity: earHover.hovered ? 0.9 : 0.3
+        opacity: earHover.hovered || tabDrag.active ? 0.9 : 0.22
+        transform: Scale {
+            xScale: 1 + Math.min(0.6, Math.abs(ear.pull) / 50)
+            origin.x: ear.width; origin.y: ear.height / 2   // stretches leftward from the edge
+        }
         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+        // the pull follows the finger 1:1; on release it springs back with the button family
+        property real pull: 0
+        Behavior on pull {
+            enabled: !tabDrag.active
+            SpringAnimation { spring: 4; damping: 0.45; mass: 0.6 }
+        }
         HoverHandler { id: earHover; cursorShape: Qt.PointingHandCursor; onHoveredChanged: if (hovered) peek.restart() }
+        onYChanged: if (!root.panelIn) report()   // the input mask rides the tab while it is dragged
         TapHandler { onTapped: root.open = true }
+        DragHandler {
+            id: tabDrag
+            target: null
+            property string axis: ""
+            property real startY: 0
+            onActiveChanged: {
+                if (active) {
+                    axis = ""
+                    startY = ear.y
+                } else {
+                    if (axis === "y") ctl.setTabRatio(root.ratioFromY(ear.y))
+                    ear.pull = 0
+                }
+            }
+            onTranslationChanged: {
+                if (axis === "") {
+                    if (Math.abs(translation.x) < 6 && Math.abs(translation.y) < 6) return
+                    axis = Math.abs(translation.x) >= Math.abs(translation.y) ? "x" : "y"
+                }
+                if (axis === "x") {
+                    ear.pull = Math.max(-44, Math.min(0, translation.x))
+                    if (translation.x < -14) {   // the drawer takes over; the spring lands it
+                        axis = "done"
+                        ear.pull = 0
+                        root.open = true
+                    }
+                } else if (axis === "y") {
+                    const maxY = root.height - ear.height - root.edgeGap
+                    ear.y = Math.max(root.edgeGap, Math.min(maxY, startY + translation.y))
+                }
+            }
+        }
         // a fast swipe across the edge must not flash the shelf; and right after a deliberate
         // close the pointer is still near - give it 800ms of grace before hover counts again
         Timer { id: peek; interval: 240; onTriggered: if (Date.now() - root.closedAt > 800) root.open = true }
