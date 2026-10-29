@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+"""aether-agent-run: run a command inside its own headless KWin display.
+
+Every invocation spins up a nested, virtual-framebuffer KWin - the same
+compositor as the desktop, so agents get a real Wayland server - with its
+own Wayland socket, attaches to it the sandbox's own rootless Xwayland,
+runs the command there, and tears the whole sandbox down when it exits:
+
+    aether-agent-run [--name NAME] [--resolution WxH] -- COMMAND [ARGS...]
+
+The command inherits exactly two display variables, both pointing into the
+sandbox: WAYLAND_DISPLAY=aether-v-<runner pid> for Wayland-native agents
+and DISPLAY=:<N> for X11 agents. N is picked by this runner (the lowest
+free X display), not by KWin: KWin's own Xwayland launcher proved flaky in
+nested mode (it binds the X sockets but often never starts the server),
+while a directly-spawned rootful Xwayland is rock solid and gives the X11
+side a real framebuffer root (classic capture and XTEST just work). Nothing
+of the command's input or output touches the real session: the nested KWin
+has no input devices, its windows never map on the real desktop, and
+capture clients aimed at the sandbox see only the sandbox. Input emulation
+that goes through a display server (XTEST, libei, portal RemoteDesktop) is
+sandboxed with the agent; kernel-level injectors (ydotool's uinput) are
+NOT - they would reach the real seat.
+
+Note: the sandbox X display carries no X cookie while it lives; it exists
+only for the duration of the command on a single-user machine.
+
+Each run registers itself in $XDG_RUNTIME_DIR/aether-agents/<pid>.json so
+supervisors (the island's Vibe panel) can list, watch and stop agents.
+"""
+import atexit
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
+X11_DIR = Path("/tmp/.X11-unix")
+AGENTS_DIR = RUNTIME / "aether-agents"
+WAIT_SECS = 15
+agent = None            # the child; SIGTERM is forwarded to it
+kwin = None
+xwayland = None
+sock = ""
+display_box = [None]    # the sandbox's X display number
+
+
+def die(msg):
+    print(f"aether-agent-run: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def parse_args(argv):
+    name, resolution, cmd = None, (1920, 1080), None
+    it = iter(argv)
+    for a in it:
+        if a == "--name":
+            name = next(it, None)
+        elif a == "--resolution":
+            try:
+                w, h = next(it).split("x")
+                resolution = (int(w), int(h))
+            except (StopIteration, ValueError):
+                die("--resolution needs WxH")
+        elif a == "--":
+            cmd = list(it)
+            break
+        else:
+            die(f"unknown argument: {a}")
+    if not cmd:
+        die("usage: aether-agent-run [--name NAME] [--resolution WxH] -- COMMAND [ARGS...]")
+    return name or cmd[0].split("/")[-1], resolution, cmd
+
+
+def free_x_display():
+    """Lowest X display number with no socket and no lock file."""
+    taken = {p.name for p in X11_DIR.iterdir()} if X11_DIR.is_dir() else set()
+    taken |= {p.name for p in Path("/tmp").glob(".X[0-9]*-lock")}
+    for n in range(10, 10000):
+        if f"X{n}" not in taken and f".X{n}-lock" not in taken:
+            return n
+    return None
+
+
+def wait_for(fn, secs):
+    deadline = time.monotonic() + secs
+    while time.monotonic() < deadline:
+        got = fn()
+        if got:                                  # False/None keep waiting; True and strings settle it
+            return got
+        time.sleep(0.15)
+    return None
+
+
+def teardown():
+    """Idempotent: kill the nested KWin and our Xwayland, scrub every file the sandbox made."""
+    for proc in (xwayland, kwin):
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=3)
+    for f in (RUNTIME / sock, RUNTIME / f"{sock}.lock"):
+        try:
+            f.unlink()
+        except FileNotFoundError:
+            pass
+    if display_box[0] is not None:
+        for f in (X11_DIR / f"X{display_box[0]}", X11_DIR / f".X{display_box[0]}-lock",
+                  Path(f"/tmp/.X{display_box[0]}-lock")):
+            try:
+                f.unlink()
+            except FileNotFoundError:
+                pass
+    try:
+        (AGENTS_DIR / f"{os.getpid()}.json").unlink()
+    except FileNotFoundError:
+        pass
+
+
+def main():
+    global agent, kwin, xwayland, sock
+    name, (w, h), cmd = parse_args(sys.argv[1:])
+    pid = os.getpid()
+    sock = f"aether-v-{pid}"
+    AGENTS_DIR.mkdir(exist_ok=True)
+
+    env = os.environ.copy()                      # the nested KWin must attach to the REAL session
+    kwin_log = open(AGENTS_DIR / f"{pid}.kwin.log", "wb")
+    kwin = subprocess.Popen(
+        ["kwin_wayland", "--virtual", "--socket", sock, "--width", str(w), "--height", str(h)],
+        env=env, stdout=kwin_log, stderr=subprocess.STDOUT, start_new_session=True)
+    atexit.register(teardown)
+
+    if not wait_for(lambda: (RUNTIME / sock).exists() or kwin.poll() is not None, WAIT_SECS):
+        teardown()
+        die(f"the nested KWin did not come up (log: {AGENTS_DIR}/{pid}.kwin.log)")
+
+    display = free_x_display()
+    if display is None:
+        teardown()
+        die("no free X display number")
+    xw_log = open(AGENTS_DIR / f"{pid}.xwayland.log", "wb")
+    xw_env = env.copy()
+    xw_env["WAYLAND_DISPLAY"] = sock             # Xwayland attaches to the sandbox compositor
+    # Rootful, not rootless: without KWin's own Xwayland integration a rootless
+    # server's windows never map (X_GetImage BadMatch), while a rootful server's
+    # root IS a real framebuffer - classic X11 capture and XTEST just work.
+    xwayland = subprocess.Popen(
+        ["Xwayland", f":{display}", "-geometry", f"{w}x{h}+0+0", "-noreset"],
+        env=xw_env, stdout=xw_log, stderr=subprocess.STDOUT, start_new_session=True)
+
+    if not wait_for(lambda: (X11_DIR / f"X{display}").exists() or xwayland.poll() is not None, WAIT_SECS):
+        teardown()
+        die(f"the sandbox Xwayland did not come up (log: {AGENTS_DIR}/{pid}.xwayland.log)")
+    display_box[0] = display
+
+    agent_env = env.copy()
+    agent_env["WAYLAND_DISPLAY"] = sock          # Wayland-native agents
+    agent_env["DISPLAY"] = f":{display}"         # X11 agents, through the sandbox's Xwayland
+    agent_env.pop("XAUTHORITY", None)            # the sandbox display has no cookie
+    agent_env.pop("WAYLAND_SOCKET", None)
+
+    (AGENTS_DIR / f"{pid}.json").write_text(json.dumps({
+        "name": name, "pid": pid, "kwin_pid": kwin.pid, "xwayland_pid": xwayland.pid,
+        "socket": sock, "display": display, "resolution": f"{w}x{h}", "cmd": cmd,
+        "started": int(time.time())}))
+
+    print(f"aether-agent-run: '{name}' in WAYLAND_DISPLAY={sock} DISPLAY=:{display} ({w}x{h})", flush=True)
+
+    code = 0
+    try:
+        agent = subprocess.Popen(cmd, env=agent_env)
+        code = agent.wait()
+    except KeyboardInterrupt:
+        code = 130                               # Ctrl+C reached the agent too (same process group)
+    finally:
+        teardown()
+    sys.exit(code)
+
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, lambda *_: agent is not None and agent.poll() is None and agent.terminate())
+    main()

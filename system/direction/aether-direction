@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""aether-direction: per-app RTL/LTR launch rules for the Aether desktop.
+
+Rules live in ~/.config/aether/direction.conf, one section per application:
+
+    [org.kde.dolphin.desktop]
+    direction=rtl
+
+`sync` turns every rule into a shadowing .desktop file in
+~/.local/share/applications whose Exec goes through aether-direction-run.
+Because the file id is unchanged, KRunner, the application launcher, the
+dock, xdg-open and file associations all pick the rule up automatically.
+Apps without a rule launch exactly as the system launches them, so newly
+installed applications need no action.
+
+Commands:
+  set <app> rtl|ltr|default   resolve <app>, write the rule, sync
+  unset <app>                 drop the rule and undo the override
+  list                        rules with status and the mechanism in use
+  sync                        (re)generate overrides, restore orphans
+  doctor                      coverage report: what works, what can't, why
+"""
+import configparser
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+CONF_DIR = Path.home() / ".config" / "aether"
+CONF = CONF_DIR / "direction.conf"
+LOCAL_APPS = Path.home() / ".local/share/applications"
+BACKUPS = LOCAL_APPS / "aether-direction-backups"
+RUNNER = Path.home() / ".local/bin/aether-direction-run"
+MARKER = "X-Aether-Direction"
+SOURCE_KEY = "X-Aether-Direction-Source-Exec"
+DIRECTIONS = ("rtl", "ltr", "default")
+
+
+def die(msg, code=1):
+    print(f"aether-direction: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def app_dirs():
+    """Application directories in XDG precedence order."""
+    home = Path.home()
+    data_home = Path(os.environ.get("XDG_DATA_HOME") or home / ".local/share")
+    dirs = [data_home / "applications"]
+    # Flatpak export dirs, in case the session env lost them.
+    dirs += [home / ".local/share/flatpak/exports/share/applications",
+             Path("/var/lib/flatpak/exports/share/applications")]
+    for d in os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":"):
+        if d:
+            dirs.append(Path(d) / "applications")
+    seen, out = set(), []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
+def all_ids():
+    """Every visible desktop id -> its highest-precedence file."""
+    ids = {}
+    for d in app_dirs():
+        if d.is_dir():
+            for p in sorted(d.glob("*.desktop")):
+                ids.setdefault(p.name, p)
+    return ids
+
+
+def is_ours(path):
+    try:
+        return MARKER + "=" in path.read_text(encoding="utf-8", errors="replace")[:8192]
+    except OSError:
+        return False
+
+
+def source_desktop(name):
+    """Highest-precedence desktop file for `name` that we did not generate."""
+    for d in app_dirs():
+        p = d / name
+        if p.is_file() and not (d == LOCAL_APPS and is_ours(p)):
+            return p
+    return None
+
+
+def read_exec(lines):
+    for ln in lines:
+        if ln.startswith("Exec="):
+            return ln[5:].strip()
+    return None
+
+
+def read_rules():
+    rules = {}
+    if CONF.is_file():
+        cp = configparser.ConfigParser(interpolation=None, strict=False)
+        cp.read(CONF, encoding="utf-8")
+        for sec in cp.sections():
+            direction = cp.get(sec, "direction", fallback="").strip().lower()
+            if direction:
+                rules[sec] = direction
+    return rules
+
+
+def write_rules(rules):
+    CONF_DIR.mkdir(parents=True, exist_ok=True)
+    lines = ["# aether-direction rules. Manage with the aether-direction command;",
+             "# 'sync' regenerates the launch overrides from this file."]
+    for name, direction in rules.items():
+        lines += ["", f"[{name}]", f"direction={direction}"]
+    CONF.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def resolve(query):
+    ids = all_ids()
+    name = query.strip()
+    if not name.endswith(".desktop"):
+        name += ".desktop"
+    if name in ids:
+        return name
+    hits = sorted(n for n in ids if n.endswith("." + name))
+    if len(hits) == 1:
+        return hits[0]
+    if not hits:
+        die(f"no installed application matches '{query}'")
+    die("ambiguous, be more specific:\n  " + "\n  ".join(hits))
+
+
+def build_override(src_lines, direction):
+    """Desktop-file lines with Exec routed through the runner, or (None, None)."""
+    out, done, orig = [], False, None
+    for ln in src_lines:
+        if ln.startswith("Exec=") and not done:
+            orig = ln[5:].strip()
+            if not orig:
+                return None, None
+            out.append(f"Exec={RUNNER} --direction={direction} -- {orig}")
+            # Markers must stay in the [Desktop Entry] section, so they go
+            # right here, before any [Desktop Action ...] sections below.
+            out.append(f"{MARKER}={direction}")
+            out.append(f"{SOURCE_KEY}={orig}")
+            done = True
+        else:
+            out.append(ln)
+    if not done:
+        return None, None
+    return out, orig
+
+
+def apply_rule(name, direction):
+    """(Re)write the override for one rule. Returns True if anything changed."""
+    src = source_desktop(name)
+    if src is None:
+        backup = BACKUPS / name
+        if backup.is_file():
+            src = backup
+        else:
+            print(f"  ! {name}: no desktop file found (uninstalled?), rule kept")
+            return False
+    target = LOCAL_APPS / name
+    if target.is_file() and not is_ours(target):
+        BACKUPS.mkdir(parents=True, exist_ok=True)
+        keep = BACKUPS / name
+        if not keep.exists():
+            shutil.copy2(target, keep)
+            print(f"  ~ {name}: existing override backed up to {keep}")
+    new_lines, orig = build_override(src.read_text(encoding="utf-8", errors="replace").splitlines(), direction)
+    if new_lines is None:
+        print(f"  ! {name}: desktop file has no Exec= (launcher-less), skipped")
+        return False
+    if target.is_file() and target.read_text(encoding="utf-8", errors="replace").splitlines() == new_lines:
+        return False
+    target.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    return True
+
+
+def remove_override(name):
+    """Undo our override: restore the backed-up file, or drop ours."""
+    target = LOCAL_APPS / name
+    if not target.is_file() or not is_ours(target):
+        return False
+    backup = BACKUPS / name
+    if backup.is_file():
+        shutil.copy2(backup, target)
+    else:
+        target.unlink()
+    return True
+
+
+def sync():
+    rules = read_rules()
+    changed = False
+    for name, direction in rules.items():
+        if apply_rule(name, direction):
+            print(f"  + {name}: {direction}")
+            changed = True
+    for p in sorted(LOCAL_APPS.glob("*.desktop")):
+        if is_ours(p) and p.name not in rules:
+            if remove_override(p.name):
+                print(f"  - {p.name}: rule gone, override undone")
+                changed = True
+    if changed and shutil.which("kbuildsycoca6"):
+        subprocess.run(["kbuildsycoca6"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return changed
+
+
+def override_status(name):
+    """(status, mechanism) for the list/doctor tables."""
+    src = source_desktop(name)
+    target = LOCAL_APPS / name
+    if src is None:
+        if (BACKUPS / name).is_file():
+            return "backup only (app uninstalled)", "native"
+        return "missing (app uninstalled)", "native"
+    if not target.is_file() or not is_ours(target):
+        return "needs sync", "native"
+    ours = target.read_text(encoding="utf-8", errors="replace")
+    stored = cur = None
+    for ln in ours.splitlines():
+        if ln.startswith(SOURCE_KEY + "="):
+            stored = ln[len(SOURCE_KEY) + 1:]
+    cur = read_exec(src.read_text(encoding="utf-8", errors="replace").splitlines())
+    how = "flatpak" if "X-Flatpak=" in ours else "native"
+    if stored is not None and cur is not None and stored != cur:
+        return "stale (app updated, run sync)", how
+    return "ok", how
+
+
+def cmd_set(query, direction):
+    if direction not in DIRECTIONS:
+        die(f"direction must be one of: {', '.join(DIRECTIONS)}")
+    name = resolve(query)
+    rules = read_rules()
+    rules[name] = direction
+    write_rules(rules)
+    sync()
+    print(f"{name}: {direction} (applies on the app's next launch)")
+
+
+def cmd_unset(query):
+    name = resolve(query)
+    rules = read_rules()
+    if name not in rules:
+        die(f"no rule for {name}")
+    del rules[name]
+    write_rules(rules)
+    sync()
+    print(f"{name}: rule removed")
+
+
+def cmd_list():
+    rules = read_rules()
+    if not rules:
+        print("no rules yet — try: aether-direction set dolphin rtl")
+        return
+    width = max(len(n) for n in rules)
+    for name, direction in rules.items():
+        status, how = override_status(name)
+        print(f"{name:<{width}}  {direction:<8} {how:<8} {status}")
+
+
+def cmd_doctor():
+    print("== system")
+    print(f"  runner     : {RUNNER}{' (installed)' if RUNNER.is_file() else ' MISSING — run make direction-install'}")
+    have_sycoca = bool(shutil.which("kbuildsycoca6"))
+    print(f"  kbuildsycoca6: {'present' if have_sycoca else 'MISSING (overrides will not refresh menus)'}")
+    try:
+        loc = subprocess.run(["locale", "-a"], capture_output=True, text=True).stdout
+        hebrew = [l for l in loc.splitlines() if l.lower().startswith("he_il")]
+        print(f"  he_IL locale : {'available (' + ', '.join(hebrew) + ')' if hebrew else 'MISSING — generate it (locale-gen he_IL.UTF-8)'}")
+    except OSError:
+        print("  he_IL locale : unknown (locale not runnable)")
+    rules = read_rules()
+    print(f"== rules ({len(rules)})")
+    if not rules:
+        print("  none — every app launches exactly as the system launches it")
+    for name, direction in rules.items():
+        status, how = override_status(name)
+        src = source_desktop(name)
+        where = str(src) if src else str(BACKUPS / name)
+        print(f"  {name}: {direction} [{how}] {status}\n      {where}")
+    orphans = [p.name for p in LOCAL_APPS.glob("*.desktop") if is_ours(p) and p.name not in rules]
+    if orphans:
+        print("== overrides without a rule (run sync to undo): " + ", ".join(orphans))
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("help", "--help", "-h"):
+        print(__doc__.strip())
+        return
+    cmd, *rest = args
+    if cmd == "set" and len(rest) == 2:
+        cmd_set(rest[0], rest[1].lower())
+    elif cmd == "unset" and len(rest) == 1:
+        cmd_unset(rest[0])
+    elif cmd == "list" and not rest:
+        cmd_list()
+    elif cmd == "sync" and not rest:
+        sync() or print("  (already in sync)")
+    elif cmd == "doctor" and not rest:
+        cmd_doctor()
+    else:
+        die(f"unknown command {args!r} — see: aether-direction help")
+
+
+if __name__ == "__main__":
+    main()

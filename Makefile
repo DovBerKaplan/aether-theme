@@ -4,7 +4,7 @@ GEN   := theme/generators
 APPS  := island toasts dock console
 
 .DEFAULT_GOAL := help
-.PHONY: help all tokens theme fonts components install install-island install-login install-gestures uninstall restore check clean
+.PHONY: help all tokens theme fonts components install install-island install-login install-gestures direction-install zcode-rtl-install uninstall restore check clean
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-18s %s\n", $$1, $$2}'
@@ -44,6 +44,12 @@ install-login: ## Install the login screen (asks for sudo)
 install-gestures: ## Install 3-finger touchpad gestures (needs the input group, see docs/INSTALL.md)
 	system/gestures/install-gestures.sh
 
+direction-install: ## Install per-app RTL/LTR launch rules (aether-direction)
+	system/direction/install-direction.sh
+
+zcode-rtl-install: ## Install the ZCode (Electron) RTL kit: Hebrew locale hint + DevTools port + desktop override
+	system/zcode-rtl/install-zcode-rtl.sh
+
 uninstall: ## Stop and remove the island and toasts services
 	install/uninstall-island.sh
 
@@ -51,8 +57,11 @@ restore: ## Restore the KDE settings from the latest backup
 	install/restore.sh
 
 check: ## Syntax-check scripts and build both components
-	@for f in install/*.sh system/*.sh system/gestures/*.sh; do bash -n $$f || exit 1; done
-	python3 -m py_compile $(GEN)/*.py system/shortcuts/*.py tools/*.py
+	@for f in install/*.sh system/*.sh system/gestures/*.sh system/direction/*.sh system/zcode-rtl/*.sh; do bash -n $$f || exit 1; done
+	python3 -m py_compile $(GEN)/*.py system/shortcuts/*.py tools/*.py system/direction/aether-direction system/direction/aether-direction-run system/vibe/aether-vibe system/agents/aether-agent-run
+	node --check system/zcode-rtl/zcode-rtl-inspect.mjs
+	node --check system/zcode-rtl/zcode-rtl-apply.mjs
+	node --check system/zcode-rtl/zcode-rtl-inject.mjs
 	python3 $(GEN)/build_tokens_qml.py --check
 	node -e "new Function(require('fs').readFileSync('system/layout.js','utf8'))"
 	$(MAKE) components

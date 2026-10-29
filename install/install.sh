@@ -43,6 +43,8 @@ cp "$GEN"/konsole/*.colorscheme "$D/konsole/"
 [[ -f "$D/konsole/Aether.profile" ]] || cp "$GEN/konsole/Aether.profile" "$D/konsole/"
 for k in "$GEN"/kvantum/*; do rm -rf "$HOME/.config/Kvantum/$(basename "$k")"; cp -r "$k" "$HOME/.config/Kvantum/"; done
 install -m 755 "$ROOT/system/aether-mode-sync" "$HOME/.local/bin/aether-mode-sync"
+install -m 755 "$ROOT/system/vibe/aether-vibe" "$HOME/.local/bin/aether-vibe"
+install -m 755 "$ROOT/system/agents/aether-agent-run" "$HOME/.local/bin/aether-agent-run"
 mkdir -p "$D/plasma/plasmoids" "$D/icons/hicolor/scalable/apps"
 for p in org.aether.appname; do rm -rf "$D/plasma/plasmoids/$p"; cp -r "$ROOT/plasmoids/$p" "$D/plasma/plasmoids/"; done
 cp "$ROOT"/theme/icons/*.svg "$D/icons/hicolor/scalable/apps/"
@@ -71,6 +73,9 @@ WantedBy=default.target
 EOF
 systemctl --user daemon-reload
 systemctl --user enable --now aether-mode-sync.path
+
+echo "== direction rules"
+"$ROOT/system/direction/install-direction.sh"
 
 echo "== fonts, KWin, desktops"
 kwriteconfig6 --file kdeglobals --group General --key font "Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"

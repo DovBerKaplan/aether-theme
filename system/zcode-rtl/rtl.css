@@ -1,0 +1,20 @@
+/* Aether RTL for ZCode — refinements on top of the html dir=rtl flip.
+   Read by zcode-rtl-inject.mjs and pushed into every renderer. */
+
+/* Code, terminal output and file paths read LTR inside the RTL shell. */
+pre, code, kbd, samp {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* User-typed Hebrew in the composer follows its own content. */
+textarea {
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
+/* English UI strings that must not mirror with the document. */
+kbd, .font-mono {
+  direction: ltr;
+  unicode-bidi: isolate;
+}

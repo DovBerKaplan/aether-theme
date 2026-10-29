@@ -1,0 +1,12 @@
+[Unit]
+Description=Aether: keep RTL alive in ZCode renderers (CDP injector)
+# The injector waits for the app; starting at login is fine.
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/zcode-rtl-inject
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
