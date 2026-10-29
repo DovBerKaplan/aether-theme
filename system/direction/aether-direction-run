@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""aether-direction-run: launch an app under an aether-direction rule.
+
+Called only from the .desktop overrides that `aether-direction sync` generates:
+
+    Exec=<home>/.local/bin/aether-direction-run --direction=rtl -- <original exec>
+
+Applies the direction's locale profile and execs the original command (so
+signals, terminal control and exit codes all stay with the real app). Flatpak
+apps get their env through `flatpak run --env=...` instead, which reaches
+inside the sandbox.
+"""
+import os
+import sys
+
+# Locale profiles. Only LANGUAGE + LC_MESSAGES are set: they drive both the
+# layout direction (Qt and GTK derive it from the messages locale) and the
+# translation language. LC_CTYPE is deliberately left at the session value —
+# flipping it only breaks setlocale (flatpak runtimes lack foreign locale
+# archives and Qt then falls back to C.UTF-8, spamming warnings) without
+# changing the direction. Formats (LC_TIME, LC_NUMERIC...) stay at the
+# session's values too: a Hebrew-RTL app still shows dates as the session
+# does, and LANGUAGE's ":en" tail falls back to English for untranslated
+# strings.
+PROFILES = {
+    "rtl": {"LANGUAGE": "he:en", "LC_MESSAGES": "he_IL.UTF-8"},
+    "ltr": {"LANGUAGE": "en", "LC_MESSAGES": "en_US.UTF-8"},
+}
+
+
+def flatpak_cmd(cmd, env):
+    """Return cmd rewritten as `flatpak run --env=... <rest>`, or None."""
+    if len(cmd) < 2 or os.path.basename(cmd[0]) != "flatpak" or cmd[1] != "run":
+        return None
+    return cmd[:2] + [f"--env={k}={v}" for k, v in env.items()] + cmd[2:]
+
+
+def main():
+    argv = sys.argv[1:]
+    direction = ""
+    if argv and argv[0].startswith("--direction="):
+        direction = argv[0].split("=", 1)[1]
+        argv = argv[1:]
+    if argv and argv[0] == "--":
+        argv = argv[1:]
+    if not argv:
+        sys.exit("aether-direction-run: no command after --")
+
+    cmd = argv
+    env = dict(os.environ)
+    profile = PROFILES.get(direction)
+    if profile:
+        injected = flatpak_cmd(cmd, profile)
+        if injected:
+            cmd = injected
+        else:
+            env.update(profile)
+    try:
+        os.execvpe(cmd[0], cmd, env)
+    except FileNotFoundError:
+        sys.exit(f"aether-direction-run: command not found: {cmd[0]}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""aether-vibe: keep AI agents working with the lid closed and the screen dark.
+
+One vibe session lasts one lid cycle. `on` starts a detached session that
+holds logind inhibitors (sleep:idle:handle-lid-switch), so nothing suspends
+the machine while the agents run - not the lid switch, not an idle timeout,
+not powerdevil. When the lid closes, the screens' DPMS is switched off right
+away - but only when the laptop panel is the single live screen, so an
+external display you may be using is left alone; Plasma's own idle blanking
+is untouched. When the lid opens, the screens light again and the session
+ends by itself. Reacting only to a close *transition* keeps the panel
+dark-proof: if the ACPI lid switch stays stuck at "closed" (it does on some
+machines, the panel is then the screen you work on), nothing ever blanks and
+the session ends by a tap.
+
+The island's Vibe tile reads $XDG_RUNTIME_DIR/aether-vibe.state (the session
+pid) and follows the session even when it ends without a tap.
+
+Commands:
+  on | off | toggle | status
+  run    internal: the session body, executed under systemd-inhibit
+"""
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+STATE = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}") / "aether-vibe.state"
+WHAT = "sleep:idle:handle-lid-switch"
+POLL = 2.0
+
+
+def die(msg):
+    print(f"aether-vibe: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def session_pid():
+    """The pid in the state file, but only if it is really a live aether-vibe session."""
+    try:
+        pid = int(STATE.read_text().strip())
+    except (OSError, ValueError):
+        return 0
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace")
+    except OSError:
+        return 0
+    return pid if "aether-vibe" in cmdline else 0
+
+
+def running():
+    return session_pid() != 0
+
+
+def lid_closed():
+    r = subprocess.run(["busctl", "get-property", "org.freedesktop.login1", "/org/freedesktop/login1",
+                        "org.freedesktop.login1.Manager", "LidClosed"], capture_output=True, text=True)
+    return "true" in r.stdout
+
+
+def panel_alone():
+    """True when the laptop panel (eDP/LVDS) is the only screen that is on."""
+    r = subprocess.run(["kscreen-doctor", "-o"], capture_output=True, text=True)
+    text = re.compile(r"\x1b\[[0-9;]*m").sub("", r.stdout)     # kscreen-doctor colorizes even when piped
+    name, enabled, panel = "", 0, False
+    for line in text.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == "Output:":
+            name = parts[2] if len(parts) > 2 else ""
+            if "enabled" in parts[3:]:          # compact form: "Output: 1 eDP-1 enabled connected ..."
+                enabled += 1
+                panel = panel or name.startswith("eDP") or name.startswith("LVDS")
+        elif parts[0] == "enabled":             # long form: one property per line
+            enabled += 1
+            if name.startswith("eDP") or name.startswith("LVDS"):
+                panel = True
+    return enabled == 1 and panel
+
+
+def dpms(on):
+    subprocess.run(["kscreen-doctor", "--dpms", "on" if on else "off"], capture_output=True)
+
+
+def run():
+    STATE.write_text(str(os.getppid()))        # systemd-inhibit is the session leader `off` will signal
+    closed = lid_closed()
+    try:
+        while STATE.exists():
+            now = lid_closed()
+            if now and not closed:
+                if panel_alone():              # the lid just closed: darken the screens, keep the machine awake
+                    dpms(False)
+            elif not now and closed:
+                break                          # the lid opened: wake the screens, end the session
+            closed = now
+            time.sleep(POLL)
+    finally:
+        dpms(True)
+        STATE.unlink(missing_ok=True)
+
+
+def start():
+    if running():
+        return
+    STATE.unlink(missing_ok=True)              # a stale state file from a killed session
+    subprocess.Popen(["systemd-inhibit", "--what", WHAT, "--mode", "block",
+                      sys.executable, os.path.abspath(__file__), "run"],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    for _ in range(20):                        # the runner owns the state file: wait for it to appear
+        if STATE.exists():
+            return
+        time.sleep(0.1)
+    die("the session did not start")
+
+
+def stop():
+    pid = session_pid()
+    if pid:
+        try:
+            os.killpg(pid, signal.SIGTERM)     # systemd-inhibit and the runner share the group
+        except ProcessLookupError:
+            pass
+        for _ in range(20):
+            if not running():
+                break
+            time.sleep(0.1)
+    STATE.unlink(missing_ok=True)
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    if cmd == "run":
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        run()
+    elif cmd == "on":
+        start()
+    elif cmd == "off":
+        stop()
+    elif cmd == "toggle":
+        stop() if running() else start()
+    elif cmd == "status":
+        on = running()
+        print("on" if on else "off")
+        sys.exit(0 if on else 1)
+    else:
+        die(f"unknown command: {cmd}")
+
+
+if __name__ == "__main__":
+    main()

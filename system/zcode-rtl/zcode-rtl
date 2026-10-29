@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# ZCode with the Aether RTL kit: Hebrew locale hint (the app derives its UI
+# direction from the locale — see README) and a loopback DevTools port used by
+# zcode-rtl-inspect.mjs and the CSS injector. ZCode is single-instance
+# (SingletonLock): quit the running app before this, or just launch it from
+# the dock/launcher — the installed desktop override routes here anyway.
+exec /opt/ZCode/zcode --lang=he --remote-debugging-port=9223 "$@"
