@@ -31,7 +31,9 @@ Item {
     readonly property string activeKind: activeTab.kind
     onActiveIdxChanged: syncWorkspace()
     onTabsChanged: syncWorkspace()
-    readonly property bool detailOpen: activeKind === "card"
+    // every tab but the list gets the wide glass - a terminal or a file browser at list
+    // width is cramped, and narrowing for it made the seat chase a moving hole
+    readonly property bool detailOpen: activeKind !== "home"
     readonly property int pw: detailOpen ? pwDetail : pwList
     function openTab(kind, id, title, data, dtype) {
         for (let i = 0; i < tabs.length; ++i) {
@@ -79,7 +81,7 @@ Item {
         // keep the window wide until the glass has fully slid out, then shrink to the ear strip
         if (!open && slide > gw + 20 && root.width > 64) ctl.setWindowSize(64, ctl.screenHeight)
     }
-    onGwChanged: report()
+    onGwChanged: { report(); if (seatPid > 0) { seatTries = 0; seatSettle.restart() } }
     onPwChanged: if (open) ctl.setWindowSize(pw + edgeGap, ctl.screenHeight)
     onOpenChanged: {
         closedAt = open ? 0 : Date.now()
@@ -87,9 +89,10 @@ Item {
         discovery.setPolling(open)
         if (open) ctl.setWindowSize(pw + edgeGap, ctl.screenHeight)
         else content.page = "none"   // the width shrinks when the slide settles (onSlideChanged)
+        syncSeat()                   // the terminal leaves with the glass and returns with it
         report()
     }
-    onWidthChanged: report()
+    onWidthChanged: { report(); if (seatPid > 0) { seatTries = 0; seatSettle.restart() } }
 
     // The island's accent colour and language flow in through the controller's file watch -
     // a colour picked in the bar tints this shelf the same way.
@@ -169,7 +172,7 @@ Item {
     function report() {
         if (panelIn) {
             let hole = {}
-            if (activeKind === "card" && detailKind === "session" && detailView === termIdx && seatPid > 0) {
+            if ((activeKind === "term" || activeKind === "local") && seatPid > 0) {
                 const r = seatHost.mapToItem(root, 0, 0)
                 hole = { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(seatHost.width), h: Math.round(seatHost.height) }
             }
@@ -364,7 +367,8 @@ Item {
     // A window the script reports dead (ssh drop, user close) is relaunched automatically
     // when its card is on screen, and marked with the orange dot otherwise.
     function syncSeat() {
-        const want = activeKind === "term" || activeKind === "local"
+        const want = root.open && (activeKind === "term" || activeKind === "local")
+        seatSent = ""
         if (!want) {
             if (seatPid > 0) ctl.hideSeat()
             seatReady = false
@@ -384,8 +388,26 @@ Item {
         }
         seatPid = pid
         seatReady = false
+        seatTries = 0
+        placeSeat()
+    }
+    // The seat is measured only once the glass has settled: opening a terminal tab narrows
+    // the shelf (card width -> list width) and the window shrinks at once while gw is still
+    // springing, so an early measurement mixes the two and parks Konsole beside the glass.
+    // Re-sent whenever the hole moves; the KWin script just re-places a window already up.
+    property string seatSent: ""
+    property int seatTries: 0
+    Timer { id: seatSettle; interval: 50; onTriggered: root.placeSeat() }
+    function placeSeat() {
+        if (!root.open || seatPid <= 0 || !(activeKind === "term" || activeKind === "local")) return
+        const settled = Math.abs(gw - pw) < 1 && Math.abs(root.width - (pw + edgeGap)) < 1 && Math.abs(slide) < 1
+        if (!settled && seatTries++ < 40) { seatSettle.restart(); return }
         const r = seatHost.mapToItem(root, 0, 0)
-        ctl.showSeat(pid, Math.round(r.x), Math.round(r.y), Math.round(seatHost.width), Math.round(seatHost.height))
+        const g = [Math.round(r.x), Math.round(r.y), Math.round(seatHost.width), Math.round(seatHost.height)]
+        const key = seatPid + ":" + g.join(",")
+        if (key === seatSent) return
+        seatSent = key
+        ctl.showSeat(seatPid, g[0], g[1], g[2], g[3])
         report()
     }
 
@@ -572,12 +594,23 @@ Item {
 
         TapHandler { onTapped: (e) => e.accepted = true }   // the glass eats its own clicks
 
+        // The seated terminal lives in a window BELOW this one: the hole must be cut from the
+        // painted glass and grain too, not only from blur and input - or the gradient veils it.
+        // Same rect as seatHost (body starts under the tab strip; the seat 34px under that).
+        readonly property bool holeOn: (root.activeKind === "term" || root.activeKind === "local")
+                                       && root.seatPid > 0 && root.seatReady
+        readonly property real holeX: Tokens.space.md
+        readonly property real holeY: tabBar.height + 34
+        readonly property real holeW: holeOn ? width - 2 * Tokens.space.md : 0
+        readonly property real holeH: holeOn ? height - holeY : 0
+
         Shape {
             id: glass
             anchors.fill: parent
             ShapePath {
                 strokeWidth: 1
                 strokeColor: Theme.rim
+                fillRule: ShapePath.OddEvenFill
                 fillGradient: LinearGradient {
                     x1: 0; y1: 0; x2: 0; y2: 1
                     GradientStop { position: 0; color: Theme.bodyTop }
@@ -592,6 +625,7 @@ Item {
                 PathQuad { x: 0; y: glass.height - root.rad; controlX: 0; controlY: glass.height }
                 PathLine { x: 0; y: root.rad }
                 PathQuad { x: root.rad; y: 0; controlX: 0; controlY: 0 }
+                PathRectangle { x: shelf.holeX; y: shelf.holeY; width: shelf.holeW; height: shelf.holeH; radius: 12 }
             }
         }
         Shape {
@@ -601,6 +635,7 @@ Item {
             layer.enabled: true
             ShapePath {
                 fillColor: "#fff"
+                fillRule: ShapePath.OddEvenFill
                 startX: root.rad; startY: 0
                 PathLine { x: glassMask.width - root.rad; y: 0 }
                 PathQuad { x: glassMask.width; y: root.rad; controlX: glassMask.width; controlY: 0 }
@@ -610,6 +645,7 @@ Item {
                 PathQuad { x: 0; y: glassMask.height - root.rad; controlX: 0; controlY: glassMask.height }
                 PathLine { x: 0; y: root.rad }
                 PathQuad { x: root.rad; y: 0; controlX: 0; controlY: 0 }
+                PathRectangle { x: shelf.holeX; y: shelf.holeY; width: shelf.holeW; height: shelf.holeH; radius: 12 }
             }
         }
         Image {
@@ -636,54 +672,80 @@ Item {
             // ---- tab bar: everything lives inside our window (VS Code style) ----
             Item {
                 id: tabBar
-                width: parent.width; height: 34
+                // the strip appears only once there is something to switch to; with the
+                // list alone it would just repeat the header's own "Console"
+                readonly property bool shown: root.tabs.length > 1
+                width: parent.width; height: shown ? 42 : 0
+                visible: shown
+                clip: true
+                // inset past the glass's rounded corners so no tab sits under the curve
                 Flickable {
-                    anchors.fill: parent
+                    anchors { fill: parent; leftMargin: root.rad * 0.6; rightMargin: root.rad * 0.6 }
                     contentWidth: trow.width
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
                     Row {
                         id: trow
-                        spacing: 2
+                        height: tabBar.height
+                        spacing: 4
                         Repeater {
                             model: root.tabs
                             Item {
                                 id: tabItem
                                 required property int index
                                 required property var modelData
-                                width: Math.min(150, 34 + tabTitle.implicitWidth + (index > 0 ? 14 : 0))
-                                height: 30
+                                readonly property bool active: root.activeIdx === index
+                                // equal padding on both sides; the close glyph keeps its slot
+                                // (shown on hover/active) so tabs never jump in width
+                                width: 12 + tabTitle.width + (index > 0 ? 6 + 14 : 0) + 12
+                                height: parent.height
                                 Rectangle {
-                                    anchors { fill: parent; topMargin: 2 }
-                                    radius: 8
-                                    color: root.activeIdx === index ? Theme.chip : "transparent"
+                                    id: pill
+                                    anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; verticalCenterOffset: -2 }
+                                    height: 28
+                                    radius: 9
+                                    color: tabItem.active ? Theme.chip
+                                         : Qt.rgba(1, 1, 1, tabHover.hovered ? Tokens.material.tintHover : 0)
+                                    Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
                                 }
+                                // the accent line rides the bar's bottom rule, not the pill
                                 Rectangle {
-                                    anchors { bottom: parent.bottom; left: parent.left; right: parent.right; margins: 8 }
+                                    anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+                                    width: parent.width - 16
                                     height: 2; radius: 1
                                     color: Theme.accent
-                                    visible: root.activeIdx === index
+                                    opacity: tabItem.active ? 1 : 0
+                                    Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
                                 }
                                 Text {
                                     id: tabTitle
-                                    x: 10
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: Math.min(110, implicitWidth)
+                                    x: 12
+                                    anchors.verticalCenter: pill.verticalCenter
+                                    width: Math.min(120, implicitWidth)
                                     elide: Text.ElideRight
                                     text: modelData.title
-                                    font { family: Theme.font; pixelSize: Tokens.type.label }
-                                    color: root.activeIdx === index ? Theme.text : Theme.subtext
+                                    font { family: Theme.font; pixelSize: Tokens.type.label; weight: tabItem.active ? Font.Medium : Font.Normal }
+                                    color: tabItem.active ? Theme.text : Theme.subtext
                                 }
-                                Glyph {
+                                Item {
                                     visible: index > 0
-                                    name: "close"; size: 11
-                                    anchors { verticalCenter: parent.verticalCenter; left: tabTitle.right; leftMargin: 3 }
-                                    color: tabX.hovered ? Theme.text : Theme.subtext
+                                    width: 14; height: 14
+                                    anchors { verticalCenter: pill.verticalCenter; left: tabTitle.right; leftMargin: 6 }
+                                    Rectangle {
+                                        anchors.fill: parent; radius: 4
+                                        color: Qt.rgba(1, 1, 1, tabX.hovered ? Tokens.material.tintHover * 2 : 0)
+                                    }
+                                    Glyph {
+                                        anchors.centerIn: parent
+                                        name: "close"; size: 10
+                                        opacity: tabItem.active || tabHover.hovered ? 1 : 0
+                                        color: tabX.hovered ? Theme.text : Theme.subtext
+                                    }
                                     HoverHandler { id: tabX; cursorShape: Qt.PointingHandCursor }
                                     TapHandler { onTapped: root.closeTab(index) }
                                 }
                                 TapHandler { onTapped: root.activeIdx = index }
-                                HoverHandler { cursorShape: Qt.PointingHandCursor }
+                                HoverHandler { id: tabHover; cursorShape: Qt.PointingHandCursor }
                             }
                         }
                     }
@@ -763,6 +825,7 @@ Item {
                     placeholder: I18n.tr("Filter")
                     onTextChanged: root.rebuild()
                 }
+                Item { width: 1; height: Tokens.space.xs }
 
                 // empty state: an affordance, not a blank wall
                 Column {
@@ -800,7 +863,9 @@ Item {
                     Loader {
                         required property int index
                         required property var modelData
-                        width: parent ? parent.width : 0
+                        // rows are inset like cards so a highlight never runs into the glass rim
+                        x: Tokens.space.sm
+                        width: parent ? parent.width - 2 * Tokens.space.sm : 0
                         sourceComponent: modelData.t === "label" ? lblComp
                                        : modelData.t === "session" ? sessComp
                                        : modelData.t === "cont" ? contComp
@@ -877,6 +942,7 @@ Item {
                             }
                         }
                     }
+                    Item { width: 1; height: Tokens.space.md }   // air between the switcher and the view
 
                     // ----- dashboard (ssh session) -----
                     Column {
@@ -1063,6 +1129,7 @@ Item {
                     }
 
                 }
+            }                      // detailPage
 
                 // ----- terminal tab: the seat lives here, one per tab -----
                 Item {
@@ -1070,19 +1137,11 @@ Item {
                     anchors.fill: parent
                     visible: activeKind === "term" || activeKind === "local"
 
+                    // the tab already names the terminal - this strip only offers another one
                     Row {
                         x: Tokens.space.md
-                        width: parent.width - 2 * Tokens.space.md
+                        height: 34
                         spacing: Tokens.space.xs
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - 110
-                            text: activeTab.title
-                            textFormat: Text.PlainText
-                            elide: Text.ElideRight
-                            font { family: Theme.font; pixelSize: Tokens.type.label }
-                            color: Theme.subtext
-                        }
                         ActionGlyph {
                             glyph: "plus"
                             anchors.verticalCenter: parent.verticalCenter
@@ -1092,7 +1151,7 @@ Item {
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: I18n.tr("another")
+                            text: I18n.tr("New terminal")
                             font { family: Theme.font; pixelSize: Tokens.type.caption }
                             color: Theme.subtext
                         }
@@ -1155,16 +1214,19 @@ Item {
                     anchors.fill: parent
                     visible: activeKind === "files"
 
+                    // a tab owns the whole glass: path bar on top, the listing fills the rest,
+                    // the upload bar is pinned to the bottom
                     Column {
-                        anchors.fill: parent
-                        spacing: Tokens.space.sm
-                        topPadding: Tokens.space.sm
+                        id: filesTop
+                        width: parent.width
+                        spacing: Tokens.space.xs
                         Row {
                             x: Tokens.space.md
                             width: parent.width - 2 * Tokens.space.md
+                            height: 34
                             spacing: Tokens.space.xs
-                            ActionGlyph { glyph: "up"; onAct: root.navigate(sftp.path + "/..") }
-                            ActionGlyph { glyph: "folder"; onAct: launcher.browseRemote(root.sftpUrl(sftp.path)) }
+                            ActionGlyph { glyph: "up"; anchors.verticalCenter: parent.verticalCenter; onAct: root.navigate(sftp.path + "/..") }
+                            ActionGlyph { glyph: "folder"; anchors.verticalCenter: parent.verticalCenter; onAct: launcher.browseRemote(root.sftpUrl(sftp.path)) }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width - 60
@@ -1188,72 +1250,72 @@ Item {
                             font { family: Theme.mono; pixelSize: Tokens.type.caption }
                             color: Tokens.role.island.negative
                         }
-                        Item {
-                            x: Tokens.space.md
-                            width: parent.width - 2 * Tokens.space.md
-                            height: Math.max(180, Math.min(430, root.height - 470))
-                            ListView {
-                                id: fileList
-                                anchors.fill: parent
-                                clip: true
-                                reuseItems: true
-                                boundsBehavior: Flickable.StopAtBounds
-                                LayoutMirroring.enabled: false
-                                model: sftp.entries
-                                delegate: ListRow {
-                                    required property var modelData
-                                    width: fileList.width
-                                    title: modelData.name
-                                    subtitle: modelData.dir ? I18n.tr("Folder") + " · " + I18n.ltr(modelData.date)
-                                                            : I18n.ltr(root.hsize(modelData.size) + "  ·  " + modelData.date)
-                                    leadingGlyphSource: Qt.resolvedUrl(modelData.dir ? "assets/glyphs/folder.svg"
-                                                                                     : "assets/glyphs/file.svg")
-                                    onClicked: if (modelData.dir) root.navigate(sftp.path + "/" + modelData.name)
-                                    trailing: [
-                                        ActionGlyph {
-                                            glyph: "edit"
-                                            visible: !modelData.dir
-                                            onAct: launcher.editRemote(root.sftpUrl(sftp.path + "/" + modelData.name))
-                                        },
-                                        ActionGlyph {
-                                            glyph: "download"
-                                            visible: !modelData.dir
-                                            onAct: sftp.download(modelData.name)
-                                        }
-                                    ]
-                                }
-                            }
-                            DropArea {
-                                id: fileDrop
-                                anchors.fill: parent
-                                onEntered: (d) => d.accepted = d.hasUrls
-                                onDropped: (d) => { if (d.hasUrls) d.urls.forEach(u => sftp.upload(u)); d.accept() }
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                visible: fileDrop.containsDrag
-                                text: I18n.tr("Drop to upload here")
-                                font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
-                                color: Theme.accent
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                visible: sftp.entries.length === 0 && !sftp.busy && sftp.err.length === 0
-                                text: I18n.tr("Empty folder")
-                                font { family: Theme.font; pixelSize: Tokens.type.label }
-                                color: Theme.subtext
+                    }
+                    Item {
+                        anchors { top: filesTop.bottom; topMargin: Tokens.space.xs; bottom: filesBar.top; bottomMargin: Tokens.space.sm
+                                  left: parent.left; right: parent.right; leftMargin: Tokens.space.sm; rightMargin: Tokens.space.sm }
+                        ListView {
+                            id: fileList
+                            anchors.fill: parent
+                            clip: true
+                            reuseItems: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            LayoutMirroring.enabled: false
+                            model: sftp.entries
+                            delegate: ListRow {
+                                required property var modelData
+                                width: fileList.width
+                                title: modelData.name
+                                subtitle: modelData.dir ? I18n.tr("Folder") + " · " + I18n.ltr(modelData.date)
+                                                        : I18n.ltr(root.hsize(modelData.size) + "  ·  " + modelData.date)
+                                leadingGlyphSource: Qt.resolvedUrl(modelData.dir ? "assets/glyphs/folder.svg"
+                                                                                 : "assets/glyphs/file.svg")
+                                onClicked: if (modelData.dir) root.navigate(sftp.path + "/" + modelData.name)
+                                trailing: [
+                                    ActionGlyph {
+                                        glyph: "edit"
+                                        visible: !modelData.dir
+                                        onAct: launcher.editRemote(root.sftpUrl(sftp.path + "/" + modelData.name))
+                                    },
+                                    ActionGlyph {
+                                        glyph: "download"
+                                        visible: !modelData.dir
+                                        onAct: sftp.download(modelData.name)
+                                    }
+                                ]
                             }
                         }
-                        Row {
-                            x: Tokens.space.md
-                            spacing: Tokens.space.sm
-                            Button { text: I18n.tr("Upload…"); onClicked: sftp.chooseUpload() }
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: I18n.tr("or drop files here")
-                                font { family: Theme.font; pixelSize: Tokens.type.caption }
-                                color: Theme.subtext
-                            }
+                        DropArea {
+                            id: fileDrop
+                            anchors.fill: parent
+                            onEntered: (d) => d.accepted = d.hasUrls
+                            onDropped: (d) => { if (d.hasUrls) d.urls.forEach(u => sftp.upload(u)); d.accept() }
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            visible: fileDrop.containsDrag
+                            text: I18n.tr("Drop to upload here")
+                            font { family: Theme.font; pixelSize: Tokens.type.body; weight: Font.Medium }
+                            color: Theme.accent
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            visible: sftp.entries.length === 0 && !sftp.busy && sftp.err.length === 0
+                            text: I18n.tr("Empty folder")
+                            font { family: Theme.font; pixelSize: Tokens.type.label }
+                            color: Theme.subtext
+                        }
+                    }
+                    Row {
+                        id: filesBar
+                        anchors { left: parent.left; leftMargin: Tokens.space.md; bottom: parent.bottom; bottomMargin: Tokens.space.md }
+                        spacing: Tokens.space.sm
+                        Button { text: I18n.tr("Upload…"); onClicked: sftp.chooseUpload() }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: I18n.tr("or drop files here")
+                            font { family: Theme.font; pixelSize: Tokens.type.caption }
+                            color: Theme.subtext
                         }
                     }
                 }
@@ -1285,9 +1347,9 @@ Item {
         id: lblComp
         Item {
             width: parent ? parent.width : 0
-            height: 32
+            height: 38
             SectionLabel {
-                anchors { left: parent.left; leftMargin: Tokens.space.md; right: parent.right; rightMargin: Tokens.space.md; verticalCenter: parent.verticalCenter }
+                anchors { left: parent.left; leftMargin: Tokens.space.md; right: parent.right; rightMargin: Tokens.space.md; bottom: parent.bottom; bottomMargin: Tokens.space.xs }
                 text: modelData.text
             }
         }
@@ -1416,5 +1478,4 @@ Item {
             }
         }
     }
-}
 }

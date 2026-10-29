@@ -112,6 +112,12 @@ registerShortcut("Aether Console Seat Show", "Aether: seat the console terminal 
                 prevActive = a && a !== prev ? a : null;
             }
         }
+        // already seated and showing: the hole only moved (the glass settled) - just follow it
+        const cur = windows[pid];
+        if (wantedPid === pid && cur && !cur.minimized && cur.opacity === 1) {
+            place(cur);
+            return;
+        }
         wantedPid = pid;
         if (windows[pid]) {
             present(pid);
