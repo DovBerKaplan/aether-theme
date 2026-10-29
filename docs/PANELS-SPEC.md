@@ -363,14 +363,14 @@ Advanced settings ↗
 ‹  Bluetooth                                     [●═══]
    Visible as “dovber-laptop” while this panel is open
 Connected
-  🎧 WH-1000XM5               Battery 80% ▮▮▮▯     ⓘ
+  🎧 WH-1000XM5               Connected     [🔋80] [▮▮▮▮]  ⓘ
 Saved devices
-  ⌨  MX Keys                  Not connected        ⓘ
-  🖱 MX Master 3S              Not connected        ⓘ
+  ⌨  MX Keys                  Not connected                 ⓘ
+  🖱 MX Master 3S              Not connected                 ⓘ
 Pair new device
   ═══════════════  (LinearProgress while discovering)
-  📱 Pixel 9 Pro
-  🔊 JBL Flip 6
+  📱 Pixel 9 Pro                [▮▮▯▯]
+  🔊 JBL Flip 6                 [▮▮▯▯]
   ?  Unknown device · 4C:…   (shown only after "Show unnamed")
 ──────────────────────────────────────────────────────
 Bluetooth settings ↗                         Rename device
@@ -397,7 +397,21 @@ Bluetooth settings ↗                         Rename device
   only), "Use for audio" (sets it as the default sink), "Forget" (second-tap
   confirm).
 - Icons come from BlueZ `Icon` (audio-headset, input-keyboard, phone…), mapped
-  to the island's glyph set with a generic fallback.
+  to the island's glyph set by `BtIcons.js` with a generic fallback; each family
+  also has a friendly translated label for the detail page ("Type" row).
+- **Battery** (`org.bluez.Battery1`) is a small battery glyph + percent at the
+  row's trailing end (not in the subtitle); the detail page shows a ring with
+  the number inside.
+- **Link quality** is the RSSI quantized into the same 0-4 bars as Wi-Fi
+  (`level` in the devices list: >-55 dBm → 4, >-70 → 3, >-85 → 2, else 1).
+  BlueZ reports RSSI mainly during discovery, so bars mostly appear on nearby
+  devices; a connected device's raw dBm is read on demand (`readRssi`, refreshed
+  every 3 s while its detail page is open) and shown there as bars + dBm.
+- **The bluetooth tile** adopts a lone connected device's glyph and name, keeps
+  the battery text at its far end, and falls back to signal bars when the
+  device reports no battery.
+- `AETHER_ISLAND_FAKE_BT=1` runs the model against an invented fixture (headset,
+  keyboard, mouse, phone, speaker) for UI work and screenshots without hardware.
 
 ---
 
@@ -552,8 +566,9 @@ World clocks
 Once panels exist, the four chips can grow into an Android-style tile set.
 The candidate tiles are: Do not disturb (pauses toasts; island history still
 fills), Night Light, Dark theme, Airplane mode, Keep awake (inhibit sleep),
-Screenshot (Spectacle region), Screen record, Hotspot, Power saver and
-Microphone mute.
+Vibe coding (aether-vibe: agents keep running with the lid closed and the
+panel dark, until the lid opens), Screenshot (Spectacle region), Screen
+record, Hotspot, Power saver and Microphone mute.
 
 - Layout: 4 per row, 2 rows (8 tiles). Horizontal paging with dots if there
   are more. The large island grows by 68 px.
