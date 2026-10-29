@@ -2,6 +2,11 @@
 # Keep Kvantum, Konsole and the GTK/browser apps in step with the active KDE color scheme.
 # Triggered by aether-mode-sync.path whenever ~/.config/kdeglobals changes.
 set -euo pipefail
+# A look-and-feel apply leaks its package defaults (ColorScheme=...) into kdedefaults; there the
+# entry shadows the live scheme and makes plasma-apply-colorscheme believe the theme is already
+# active, so nothing is written and no app is notified. The live kdeglobals always carries the
+# explicit name after a real apply - keep the defaults layer clean so re-applies always land.
+sed -i '/^ColorScheme=/d' "$HOME/.config/kdedefaults/kdeglobals" 2>/dev/null || true
 scheme="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme)"
 case "$scheme" in
   AetherGlass) kv=AetherGlass ;;
