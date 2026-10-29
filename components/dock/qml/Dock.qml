@@ -11,6 +11,9 @@ import AetherShared
 // springs the pill out of the edge in the island's material; leaving retracts it.
 Item {
     id: root
+    // Same colour as the island: the user's pick from its colour panel; the scheme follows the system.
+    Binding { target: Theme; property: "accentOverride"; value: dock.accentOverride }
+    Binding { target: Theme; property: "dark"; value: dock.dark }
     // Icon order is fixed (pinned first, left to right / top to bottom) whatever the UI locale.
     LayoutMirroring.enabled: false
     LayoutMirroring.childrenInherit: true
@@ -63,6 +66,7 @@ Item {
     property real lastT: 0
     Behavior on d {
         SpringAnimation {
+            id: dSpring
             spring: 3.6                              // the island's own spring
             damping: root.shown ? 0.22 : 0.36
             mass: 1
@@ -82,7 +86,9 @@ Item {
     readonly property real stretch: Math.max(-0.3, Math.min(0.3, vel * 0.012))
 
     // ---- Window geometry: strip while hidden, pill-sized while shown or moving ------------
-    readonly property bool open: shown || d > hiddenD + 2
+    // The window only shrinks back to the idle strip once the spring has fully settled: the closing
+    // spring bounces around its target, and resizing the surface on every bounce flickered.
+    readonly property bool open: shown || dSpring.running || d > hiddenD + 2
     readonly property real lWin: along + 2 * uPad
     function applyWindow() {
         const w = open ? (horiz ? Math.ceil(lWin) : vWin) : (horiz ? dock.screenWidth : 10)
@@ -389,10 +395,11 @@ Item {
                         width: root.horiz ? len : 4
                         height: root.horiz ? 4 : len
                         radius: 2
-                        color: Theme.accent
-                        x: root.horiz ? (parent.width - width) / 2 : 1
-                        y: root.horiz ? parent.height - 5 : (parent.height - height) / 2
-                        opacity: root.isWindow(mi) ? (root.isMinimized(mi) ? 0.4 : 0.9) : 0
+                        color: Theme.accent   // the user's accent, as in the island
+                        // Below the icon, in the glass's own padding (left dock: to its screen-edge side).
+                        x: root.horiz ? (parent.width - width) / 2 : -5
+                        y: root.horiz ? parent.height + 2 : (parent.height - height) / 2
+                        opacity: root.isWindow(mi) ? (root.isMinimized(mi) ? 0.3 : (root.isActive(mi) ? 0.9 : 0.55)) : 0
                         Behavior on opacity { NumberAnimation { duration: 150 } }
                         Behavior on len { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                     }

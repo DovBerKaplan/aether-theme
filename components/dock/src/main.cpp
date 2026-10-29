@@ -3,6 +3,7 @@
 // touching an edge springs that edge's glass pill out, leaving retracts it. Only one is open at
 // a time. The pill is drawn by Dock.qml in the island's material; blur and input follow the
 // shape QML reports through setLayout().
+#include <QColor>
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDBusConnection>
@@ -62,6 +63,7 @@ class DockController : public QObject
     Q_CLASSINFO("D-Bus Interface", "org.aether.Dock")
     Q_PROPERTY(QString edge READ edge CONSTANT)
     Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
+    Q_PROPERTY(QColor accentOverride READ accentOverride NOTIFY accentChanged)
     Q_PROPERTY(int screenWidth READ screenWidth CONSTANT)
     Q_PROPERTY(int screenHeight READ screenHeight CONSTANT)
     Q_PROPERTY(QStringList launchers READ launchers WRITE setLaunchers NOTIFY launchersChanged)
@@ -72,32 +74,39 @@ public:
         : QObject(view), m_view(view), m_edge(edge)
     {
         m_kdeglobals = QStandardPaths::locate(QStandardPaths::GenericConfigLocation, QStringLiteral("kdeglobals"));
+        m_islandRc = QDir::homePath() + QStringLiteral("/.config/aetherislandrc");
         m_watcher.addPath(m_kdeglobals);
+        m_watcher.addPath(m_islandRc);
         // A scheme switch rewrites kdeglobals in several steps (and KDE replaces the file), so the
         // change is read once things have settled, and the watch is re-armed afterwards. A slow poll
         // is the safety net for a watch that got lost with the replaced file.
         m_debounce.setSingleShot(true);
         m_debounce.setInterval(300);
         connect(&m_debounce, &QTimer::timeout, this, [this] {
-            if (!m_watcher.files().contains(m_kdeglobals)) {
-                m_watcher.addPath(m_kdeglobals);
+            for (const QString &f : { m_kdeglobals, m_islandRc }) {
+                if (!m_watcher.files().contains(f)) {
+                    m_watcher.addPath(f);
+                }
             }
             readScheme();
+            readAccent();
         });
         connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this] { m_debounce.start(); });
         m_poll.setInterval(2000);
         connect(&m_poll, &QTimer::timeout, this, [this] {
-            const QDateTime t = QFileInfo(m_kdeglobals).lastModified();
+            const QDateTime t = qMax(QFileInfo(m_kdeglobals).lastModified(), QFileInfo(m_islandRc).lastModified());
             if (t != m_lastModified) {
                 m_lastModified = t;
                 m_debounce.start();
             }
         });
         m_poll.start();
-        m_lastModified = QFileInfo(m_kdeglobals).lastModified();
+        m_lastModified = qMax(QFileInfo(m_kdeglobals).lastModified(), QFileInfo(m_islandRc).lastModified());
         readScheme();
+        readAccent();
     }
     bool dark() const { return m_dark; }
+    QColor accentOverride() const { return m_accent; }
     QString edge() const { return m_edge; }
     int screenWidth() const { return m_view->screen() ? m_view->screen()->size().width() : 1920; }
     int screenHeight() const { return m_view->screen() ? m_view->screen()->size().height() : 1080; }
@@ -220,6 +229,7 @@ Q_SIGNALS:
     void launchersChanged();
     void allAtStartChanged();
     void darkChanged();
+    void accentChanged();
     void stateRequested(const QString &state);
     void shownOnEdge(const QString &edge);
 
@@ -233,6 +243,24 @@ private:
         return { QStringLiteral("applications:zcode.desktop"), QStringLiteral("applications:com.anthropic.Claude.desktop"),
                  QStringLiteral("applications:google-chrome.desktop"), QStringLiteral("applications:com.microsoft.VSCode.desktop"),
                  QStringLiteral("applications:org.kde.dolphin.desktop"), QStringLiteral("applications:org.kde.konsole.desktop") };
+    }
+
+    // The colour the user picked in the island's colour panel (~/.config/aetherislandrc [Appearance]).
+    // Transparent means "none chosen": Theme falls back to the theme's own accent.
+    void readAccent()
+    {
+        QSettings s(m_islandRc, QSettings::IniFormat);
+        QColor c(Qt::transparent);
+        if (s.value(QStringLiteral("Appearance/AccentSet")).toBool()) {
+            const qreal hue = qBound(0, s.value(QStringLiteral("Appearance/AccentHue"), 183).toInt(), 359) / 360.0;
+            const qreal light = qBound(0.25, s.value(QStringLiteral("Appearance/AccentLight"), 0.5).toDouble(), 0.8);
+            const qreal sat = qBound(0.15, s.value(QStringLiteral("Appearance/AccentSat"), 1.0).toDouble(), 1.0);
+            c = QColor::fromHslF(hue, sat, light);
+        }
+        if (c != m_accent) {
+            m_accent = c;
+            Q_EMIT accentChanged();
+        }
     }
 
     void readScheme()
@@ -270,6 +298,8 @@ private:
     QTimer m_poll;
     QDateTime m_lastModified;
     QString m_kdeglobals;
+    QString m_islandRc;
+    QColor m_accent = QColor(Qt::transparent);
     bool m_dark = true;
 };
 
