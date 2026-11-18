@@ -7,7 +7,7 @@ Item {
     required property var timer
     height: 58
 
-    Rectangle { anchors.fill: parent; radius: Tokens.radius.xl; color: Qt.rgba(1, 1, 1, Tokens.tint.faint) }
+    Rectangle { anchors.fill: parent; radius: Tokens.radius.xl; color: Theme.veil(Tokens.tint.faint) }
 
     // idle: presets
     Row {

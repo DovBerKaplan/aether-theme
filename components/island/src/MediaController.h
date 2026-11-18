@@ -133,10 +133,13 @@ public:
             return;
         }
         const QString bin = pearPath("opt/YouTube Music/youtube-music");
-        if (QFile::exists(bin)) {
-            QProcess::startDetached(bin, { QStringLiteral("--no-sandbox"), QStringLiteral("--ozone-platform=x11") });
+        const QStringList cmd = { QFile::exists(bin) ? bin : QStringLiteral("pear-desktop"), QStringLiteral("--no-sandbox"), QStringLiteral("--ozone-platform=x11") };
+        // In a scope of its own, not in aether-island.service: a restart of the island used to take
+        // the app down with it (systemd stops the whole cgroup), and the next launch resumed a song.
+        if (!QStandardPaths::findExecutable(QStringLiteral("systemd-run")).isEmpty()) {
+            QProcess::startDetached(QStringLiteral("systemd-run"), QStringList{ QStringLiteral("--user"), QStringLiteral("--scope"), QStringLiteral("--collect"), QStringLiteral("--quiet"), QStringLiteral("--") } + cmd);
         } else {
-            QProcess::startDetached(QStringLiteral("pear-desktop"), { QStringLiteral("--no-sandbox"), QStringLiteral("--ozone-platform=x11") });
+            QProcess::startDetached(cmd.first(), cmd.mid(1));
         }
     }
 

@@ -23,6 +23,9 @@ Item {
     Binding { target: I18n; property: "lang"; value: tiles.language }
     Binding { target: Theme; property: "accentOverride"; value: tiles.accentCustom ? Qt.hsla(tiles.accentHue / 360, tiles.accentSat, tiles.accentLight, 1) : "transparent" }
     Binding { target: Theme; property: "accentTint"; value: 0.07 }
+    // The bar dresses for what it sits on: Theme's light material over a bright desktop, its ink glass otherwise.
+    Binding { target: Theme; property: "dark"; value: !island.backdropLight }
+    Binding { target: Theme; property: "bodyAlpha"; value: island.backdropLight ? 0.62 : Tokens.material.islandBodyAlpha }
     // The system follows the bar: the accent is baked into the color scheme, so the selections,
     // focus rings and sliders outside the island change with it. A short settle, because a
     // slider drag changes the accent dozens of times and the push should run once it rests.
@@ -49,7 +52,7 @@ Item {
     LayoutMirroring.childrenInherit: true
     readonly property real screenW: island.screenWidth
     readonly property real screenH: island.screenHeight
-    readonly property bool big: mode === "large" || mode === "expanded" || mode === "panel" || mode === "activity"
+    readonly property bool big: mode === "large" || mode === "expanded" || mode === "panel" || mode === "activity" || mode === "search"
     // Media mode: the whole bar becomes YouTube Music - nothing above the app but a
     // thin uniform glass bezel. It closes only deliberately: click outside, the handle,
     // wheel up, Win+N, or another window taking focus - never on pointer-leave.
@@ -80,7 +83,8 @@ Item {
         "large":     { sw: 0, sh: 0, nw: 480, nb: Math.max(170, largeContent.contentHeight), r: 30, win: Qt.size(screenW, screenH) },
         "expanded":  { sw: 0, sh: 0, nw: 480, nb: Math.min(largeContent.expandedHeight, screenH - 80), r: 30, win: Qt.size(screenW, screenH) },
         "activity":  { sw: 0, sh: 0, nw: 440, nb: 112, r: 26, win: Qt.size(screenW, screenH) },
-        "panel":     { sw: 0, sh: 0, nw: 480, nb: Math.max(170, largeContent.contentHeight, Math.min(panelHost.contentHeight, screenH - 120)), r: 30, win: Qt.size(screenW, screenH) },
+        "panel":     { sw: 0, sh: 0, nw: 480, nb: Math.max(120, panelFrom === "large" ? largeContent.contentHeight : 0, Math.min(panelHost.contentHeight, screenH - 120)), r: 30, win: Qt.size(screenW, screenH) },
+        "search":    { sw: 0, sh: 0, nw: Math.min(560, screenW - 160), nb: Math.max(170, Math.min(searchHost.contentHeight, screenH - 120)), r: 30, win: Qt.size(screenW, screenH) },
         "media":     { sw: 0, sh: 0, nw: mediaAppW + 2 * mediaBezel, nb: mediaBezel + mediaAppH + mediaGrip, r: 30, win: Qt.size(screenW, screenH) }
     })
 
@@ -140,6 +144,18 @@ Item {
                                 buttons: [{ id: "open", label: I18n.tr("Open file") }, { id: "folder", glyph: "folder" }] })
         }
     }
+    Connections {
+        target: tether
+        // The fallback router picking the machine up, and the wifi back. The engine's retries
+        // stay silent - only successful transitions ever speak, and the card never interrupts
+        // an island the user is already looking at.
+        function onEngaged(name) {
+            root.showActivity({ key: "tether", glyph: "phone", title: I18n.f("No internet — riding %1", name), panel: "bluetooth", duration: 8000 })
+        }
+        function onRecovered() {
+            root.showActivity({ key: "tether", glyph: "wifi-3", title: I18n.tr("Back on Wi‑Fi"), duration: 6000 })
+        }
+    }
     function openPanel(id) {
         if (!id) return
         const i = id.indexOf(":")             // "connect:notifications" opens that page directly;
@@ -147,6 +163,14 @@ Item {
         panelHost.page = i < 0 ? "" : id.substring(i + 1)     // ("bluetooth:detail:<path>")
         panelFrom = (mode === "bar" || mode === "hidden" || mode === "activity") ? "bar" : "large"
         setMode("panel")
+    }
+    // The tab morphs into the query pill: the engine starts clean, the keyboard follows.
+    // A prefill (from the D-Bus API) lands in the field and queries at once.
+    function openSearchMode(prefill) {
+        searchHost.reset()
+        if (prefill)
+            searchHost.text = prefill
+        setMode("search")
     }
     function panelBack() {
         if (panelHost.page !== "") panelHost.page = ""
@@ -166,6 +190,11 @@ Item {
     // spring instead of on its own timer - one motion, not several.
     readonly property real openT: Math.max(0, Math.min(1,
         (surface.notchBottom - shapes.bar.nb) / Math.max(1, shapes.large.nb - shapes.bar.nb)))
+    // The same progress measured against the CURRENT mode's own stop. openT never reaches 1
+    // on stops shorter than large (search), so the width, the corners and the search host
+    // ride on this relative progress instead.
+    readonly property real modeT: Math.max(0, Math.min(1,
+        (surface.notchBottom - shapes.bar.nb) / Math.max(1, shape.nb - shapes.bar.nb)))
 
     // The pull curtain: while dragging, these override the shape so the surface follows the
     // pointer directly (the spring is disabled); on release the mode snaps and springs settle.
@@ -323,8 +352,10 @@ Item {
     Connections {
         target: island
         function onPanelRequested(id) { root.openPanel(id) }
+        function onSearchRequested(query) { root.openSearchMode(query) }
         function onStateRequested(state) {
             if (state === "close") { if (root.mode !== "hidden") root.setMode("bar"); return }
+            if (state === "search") { root.openSearchMode(); return }
             if (state === "small") state = "bar"
             if (state === "bar" && root.big) return
             root.setMode(state)
@@ -504,8 +535,8 @@ Item {
         onTriggered: {
             if (root.mode === "media") {
                 // never closes by itself: the user is working inside the app
-            } else if (root.mode === "panel" || root.mode === "activity") {
-                // never closes by itself: someone may be typing a password
+            } else if (root.mode === "panel" || root.mode === "activity" || root.mode === "search") {
+                // never closes by itself: someone may be typing a password - or a query
             } else if (root.big) {
                 root.setMode("bar")
             } else if (!root.pointerIn) {
@@ -518,6 +549,7 @@ Item {
     Keys.onEscapePressed: largeContent.editing ? largeContent.editing = false
                           : root.mode === "activity" ? root.dismissActivity()
                           : root.mode === "panel" ? root.panelBack()
+                          : root.mode === "search" ? (searchHost.text !== "" ? searchHost.reset() : root.setMode("bar"))
                           : root.setMode(root.mode === "expanded" ? "large" : root.mode === "large" ? "bar" : "hidden")
 
     // Click outside the island (only reachable while the window covers the screen).
@@ -542,11 +574,11 @@ Item {
         // horizontally mid-animation. Media mode keeps its own geometry.
         notchW: root.interactiveW >= 0 ? root.interactiveW
                : root.mode === "media" || root.mode === "activity" ? root.shape.nw
-               : root.shapes.bar.nw + (480 - root.shapes.bar.nw) * root.openT
+               : root.shapes.bar.nw + (root.shape.nw - root.shapes.bar.nw) * root.modeT
         notchBottom: root.interactiveBottom >= 0 ? root.interactiveBottom : root.shape.nb
         cornerR: root.interactiveR >= 0 ? root.interactiveR
                 : root.mode === "media" || root.mode === "activity" ? root.shape.r
-                : 15 + 15 * root.openT
+                : 15 + 15 * root.modeT
         shoulder: root.shoulder
         holeX: (root.width - root.mediaAppW) / 2
         holeY: root.mediaBezel
@@ -629,11 +661,11 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             y: (parent.height - height) / 2 - 3
             spacing: 12
-            opacity: (root.mode === "media" || root.mode === "activity" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
+            opacity: (root.mode === "media" || root.mode === "activity" ? 0 : Math.max(0, Math.min(1, (0.5 - root.modeT) / 0.5))) * surface.opacity
             visible: opacity > 0
             NotchButton {
                 glyph: "search"
-                onTapped: island.openSearch()
+                onTapped: root.openSearchMode()
             }
             // The clock is a button like the others: the same hover seat, the same press squish.
             // Its seat is a stadium (the text is wider than a 30 px circle); the timer's own
@@ -645,7 +677,7 @@ Item {
                 Behavior on scale { SpringAnimation { spring: 4; damping: 0.45; mass: 0.6 } }
                 Rectangle {
                     anchors.fill: parent; radius: height / 2
-                    color: Qt.rgba(1, 1, 1, clockTap.pressed ? Tokens.tint.strong : clockHover.hovered ? Tokens.tint.soft : 0)
+                    color: Theme.veil(clockTap.pressed ? Tokens.tint.strong : clockHover.hovered ? Tokens.tint.soft : 0)
                     Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
                 }
                 Text {
@@ -669,7 +701,7 @@ Item {
                 width: 30; height: 30
                 Rectangle {
                     anchors.fill: parent; radius: width / 2
-                    color: Qt.rgba(1, 1, 1, langTap.pressed ? Tokens.tint.strong : langHover.hovered ? Tokens.tint.soft : 0)
+                    color: Theme.veil(langTap.pressed ? Tokens.tint.strong : langHover.hovered ? Tokens.tint.soft : 0)
                     Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
                 }
                 Text {
@@ -744,7 +776,7 @@ Item {
         appName: root.appName
         // Folding from the media panel straight to the tab passes through the large
         // island's height: its content must not flash up on the way.
-        opacity: (root.mode === "activity" || (root.mediaWidth && !root.big) ? 0 : Math.max(0, Math.min(1, (root.openT - 0.2) / 0.5))) * surface.opacity * (1 - root.panelSlide)
+        opacity: (root.mode === "activity" || root.mode === "search" || (root.mediaWidth && !root.big) ? 0 : Math.max(0, Math.min(1, (root.openT - 0.2) / 0.5))) * surface.opacity * (1 - root.panelSlide)
         // Stay mounted while the curtain moves: the handle must keep its grab even after
         // its visuals fade out (the island passing below the fade band while dragged shut).
         // Hidden entirely in media mode - the app window owns the panel's middle.
@@ -778,11 +810,28 @@ Item {
         width: surface.notchW
         height: surface.notchBottom
         maxHeight: root.screenH - 120
-        opacity: root.mode === "panel" ? Math.max(0, Math.min(1, (root.openT - 0.5) / 0.4)) * surface.opacity : 0
+        opacity: root.mode === "panel" ? Math.max(0, Math.min(1, (root.modeT - 0.5) / 0.4)) * surface.opacity : 0
         visible: opacity > 0 || root.dragging && root.mode === "panel"
         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
         open: root.mode === "panel"
         onBackRequested: root.panelBack()
+        onCloseRequested: root.setMode("bar")
+        onPullStarted: root.pullBegin()
+        onPullMoved: (dy, vy) => root.pullMove(dy, vy)
+        onPullEnded: root.pullEnd()
+    }
+
+    SearchHost {
+        id: searchHost
+        x: (root.width - surface.notchW) / 2
+        y: 0
+        width: surface.notchW
+        height: surface.notchBottom
+        maxHeight: root.screenH - 120
+        opacity: root.mode === "search" ? Math.max(0, Math.min(1, (root.modeT - 0.5) / 0.4)) * surface.opacity : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
+        onBackRequested: root.setMode("bar")
         onCloseRequested: root.setMode("bar")
         onPullStarted: root.pullBegin()
         onPullMoved: (dy, vy) => root.pullMove(dy, vy)

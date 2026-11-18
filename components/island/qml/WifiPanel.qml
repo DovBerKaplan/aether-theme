@@ -64,7 +64,8 @@ PanelScaffold {
     Connections {
         target: network
         function onConnectFailed(ssid, kind, text) {
-            root.errSsid = ssid; root.errKind = kind; root.errText = text
+            // text first, and kind reset, so a repeated "busy" still reaches the row's handler
+            root.errSsid = ssid; root.errKind = ""; root.errText = text; root.errKind = kind
             if (kind === "password") root.expandedSsid = ssid
         }
         function onConnected() { root.errSsid = ""; root.expandedSsid = "" }
@@ -119,14 +120,14 @@ PanelScaffold {
                     width: listCol.width
                     height: heroCol.height + 2 * Tokens.space.lg
                     radius: Tokens.radius.lg
-                    color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+                    color: Theme.veil(Tokens.tint.subtle)
                     Item {      // disconnect: an icon next to the network you are on. Nothing is forgotten.
                         id: disc
                         anchors { right: parent.right; top: parent.top; rightMargin: Tokens.space.md; topMargin: Tokens.space.md }
                         width: 36; height: 36
                         Rectangle {
                             anchors.fill: parent; radius: 18
-                            color: Qt.rgba(1, 1, 1, discTap.pressed ? Tokens.tint.strong : discHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                            color: Theme.veil(discTap.pressed ? Tokens.tint.strong : discHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                             Behavior on color { ColorAnimation { duration: Tokens.motion.duration.micro } }
                         }
                         Glyph { anchors.centerIn: parent; name: "disconnect"; size: 16 }

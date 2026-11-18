@@ -70,10 +70,10 @@ Item {
             color: Qt.alpha(Theme.text, Tokens.tint.textDim)
         }
     }
-    // Critical notifications get a thin accent line on the left edge.
+    // Critical notifications get a small accent pill set inside the card, like the dock's indicator.
     Rectangle {
         visible: root.urgency >= 2
-        x: 0; y: 18; width: 3; height: root.height - 36; radius: Tokens.radius.hair
+        x: 7; y: 22; width: 4; height: root.height - 44; radius: width / 2
         color: Theme.accent
     }
     Rectangle {                          // dismiss, only while hovered

@@ -18,7 +18,8 @@ WifiRow 1.0 WifiRow.qml
 WifiPanel 1.0 WifiPanel.qml
 BluetoothPanel 1.0 BluetoothPanel.qml
 SoundPanel 1.0 SoundPanel.qml
-PowerPanel 1.0 PowerPanel.qml
+PowerBar 1.0 PowerBar.qml
+SearchHost 1.0 SearchHost.qml
 BatteryPanel 1.0 BatteryPanel.qml
 DisplayPanel 1.0 DisplayPanel.qml
 ColorPanel 1.0 ColorPanel.qml

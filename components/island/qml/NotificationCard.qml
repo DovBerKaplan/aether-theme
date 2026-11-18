@@ -27,7 +27,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: Tokens.radius.xl
-        color: Qt.rgba(1, 1, 1, hover.hovered || tap.pressed ? Tokens.tint.subtle : Tokens.tint.faint)
+        color: Theme.veil(hover.hovered || tap.pressed ? Tokens.tint.subtle : Tokens.tint.faint)
         Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
     }
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
@@ -90,7 +90,7 @@ Item {
     Rectangle {
         visible: root.urgency >= 2
         anchors.left: parent.left; y: 14; width: 3; height: root.height - 28; radius: Tokens.radius.hair
-        color: Theme.accent
+        color: Theme.accentFill
     }
     Rectangle {                          // dismiss, only while hovered
         anchors { right: parent.right; rightMargin: 10; top: parent.top; topMargin: 10 }

@@ -31,7 +31,7 @@ Column {
         visible: pm.available === true
         width: parent.width; height: mcol.height + 2 * Tokens.space.lg
         radius: Tokens.radius.lg
-        color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+        color: Theme.veil(Tokens.tint.subtle)
         Column {
             id: mcol
             x: Tokens.space.lg; y: Tokens.space.lg
@@ -82,7 +82,7 @@ Column {
                         required property var modelData
                         required property int index
                         width: index === 1 ? 56 : 44; height: width; radius: width / 2
-                        color: index === 1 ? Tokens.role.island.hero : Qt.rgba(1, 1, 1, tTap.pressed ? Tokens.tint.strong : tHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                        color: index === 1 ? Tokens.role.island.hero : Theme.veil(tTap.pressed ? Tokens.tint.strong : tHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                         anchors.verticalCenter: parent.verticalCenter
                         Glyph { anchors.centerIn: parent; name: modelData.g; size: index === 1 ? 22 : 18; color: index === 1 ? Tokens.role.dark.surfaceSunken : Theme.text }
                         HoverHandler { id: tHover; cursorShape: Qt.PointingHandCursor }

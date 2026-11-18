@@ -1,5 +1,6 @@
 module AetherShared
 singleton Theme 1.0 Theme.qml
+BackButton 1.0 BackButton.qml
 CardSurface 1.0 CardSurface.qml
 singleton Tokens 1.0 Tokens.qml
 Switch 1.0 Switch.qml

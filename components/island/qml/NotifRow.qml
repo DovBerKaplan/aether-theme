@@ -25,7 +25,7 @@ Item {
         width: parent.width
         height: col.height + 2 * Tokens.space.md
         radius: Tokens.radius.lg
-        color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+        color: Theme.veil(Tokens.tint.subtle)
         Behavior on height { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
         Column {
             id: col
@@ -66,7 +66,7 @@ Item {
                     width: 28; height: 28
                     Rectangle {
                         anchors.fill: parent; radius: 14
-                        color: Qt.rgba(1, 1, 1, dTap.pressed ? Tokens.tint.strong : dHover.hovered ? Tokens.tint.soft : 0)
+                        color: Theme.veil(dTap.pressed ? Tokens.tint.strong : dHover.hovered ? Tokens.tint.soft : 0)
                     }
                     Glyph { anchors.centerIn: parent; name: "close"; size: 11; color: Theme.subtext }
                     HoverHandler { id: dHover; cursorShape: Qt.PointingHandCursor }

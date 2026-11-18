@@ -278,11 +278,7 @@ public:
         } else {
             m_manual.insert(addr);
         }
-        if (m_manual.isEmpty()) {
-            m_prefs.remove(QStringLiteral("Bluetooth/Manual"));
-        } else {
-            m_prefs.setValue(QStringLiteral("Bluetooth/Manual"), QStringList(m_manual.begin(), m_manual.end()));
-        }
+        m_prefs.setValue(QStringLiteral("Bluetooth/Manual"), QStringList(m_manual.begin(), m_manual.end()));   // empty stays a key (PrefsGuard)
         m_prefs.sync();
         m_debounce.start();
     }

@@ -8,6 +8,7 @@ Item {
     property string placeholder
     property bool password: false
     property bool error: false
+    property real fillAlpha: 1             // lower for a field that should let the glass show through
     property string errorText
     signal accepted()
 
@@ -33,7 +34,7 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: Tokens.radius.md
-            color: Tokens.role.dark.surfaceSunken
+            color: Qt.alpha(Tokens.role.dark.surfaceSunken, root.fillAlpha)
             border {
                 width: input.activeFocus || root.error ? 2 : 1
                 color: root.error ? Tokens.role.island.negative : input.activeFocus ? Theme.accent : Theme.rim

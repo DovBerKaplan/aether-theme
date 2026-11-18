@@ -16,7 +16,7 @@ Column {
     Rectangle {
         width: parent.width; height: hint.height + 2 * Tokens.space.md
         radius: Tokens.radius.lg
-        color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+        color: Theme.veil(Tokens.tint.subtle)
         Text {
             id: hint
             x: Tokens.space.md; y: Tokens.space.md

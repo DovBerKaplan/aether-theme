@@ -39,7 +39,7 @@ PanelScaffold {
             visible: power.hasBattery
             width: parent.width; height: 92
             radius: Tokens.radius.lg
-            color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+            color: Theme.veil(Tokens.tint.subtle)
             Text {
                 anchors.left: parent.left; anchors.leftMargin: Tokens.space.lg; y: Tokens.space.md
                 text: power.percent + "%"
@@ -57,7 +57,7 @@ PanelScaffold {
             Rectangle {   // charge bar: a thin pill, the one place accent may be large-ish
                 x: Tokens.space.lg; y: parent.height - 22
                 width: parent.width - 2 * Tokens.space.lg; height: 6; radius: 3
-                color: Qt.rgba(1, 1, 1, Tokens.tint.soft)
+                color: Theme.veil(Tokens.tint.soft)
                 Rectangle {
                     anchors.left: parent.left
                     width: Math.max(parent.height, parent.width * power.percent / 100); height: parent.height; radius: 3

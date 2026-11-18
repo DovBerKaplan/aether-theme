@@ -14,6 +14,13 @@ var dict = {
     "Time's up": "הזמן נגמר", "Desktop": "שולחן עבודה", "%1 min": "%1 דק׳",
     "NOTIFICATIONS": "התראות", "Clear": "נקה", "No notifications": "אין התראות",
     "Nothing playing": "שום דבר לא מושמע", "now": "עכשיו", "%1m": "לפני %1 דק׳",
+    // lens
+    "Lens": "Lens", "Circle to Search": "סימון לחיפוש",
+    "Circle or tap to search": "הקף או הקש כדי לחפש", "Search what's on your screen": "חפש מה שעל המסך",
+    "Search with Lens": "חיפוש עם Lens", "Search": "חיפוש", "Translate": "תרגום", "Open in Translate": "פתח בגוגל תרגום",
+    "Copy text": "העתק טקסט", "Copy image": "העתק תמונה", "Image copied": "התמונה הועתקה", "No text in this area": "אין טקסט באזור הזה",
+    "Install tesseract for text": "להתקנת זיהוי טקסט", "Translating…": "מתרגם…", "Couldn't translate": "התרגום נכשל",
+    "Translated · Hebrew ↔ English": "תורגם · עברית ↔ אנגלית",
     // shared
     "Show": "הצג", "Hide": "הסתר", "Copied": "הועתק",
     // Wi-Fi
@@ -74,6 +81,9 @@ var dict = {
     "Headphones": "אוזניות", "Speaker": "רמקול", "Mouse": "עכבר", "Gamepad": "גיימפד", "Tablet": "טאבלט",
     "Phone": "טלפון", "Watch": "שעון", "Printer": "מדפסת", "Computer": "מחשב", "Camera": "מצלמה",
     "Forget device": "שכח מכשיר", "Pairing failed": "ההצמדה נכשלה", "Paired, but couldn't connect": "הוצמד, אך לא ניתן להתחבר",
+    "Fallback router": "ראוטר חלופי", "Use this device's internet when Wi‑Fi has none": "לרכוב על האינטרנט של המכשיר הזה כשל‑Wi‑Fi אין אינטרנט",
+    "Sharing internet": "משתף אינטרנט", "Router unreachable": "הראוטר לא מגיב", "via %1": "דרך %1",
+    "No internet — riding %1": "אין אינטרנט — גולשים דרך %1", "Back on Wi‑Fi": "חזרנו ל‑Wi‑Fi",
     // Sound
     "Sound": "שמע", "No output device": "אין התקן פלט", "Unmute": "בטל השתקה", "Mute": "השתק", "Sound settings ↗": "הגדרות שמע ↗",
     "Output": "פלט", "Input": "קלט", "Apps": "אפליקציות", "%1 · paused": "%1 · מושהה",
@@ -92,10 +102,18 @@ var dict = {
     "Hebrew dates: %1": "תאריך עברי: %1",
     // Power
     "Power": "אפשרויות כיבוי", "Tap twice to restart, shut down or log out": "הקש פעמיים כדי להפעיל מחדש, לכבות או להתנתק",
+    "Hold to confirm log out, restart or shut down": "החזיקו כדי לאשר התנתקות, הפעלה מחדש או כיבוי",
+    "Tap again to reboot into firmware": "הקישו שוב להפעלה מחדש לקושחה",
     "Lock": "נעילה", "Sleep": "שינה", "Restart": "הפעלה מחדש", "Tap to restart": "הקש להפעלה מחדש", "Shut down": "כיבוי",
     "Tap to shut down": "הקש לכיבוי", "Log out": "התנתקות", "Tap to log out": "הקש להתנתקות", "Firmware setup": "הגדרות קושחה",
+    // Search
+    "Search apps, files, pages…": "חפשו אפליקציות, קבצים, דפים…", "Type to search": "הקלידו כדי לחפש",
+    "All": "הכל", "Apps": "אפליקציות", "Web": "רשת", "Calculator": "מחשבון", "Commands": "פקודות", "Results": "תוצאות",
+    "Suggested": "מומלצים", "Recent": "אחרונים",
+    "App": "אפליקציה", "File": "קובץ", "Page": "דף", "Calc": "חישוב", "Command": "פקודה",
+    "Nothing found": "לא נמצא כלום",
     // Console
-    "Console": "קונסולה", "Active now": "פעילים עכשיו", "General": "כללי",
+    "Console": "קונסולה", "Tab shown": "הפס מוצג", "Tab hidden": "הפס מוסתר", "Active now": "פעילים עכשיו", "General": "כללי",
     "Containers": "קונטיינרים", "Pods": "פודים", "Kubernetes context": "קונטקסט Kubernetes",
     "servers · containers · pods": "שרתים · קונטיינרים · פודים", "%1 destinations": "%1 יעדים",
     "Filter": "סינון", "%1 restarts": "%1 הפעלות מחדש",
@@ -127,5 +145,9 @@ var dict = {
     "Opening the session…": "הסשן נפתח…", "tmux on the server holds your place": "ה-tmux בשרת שומר על המקום שלך",
     "The terminal could not open - check the host": "המסוף לא נפתח - בדקו את המארח", "Try again": "נסו שוב",
     "Local terminal": "מסוף מקומי", "New terminal": "מסוף חדש",
+    "Split right": "פיצול ימינה", "Split down": "פיצול למטה", "Equalize sizes": "השוואת גדלים",
+    "Maximize pane": "הגדלת חלונית", "Restore size": "החזרת גודל", "Close pane": "סגירת חלונית",
+    "Layout": "פריסה", "Single pane": "חלונית אחת", "Two columns": "שני טורים", "Two rows": "שתי שורות",
+    "Three columns": "שלושה טורים", "Main and side": "ראשית וצד", "Grid 2×2": "רשת 2×2",
     "Servers": "שרתים"
 }

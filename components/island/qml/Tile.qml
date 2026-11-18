@@ -26,7 +26,10 @@ Item {
         switch (id) {
         case "wifi": return {
             glyph: system.network === "ethernet" ? "ethernet" : (system.wifiEnabled ? "wifi-3" : "wifi-off"),
-            label: I18n.tr("Wi‑Fi"), sub: !system.wifiEnabled ? I18n.tr("Off") : (system.wifiName || I18n.tr("Not connected")),
+            label: I18n.tr("Wi‑Fi"),
+            sub: !system.wifiEnabled ? I18n.tr("Off")
+                : tether.engaged ? I18n.f("via %1", tether.routerName)   // riding the fallback router right now
+                : (system.wifiName || I18n.tr("Not connected")),
             active: system.wifiEnabled, panel: "wifi", tap: () => system.toggleWifi(),
             trail: system.wifiEnabled && system.network === "wifi" ? { kind: "signal", level: Math.max(1, Math.min(4, Math.ceil(system.wifiSignal / 25))) } : { kind: "chevron" } }
         case "bluetooth": {      // a lone connected device gives the tile its face: its glyph and name
@@ -72,6 +75,9 @@ Item {
             glyph: "vibe", label: I18n.tr("Vibe"), sub: tiles.vibeOn ? I18n.tr("Agents run") : I18n.tr("Off"),
             active: tiles.vibeOn, panel: "", tap: () => tiles.toggleVibe(),
             trail: tiles.vibeOn ? { kind: "dot" } : {} }
+        case "lens": return {
+            glyph: "lens", label: I18n.tr("Lens"), sub: tiles.lensOn ? I18n.tr("On") : I18n.tr("Off"),
+            active: tiles.lensOn, panel: "", tap: () => tiles.toggleLens() }
         case "micmute": return {
             glyph: tiles.micMuted ? "mic-off" : "mic", label: I18n.tr("Mic"), sub: tiles.micMuted ? I18n.tr("Muted") : I18n.tr("On"),
             active: !tiles.micMuted, panel: "sound", tap: () => tiles.toggleMic(), trail: tiles.micMuted ? { kind: "dot" } : { kind: "chevron" } }
@@ -83,6 +89,9 @@ Item {
         case "accent": return {
             glyph: "palette", label: I18n.tr("Color"), sub: I18n.tr("Accent"), active: false, panel: "color",
             tap: () => host.panelRequested("color"), trail: { kind: "dot", color: Theme.accent } }
+        case "console": return {
+            glyph: "terminal", label: I18n.tr("Console"), sub: tiles.consoleEarOn ? I18n.tr("Tab shown") : I18n.tr("Tab hidden"),
+            active: tiles.consoleEarOn, panel: "", tap: () => tiles.toggleConsoleEar() }
         case "screenshot": return {
             glyph: "camera", label: I18n.tr("Capture"), sub: I18n.tr("Area"), active: false, panel: "",
             tap: () => { tiles.screenshot(); host.closeRequested() } }

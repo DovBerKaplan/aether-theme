@@ -48,7 +48,7 @@ PanelScaffold {
                 width: parent.width
                 height: 76
                 radius: Tokens.radius.lg
-                color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+                color: Theme.veil(Tokens.tint.subtle)
                 Row {
                     x: Tokens.space.lg; y: Tokens.space.md
                     width: parent.width - 2 * Tokens.space.lg

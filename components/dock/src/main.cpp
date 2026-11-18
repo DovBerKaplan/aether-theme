@@ -7,6 +7,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDBusConnection>
+#include <QDBusMessage>
 #include <QDir>
 #include <QDateTime>
 #include <QFile>
@@ -28,6 +29,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 
+#include <BackdropSampler.h>
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
 
@@ -64,6 +66,7 @@ class DockController : public QObject
     Q_PROPERTY(QString edge READ edge CONSTANT)
     Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
     Q_PROPERTY(QColor accentOverride READ accentOverride NOTIFY accentChanged)
+    Q_PROPERTY(bool lensEnabled READ lensEnabled NOTIFY lensEnabledChanged)   // [Lens] Enabled in aetherislandrc
     Q_PROPERTY(int screenWidth READ screenWidth CONSTANT)
     Q_PROPERTY(int screenHeight READ screenHeight CONSTANT)
     Q_PROPERTY(QStringList launchers READ launchers WRITE setLaunchers NOTIFY launchersChanged)
@@ -104,8 +107,37 @@ public:
         m_lastModified = qMax(QFileInfo(m_kdeglobals).lastModified(), QFileInfo(m_islandRc).lastModified());
         readScheme();
         readAccent();
+
+        // A strip of the desktop just past the pill's reach (the pill itself is excluded), so the
+        // answer is about the backdrop. The window is transparent there, so KWin shows what lies under.
+        connect(&m_sampler, &BackdropSampler::lightChanged, this, &DockController::darkChanged);
+        m_sample.setInterval(1000);
+        connect(&m_sample, &QTimer::timeout, this, [this] {
+            if (!m_view->screen()) {
+                return;
+            }
+            const QRect g = m_view->screen()->geometry();
+            constexpr int reach = 96, band = 10, span = 320;
+            if (m_edge == QLatin1String("bottom")) {
+                m_sampler.sample(QRect(g.center().x() - span / 2, g.bottom() + 1 - reach - band, span, band));
+            } else {
+                m_sampler.sample(QRect(g.x() + reach, g.center().y() - span / 2, band, span));
+            }
+        });
+        m_sample.start();
     }
-    bool dark() const { return m_dark; }
+    // Hold on the grab line: ask the resident Lens program to open out of that point of the edge.
+    Q_INVOKABLE void activateLens(const QString &edge, double frac)
+    {
+        QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.aether.Lens"), QStringLiteral("/Lens"),
+                                                        QStringLiteral("org.aether.Lens"), QStringLiteral("ActivateFrom"));
+        m << edge << frac;
+        QDBusConnection::sessionBus().send(m);
+    }
+    // Light or dark follows what the desktop shows beside the dock (sampled); the system scheme
+    // only stands in until the first sample arrives or where sampling is not allowed.
+    bool dark() const { return m_sampler.valid() ? !m_sampler.light() : m_dark; }
+    bool lensEnabled() const { return m_lensEnabled; }
     QColor accentOverride() const { return m_accent; }
     QString edge() const { return m_edge; }
     int screenWidth() const { return m_view->screen() ? m_view->screen()->size().width() : 1920; }
@@ -146,7 +178,7 @@ public:
     // The silhouette arrives as path commands (the same list Dock.qml draws from), so blur, input and
     // drawing cannot disagree. hot: invisible strip that still gets the pointer.
     //   cmds: [{t:"M"|"L"|"C", x, y, x1, y1, x2, y2}]
-    Q_INVOKABLE void setLayout(const QVariantList &cmds, const QRectF &hot, const QVariantList &popups)
+    Q_INVOKABLE void setLayout(const QVariantList &cmds, const QRectF &hot, const QVariantList &popups, const QRectF &grab)
     {
         QPainterPath p;
         for (const QVariant &v : cmds) {
@@ -179,6 +211,9 @@ public:
         QRegion input = shape;
         if (!hot.isEmpty()) {
             input += QRegion(hot.toRect());
+        }
+        if (!grab.isEmpty()) {
+            input += QRegion(grab.toRect());   // the grab line's hold zone: live for the pointer, not blurred
         }
         m_view->setMask(input.isEmpty() ? QRegion(0, 0, 1, 1) : input);
     }
@@ -229,6 +264,7 @@ Q_SIGNALS:
     void launchersChanged();
     void allAtStartChanged();
     void darkChanged();
+    void lensEnabledChanged();
     void accentChanged();
     void stateRequested(const QString &state);
     void shownOnEdge(const QString &edge);
@@ -260,6 +296,11 @@ private:
         if (c != m_accent) {
             m_accent = c;
             Q_EMIT accentChanged();
+        }
+        const bool lens = s.value(QStringLiteral("Lens/Enabled"), true).toBool();
+        if (lens != m_lensEnabled) {
+            m_lensEnabled = lens;
+            Q_EMIT lensEnabledChanged();
         }
     }
 
@@ -293,9 +334,12 @@ private:
 
     QQuickView *m_view;
     QString m_edge;
+    bool m_lensEnabled = true;
     QFileSystemWatcher m_watcher;
     QTimer m_debounce;
     QTimer m_poll;
+    QTimer m_sample;
+    BackdropSampler m_sampler;
     QDateTime m_lastModified;
     QString m_kdeglobals;
     QString m_islandRc;

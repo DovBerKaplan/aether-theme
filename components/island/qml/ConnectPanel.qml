@@ -106,7 +106,7 @@ PanelScaffold {
         spacing: Tokens.space.sm
         Rectangle {      // drop zone
             width: parent.width; height: 96; radius: Tokens.radius.lg
-            color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+            color: Theme.veil(Tokens.tint.subtle)
             border { width: zone.dragging ? 2 : 1; color: zone.dragging ? Theme.accent : Theme.rim }
             Column {
                 anchors.centerIn: parent
@@ -149,7 +149,7 @@ PanelScaffold {
                     width: 32; height: 32
                     Rectangle {
                         anchors.fill: parent; radius: 16
-                        color: Qt.rgba(1, 1, 1, shTap.pressed ? Tokens.tint.strong : shHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                        color: Theme.veil(shTap.pressed ? Tokens.tint.strong : shHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                     }
                     Glyph { anchors.centerIn: parent; name: "folder"; size: 15 }
                     HoverHandler { id: shHover; cursorShape: Qt.PointingHandCursor }
@@ -183,7 +183,7 @@ PanelScaffold {
                     required property var modelData
                     readonly property bool cur: modelData.id === connectModel.selectedId
                     height: 34; width: row.width + 2 * Tokens.space.md; radius: height / 2
-                    color: cur ? Theme.chip : Qt.rgba(1, 1, 1, chipTap.pressed ? Tokens.tint.strong : chipHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                    color: cur ? Theme.chip : Theme.veil(chipTap.pressed ? Tokens.tint.strong : chipHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                     border { width: cur ? 1 : 0; color: Theme.rim }
                     opacity: modelData.reachable ? 1 : 0.6
                     Row {
@@ -208,7 +208,7 @@ PanelScaffold {
             visible: root.has
             width: parent.width; height: 92
             radius: Tokens.radius.lg
-            color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+            color: Theme.veil(Tokens.tint.subtle)
             Rectangle {
                 id: disc
                 anchors { left: parent.left; leftMargin: Tokens.space.lg; verticalCenter: parent.verticalCenter }
@@ -302,7 +302,7 @@ PanelScaffold {
                 width: parent.width
                 height: pairCol.height + 2 * Tokens.space.lg
                 radius: Tokens.radius.lg
-                color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+                color: Theme.veil(Tokens.tint.subtle)
                 Column {
                     id: pairCol
                     x: Tokens.space.lg; y: Tokens.space.lg

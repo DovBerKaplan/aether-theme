@@ -85,7 +85,7 @@ Item {
                 width: root.timer.active ? timerLabel.implicitWidth + 20 : 32; height: 32
                 Rectangle {
                     anchors.fill: parent; radius: height / 2
-                    color: Qt.rgba(1, 1, 1, timerTap.pressed ? Tokens.tint.strong : timerHover.hovered || root.timerOpen ? Tokens.tint.soft : Tokens.tint.subtle)
+                    color: Theme.veil(timerTap.pressed ? Tokens.tint.strong : timerHover.hovered || root.timerOpen ? Tokens.tint.soft : Tokens.tint.subtle)
                 }
                 Glyph { visible: !root.timer.active; anchors.centerIn: parent; name: "timer"; size: 15 }
                 Text {
@@ -104,7 +104,7 @@ Item {
                 width: 32; height: 32
                 Rectangle {
                     anchors.fill: parent; radius: height / 2
-                    color: Qt.rgba(1, 1, 1, editTap.pressed ? Tokens.tint.strong : editHover.hovered || root.editing ? Tokens.tint.soft : Tokens.tint.subtle)
+                    color: Theme.veil(editTap.pressed ? Tokens.tint.strong : editHover.hovered || root.editing ? Tokens.tint.soft : Tokens.tint.subtle)
                 }
                 Glyph { anchors.centerIn: parent; name: "edit"; size: 15; color: root.editing ? Theme.accent : Theme.text }
                 HoverHandler { id: editHover; cursorShape: Qt.PointingHandCursor }

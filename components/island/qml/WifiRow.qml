@@ -47,8 +47,9 @@ Item {
                 : !root.net.secure ? I18n.tr("Open")
                 : ""
         highlighted: root.expanded
-        enabled: !root.busy || root.joining
+        enabled: true   // taps while another network is joining get the "busy" message, not silence
         onClicked: {
+            console.log("DIAG wifi tap", root.net.ssid, "saved=" + root.net.saved, "needsPw=" + root.net.needsPassword, "connected=" + root.net.connected, "secure=" + root.net.secure)   // TEMP: remove after debugging
             root.errorKind = ""
             if (root.net.connected) root.detailsRequested()
             else if (root.net.needsPassword) root.expandRequested()
