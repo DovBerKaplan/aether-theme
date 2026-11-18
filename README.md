@@ -4,7 +4,7 @@ A desktop layer for **KDE Plasma 6** (Wayland): a dark, blurred, rounded look, p
 
 | Part | What it is | Where |
 |---|---|---|
-| **Theme** | Color schemes (Glass = dark, Serenity = light, switching by time of day), Kvantum widget style, Plasma desktop theme, global themes, Konsole profile, wallpapers | `theme/` |
+| **Theme** | Color schemes (Glass = dark, Serenity = light; optional time-of-day switching via the island's Theme tile), Kvantum widget style, Plasma desktop theme, global themes, Konsole profile, wallpapers | `theme/` |
 | **Island** | The top bar. Hidden until the pointer touches the top edge, then a full-width bar with a small notch (search, power). A click on the clock side opens a large panel: media, Wi-Fi, Bluetooth, sound, timer, volume, brightness. The notch's search is a real launcher — KRunner's plugins and your usage history in one ranked list | `components/island/` |
 | **Dock** | The app bar, hidden until the pointer touches the bottom edge (horizontal pill) or the left edge (vertical pill). The island's dark glass, rim and grain; pinned and running apps with a quiet dot | `components/dock/` |
 | **Console** | The shelf, hidden on the right edge (`Win+C`): terminals (Konsole seated inside the glass, tmux on every host), an SSH/sftp file browser, containers and pods — one pane per server, sessions that survive drops and reboots. Imports `~/.ssh/config` | `components/console/` |

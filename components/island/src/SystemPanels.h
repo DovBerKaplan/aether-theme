@@ -143,6 +143,7 @@ class DisplayModel : public QObject
     Q_PROPERTY(bool nightEnabled READ nightEnabled NOTIFY changed)
     Q_PROPERTY(int nightTemperature READ nightTemperature NOTIFY changed)   // Kelvin used at night, 1000-6500
     Q_PROPERTY(bool dark READ dark NOTIFY changed)                          // the dark Aether theme is active
+    Q_PROPERTY(bool autoTheme READ autoTheme NOTIFY changed)                // KDE switches dark/light by time of day
 
 public:
     explicit DisplayModel(QObject *parent = nullptr) : QObject(parent)
@@ -154,9 +155,9 @@ public:
             if (!m_watch.files().contains(m_globals)) {      // the file is replaced on every write: watch the new one
                 m_watch.addPath(m_globals);
             }
-            const bool was = m_dark;
+            const bool was = m_dark, wasAuto = m_auto;
             readMode();
-            if (was != m_dark) {
+            if (was != m_dark || wasAuto != m_auto) {
                 Q_EMIT changed();
             }
         });
@@ -168,6 +169,7 @@ public:
     bool nightEnabled() const { return m_enabled; }
     int nightTemperature() const { return m_temp; }
     bool dark() const { return m_dark; }
+    bool autoTheme() const { return m_auto; }
 
     Q_INVOKABLE void refresh()
     {
@@ -188,17 +190,34 @@ public:
     }
     Q_INVOKABLE void setDark(bool dark)
     {
-        // plasma-apply-colorscheme is the only path that both writes the scheme and notifies every
-        // running app (KConfigWatcher over D-Bus), so open windows repaint live. It must run FIRST:
-        // lookandfeeltool switches the identity (wallpaper, icons) but leaves the live colors alone,
-        // and a stale ColorScheme in kdedefaults once made both tools believe the scheme was already
-        // active - the toggle flipped nothing and apps kept their old palette until restart.
-        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"),
-                                {dark ? QStringLiteral("AetherGlass") : QStringLiteral("AetherSerenity")});
-        QProcess::startDetached(QStringLiteral("lookandfeeltool"),
-                                {QStringLiteral("-a"), dark ? QStringLiteral("org.aether.glass.desktop")
-                                                            : QStringLiteral("org.aether.serenity.desktop")});
-        m_dark = dark;
+        // A mode picked by hand is deliberate: automatic switching must not override it later in the day.
+        if (m_auto) {
+            writeGlobal(QStringLiteral("KDE"), QStringLiteral("AutomaticLookAndFeel"), QStringLiteral("false"));
+            m_auto = false;
+        }
+        applyTheme(dark);
+    }
+    Q_INVOKABLE void setAutoTheme(bool on)
+    {
+        writeGlobal(QStringLiteral("KDE"), QStringLiteral("DefaultDarkLookAndFeel"), QStringLiteral("org.aether.glass.desktop"));
+        writeGlobal(QStringLiteral("KDE"), QStringLiteral("DefaultLightLookAndFeel"), QStringLiteral("org.aether.serenity.desktop"));
+        writeGlobal(QStringLiteral("KDE"), QStringLiteral("AutomaticLookAndFeel"), on ? QStringLiteral("true") : QStringLiteral("false"));
+        m_auto = on;
+        if (on) {
+            // KDE re-evaluates the pair only at its next transition (verified: the key alone flips
+            // nothing, even after a reconfigure), so honor the hour right now. Night Color's fixed
+            // times when set (HHMM as hundredths), otherwise dusk 18:00 / dawn 06:00.
+            const auto kr = [](const char *key, const char *fallback) {
+                return PanelDbus::tool(QStringLiteral("kreadconfig6"),
+                                       {QStringLiteral("--file"), QStringLiteral("kwinrc"), QStringLiteral("--group"),
+                                        QStringLiteral("NightColor"), QStringLiteral("--key"), QLatin1String(key),
+                                        QStringLiteral("--default"), QLatin1String(fallback)}).toInt();
+            };
+            const int evening = kr("EveningBeginFixed", "1800");
+            const int morning = kr("MorningBeginFixed", "600");
+            const int now = QTime::currentTime().hour() * 100 + QTime::currentTime().minute();
+            applyTheme(now >= evening || now < morning);
+        }
         Q_EMIT changed();
         QTimer::singleShot(2500, this, [this] { refresh(); });      // if the switch did not happen, the tile must not keep lying
     }
@@ -208,6 +227,28 @@ Q_SIGNALS:
     void changed();
 
 private:
+    // plasma-apply-colorscheme is the only path that both writes the scheme and notifies every
+    // running app (KConfigWatcher over D-Bus), so open windows repaint live. It must run FIRST:
+    // lookandfeeltool switches the identity (wallpaper, icons) but leaves the live colors alone,
+    // and a stale ColorScheme in kdedefaults once made both tools believe the scheme was already
+    // active - the toggle flipped nothing and apps kept their old palette until restart.
+    void applyTheme(bool dark)
+    {
+        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"),
+                                {dark ? QStringLiteral("AetherGlass") : QStringLiteral("AetherSerenity")});
+        QProcess::startDetached(QStringLiteral("lookandfeeltool"),
+                                {QStringLiteral("-a"), dark ? QStringLiteral("org.aether.glass.desktop")
+                                                            : QStringLiteral("org.aether.serenity.desktop")});
+        m_dark = dark;
+        Q_EMIT changed();
+        QTimer::singleShot(2500, this, [this] { refresh(); });      // if the switch did not happen, the tile must not keep lying
+    }
+    void writeGlobal(const QString &group, const QString &key, const QString &value)
+    {
+        QProcess::execute(QStringLiteral("kwriteconfig6"),
+                          {QStringLiteral("--file"), QStringLiteral("kdeglobals"), QStringLiteral("--group"), group,
+                           QStringLiteral("--key"), key, value});
+    }
     void writeNight(const QString &key, const QString &value)
     {
         QProcess::execute(QStringLiteral("kwriteconfig6"), {QStringLiteral("--file"), QStringLiteral("kwinrc"), QStringLiteral("--group"), QStringLiteral("NightColor"), QStringLiteral("--key"), key, value});
@@ -226,11 +267,12 @@ private:
             const QStringList rgb = kr({QStringLiteral("--file"), QStringLiteral("kdeglobals"), QStringLiteral("--group"), QStringLiteral("Colors:Window"), QStringLiteral("--key"), QStringLiteral("BackgroundNormal")}).split(QLatin1Char(','));
             m_dark = rgb.size() == 3 && (rgb[0].toInt() + rgb[1].toInt() + rgb[2].toInt()) / 3 < 128;
         }
+        m_auto = kr({QStringLiteral("--file"), QStringLiteral("kdeglobals"), QStringLiteral("--group"), QStringLiteral("KDE"), QStringLiteral("--key"), QStringLiteral("AutomaticLookAndFeel")}) == QLatin1String("true");
     }
     const QString m_globals = QDir::homePath() + QStringLiteral("/.config/kdeglobals");
     QFileSystemWatcher m_watch;
     QTimer m_debounce;
-    bool m_available = false, m_enabled = false, m_dark = true;
+    bool m_available = false, m_enabled = false, m_dark = true, m_auto = false;
     int m_temp = 4500;
 };
 
