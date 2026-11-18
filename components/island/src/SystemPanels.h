@@ -216,7 +216,7 @@ public:
             const int evening = kr("EveningBeginFixed", "1800");
             const int morning = kr("MorningBeginFixed", "600");
             const int now = QTime::currentTime().hour() * 100 + QTime::currentTime().minute();
-            applyTheme(now >= evening || now < morning, /*reassertAuto=*/true);
+            applyTheme(now >= evening || now < morning, /*reassertAuto=*/true, /*lnf=*/false);
         }
         Q_EMIT changed();
         QTimer::singleShot(2500, this, [this] { refresh(); });      // if the switch did not happen, the tile must not keep lying
@@ -232,21 +232,24 @@ private:
     // lookandfeeltool switches the identity (wallpaper, icons) but leaves the live colors alone,
     // and a stale ColorScheme in kdedefaults once made both tools believe the scheme was already
     // active - the toggle flipped nothing and apps kept their old palette until restart.
-    void applyTheme(bool dark, bool reassertAuto = false)
+    void applyTheme(bool dark, bool reassertAuto = false, bool lnf = true)
     {
         QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"),
                                 {dark ? QStringLiteral("AetherGlass") : QStringLiteral("AetherSerenity")});
-        QProcess::startDetached(QStringLiteral("lookandfeeltool"),
-                                {QStringLiteral("-a"), dark ? QStringLiteral("org.aether.glass.desktop")
-                                                            : QStringLiteral("org.aether.serenity.desktop")});
+        // lookandfeeltool is what makes a hand-picked mode full (wallpaper, icons) - but it also
+        // DELETES KDE/AutomaticLookAndFeel from kdeglobals (Plasma reads its apply as a manual
+        // theme choice) and leaks ColorScheme into kdedefaults, both long after it was launched
+        // (it can take seconds). The by-hours nudge therefore skips it: colors are the visible
+        // part of the hour, and KDE's own transitions apply the registered pair anyway.
+        if (lnf) {
+            QProcess::startDetached(QStringLiteral("lookandfeeltool"),
+                                    {QStringLiteral("-a"), dark ? QStringLiteral("org.aether.glass.desktop")
+                                                                : QStringLiteral("org.aether.serenity.desktop")});
+        }
         m_dark = dark;
         Q_EMIT changed();
         if (reassertAuto) {
-            // lookandfeeltool reads its own apply as a manual theme choice and DELETES
-            // KDE/AutomaticLookAndFeel from kdeglobals (verified live), which would fling the
-            // tile out of by-hours a second after it was picked. Once the tools have settled,
-            // put the switch back - unless a hand-picked mode replaced it in between.
-            QTimer::singleShot(2500, this, [this] {
+            QTimer::singleShot(2500, this, [this] {       // belt and suspenders: nothing in this path deletes the key anymore
                 if (!m_auto) {
                     return;
                 }
