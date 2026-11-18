@@ -72,11 +72,20 @@ Item {
             anchors { left: parent.left; verticalCenter: parent.verticalCenter; verticalCenterOffset: 4 }
             TapHandler { onTapped: root.panelRequested("calendar") }
             HoverHandler { cursorShape: Qt.PointingHandCursor }
-            text: I18n.lang === "he" ? I18n.locale.toString(root.now, "dddd, d MMMM") : Qt.formatDate(root.now, "dddd, MMMM d")
+            // The full date while it fits beside the controls; a short one ("Wed, Nov 18") when the
+            // controls grow (a running timer, a long status), then an ellipsis as the last resort.
+            readonly property string full: I18n.lang === "he" ? I18n.locale.toString(root.now, "dddd, d MMMM") : Qt.formatDate(root.now, "dddd, MMMM d")
+            readonly property string brief: I18n.lang === "he" ? I18n.locale.toString(root.now, "ddd, d MMM") : Qt.formatDate(root.now, "ddd, MMM d")
+            readonly property real room: header.width - headerControls.width - 12
+            TextMetrics { id: fullDate; font: dateText.font; text: dateText.full }
+            text: fullDate.advanceWidth <= room ? full : brief
+            width: Math.max(0, Math.min(implicitWidth, room))
+            elide: Text.ElideRight
             font { family: Theme.font; pixelSize: Tokens.type.title; weight: Font.DemiBold }
             color: Theme.text
         }
         Row {
+            id: headerControls
             anchors { right: parent.right; verticalCenter: parent.verticalCenter; verticalCenterOffset: 4 }
             spacing: 12
             // Timer: a small icon (the running countdown replaces it); edit: rearrange the tiles

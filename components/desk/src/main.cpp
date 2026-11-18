@@ -7,7 +7,6 @@
 // draws stand-ins for the flight. The files themselves are never touched. Only the button's rect
 // takes input, so the rest of the desktop works as before.
 #include <QCollator>
-#include <QColor>
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -97,48 +96,31 @@ class DeskController : public QObject
     Q_PROPERTY(QVariantList items READ items NOTIFY itemsChanged)
     Q_PROPERTY(QVariantMap grid READ grid NOTIFY itemsChanged)
     Q_PROPERTY(bool clean READ clean NOTIFY cleanChanged)
-    Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
-    Q_PROPERTY(QColor accentOverride READ accentOverride NOTIFY accentChanged)
 
 public:
     explicit DeskController(QQuickView *view)
         : QObject(view), m_view(view)
     {
         m_desktopDir = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-        m_kdeglobals = QStandardPaths::locate(QStandardPaths::GenericConfigLocation, QStringLiteral("kdeglobals"));
-        m_islandRc = QDir::homePath() + QStringLiteral("/.config/aetherislandrc");   // read only
         m_appletsRc = QDir::homePath() + QStringLiteral("/.config/plasma-org.kde.plasma.desktop-appletsrc");
         m_clean = QSettings(configPath(), QSettings::IniFormat).value(QStringLiteral("Desk/Clean"), false).toBool();
 
-        // The desktop folder is watched for files coming and going; the scheme and accent files
-        // like the dock watches them (debounced, re-armed, with a slow poll as the safety net).
+        // The desktop folder is watched for files coming and going (debounced, re-armed).
         m_watcher.addPath(m_desktopDir);
-        for (const QString &f : { m_kdeglobals, m_islandRc }) {
-            if (QFileInfo::exists(f)) {
-                m_watcher.addPath(f);
-            }
-        }
         m_debounce.setSingleShot(true);
         m_debounce.setInterval(300);
         connect(&m_debounce, &QTimer::timeout, this, [this] {
-            for (const QString &f : { m_desktopDir, m_kdeglobals, m_islandRc }) {
-                if (QFileInfo::exists(f) && !m_watcher.files().contains(f) && !m_watcher.directories().contains(f)) {
-                    m_watcher.addPath(f);
-                }
+            if (QFileInfo::exists(m_desktopDir) && !m_watcher.directories().contains(m_desktopDir)) {
+                m_watcher.addPath(m_desktopDir);
             }
-            readScheme();
-            readAccent();
             readItems();
         });
-        connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this] { m_debounce.start(); });
         connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] { m_debounce.start(); });
 
         m_retry.setSingleShot(true);
         m_retry.setInterval(2000);
         connect(&m_retry, &QTimer::timeout, this, [this] { applyFilter(); });
 
-        readScheme();
-        readAccent();
         readItems();
         applyFilter();   // bring Folder View in line with the remembered state (plasmashell may still be starting)
     }
@@ -146,8 +128,6 @@ public:
     QVariantList items() const { return m_items; }
     QVariantMap grid() const { return m_grid; }
     bool clean() const { return m_clean; }
-    bool dark() const { return m_dark; }
-    QColor accentOverride() const { return m_accent; }
 
     // Clean hides Folder View's icons, not clean shows them; remembered across logins.
     Q_INVOKABLE void setClean(bool clean)
@@ -177,8 +157,6 @@ public Q_SLOTS:
 Q_SIGNALS:
     void itemsChanged();
     void cleanChanged();
-    void darkChanged();
-    void accentChanged();
     void toggleRequested();
 
 private:
@@ -327,59 +305,14 @@ private:
         return g;
     }
 
-    // The colour the user picked in the island's colour panel (~/.config/aetherislandrc, read only).
-    void readAccent()
-    {
-        QSettings s(m_islandRc, QSettings::IniFormat);
-        QColor c(Qt::transparent);
-        if (s.value(QStringLiteral("Appearance/AccentSet")).toBool()) {
-            const qreal hue = qBound(0, s.value(QStringLiteral("Appearance/AccentHue"), 183).toInt(), 359) / 360.0;
-            const qreal light = qBound(0.25, s.value(QStringLiteral("Appearance/AccentLight"), 0.5).toDouble(), 0.8);
-            const qreal sat = qBound(0.15, s.value(QStringLiteral("Appearance/AccentSat"), 1.0).toDouble(), 1.0);
-            c = QColor::fromHslF(hue, sat, light);
-        }
-        if (c != m_accent) {
-            m_accent = c;
-            Q_EMIT accentChanged();
-        }
-    }
-
-    // Light or dark from the window background the colour scheme installed (as the dock does).
-    void readScheme()
-    {
-        bool dark = true;
-        QFile f(m_kdeglobals);
-        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            bool inWindow = false;
-            while (!f.atEnd()) {
-                const QString line = QString::fromUtf8(f.readLine()).trimmed();
-                if (line.startsWith(QLatin1Char('['))) {
-                    inWindow = line == QLatin1String("[Colors:Window]");
-                } else if (inWindow && line.startsWith(QLatin1String("BackgroundNormal="))) {
-                    const QStringList c = line.mid(17).split(QLatin1Char(','));
-                    if (c.size() >= 3) {
-                        dark = (0.299 * c[0].toInt() + 0.587 * c[1].toInt() + 0.114 * c[2].toInt()) < 128;
-                    }
-                    break;
-                }
-            }
-        }
-        if (dark != m_dark) {
-            m_dark = dark;
-            Q_EMIT darkChanged();
-        }
-    }
-
     QQuickView *m_view;
-    QString m_desktopDir, m_kdeglobals, m_islandRc, m_appletsRc;
+    QString m_desktopDir, m_appletsRc;
     QFileSystemWatcher m_watcher;
     QTimer m_debounce, m_retry;
     int m_attempts = 0;
     QVariantList m_items;
     QVariantMap m_grid;
-    QColor m_accent = QColor(Qt::transparent);
     bool m_clean = false;
-    bool m_dark = true;
 };
 
 static QString qmlDir()

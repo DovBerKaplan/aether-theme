@@ -3,14 +3,14 @@ import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import AetherShared
 
-// The clean-desktop toggle. A glass button in the bottom-right corner: a folder while the desktop
+// The clean-desktop toggle. A round glass button in the bottom-right corner: a folder while the desktop
 // is clean, a broom while the files are out. Spreading throws a stand-in of every desktop entry
 // out of the folder to the cell Folder View will draw it in, then hands over to the real icons;
 // sweeping takes the real icons away under their stand-ins and draws those back into the button.
 Item {
     id: root
-    Binding { target: Theme; property: "accentOverride"; value: desk.accentOverride }
-    Binding { target: Theme; property: "dark"; value: desk.dark }
+    // The island's glass without its colour: Theme stays untinted (no accentOverride) and dark,
+    // as the island always is.
     // Folder View's grid is laid out by its own settings, not by this program's locale.
     LayoutMirroring.enabled: false
     LayoutMirroring.childrenInherit: true
@@ -204,37 +204,23 @@ Item {
             NumberAnimation { target: root; property: "pressScale"; to: 1; duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.spring }
         }
 
-        // Frosted glass: a thin veil over KWin's blur, a sheen on top, a hairline rim, grain.
+        // The island's glass, uncoloured: its dark body over KWin's blur, the hairline rim, grain.
         Rectangle {
             id: glass
             anchors.fill: parent
             radius: width / 2
             gradient: Gradient {
-                GradientStop { position: 0; color: Qt.rgba(Theme.bodyTop.r, Theme.bodyTop.g, Theme.bodyTop.b, 0.34) }
-                GradientStop { position: 1; color: Qt.rgba(Theme.bodyBottom.r, Theme.bodyBottom.g, Theme.bodyBottom.b, 0.26) }
+                GradientStop { position: 0; color: Theme.bodyTop }
+                GradientStop { position: 1; color: Theme.bodyBottom }
             }
             border.width: 1
             border.color: Theme.rim
-            Rectangle {                              // sheen
-                anchors.fill: parent
-                anchors.margins: 1
-                radius: width / 2
-                gradient: Gradient {
-                    GradientStop { position: 0; color: Qt.rgba(1, 1, 1, Theme.dark ? 0.13 : 0.22) }
-                    GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0) }
-                }
-            }
             Image {
+                id: grain
                 anchors.fill: parent
-                anchors.margins: 1
                 source: Theme.grain
                 fillMode: Image.Tile
-                opacity: Theme.dark ? Tokens.material.dockGrainDark : Tokens.material.dockGrainLight
-                layer.enabled: true
-                layer.effect: MultiEffect {
-                    maskEnabled: true
-                    maskSource: mask
-                }
+                visible: false
             }
             Rectangle {
                 id: mask
@@ -243,11 +229,18 @@ Item {
                 visible: false
                 layer.enabled: true
             }
+            MultiEffect {
+                anchors.fill: parent
+                source: grain
+                maskEnabled: true
+                maskSource: mask
+                opacity: 0.022                       // the notch's grain
+            }
             Rectangle {                              // hover / press veil
                 anchors.fill: parent
                 radius: width / 2
-                color: Theme.chip
-                opacity: hover.pressed ? 1 : hover.containsMouse ? 0.6 : 0
+                color: Theme.veil(hover.pressed ? Tokens.tint.strong : Tokens.tint.soft)
+                opacity: hover.pressed || hover.containsMouse ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
             }
         }
