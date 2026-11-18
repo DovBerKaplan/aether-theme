@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Aether Lens
+Exec=@EXEC@
+NoDisplay=true
+X-KDE-Wayland-Interfaces=org_kde_kwin_blur
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2
