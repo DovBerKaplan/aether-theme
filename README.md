@@ -1,36 +1,51 @@
 # Aether
 
-A desktop layer for **KDE Plasma 6** (Wayland): a dark, blurred, rounded look, plus two small programs that replace the top panel and the notification banners.
+A desktop layer for **KDE Plasma 6** (Wayland): a dark, blurred, rounded look, plus five small programs that replace the top panel and the notification banners, add a dock, a server shelf and circle-to-search.
 
 | Part | What it is | Where |
 |---|---|---|
 | **Theme** | Color schemes (Glass = dark, Serenity = light, switching by time of day), Kvantum widget style, Plasma desktop theme, global themes, Konsole profile, wallpapers | `theme/` |
-| **Island** | The top bar. Hidden until the pointer touches the top edge, then a full-width bar with a small notch (search, power). A click on the clock side opens a large panel: media, Wi-Fi, Bluetooth, sound, timer, volume, brightness | `components/island/` |
+| **Island** | The top bar. Hidden until the pointer touches the top edge, then a full-width bar with a small notch (search, power). A click on the clock side opens a large panel: media, Wi-Fi, Bluetooth, sound, timer, volume, brightness. The notch's search is a real launcher — KRunner's plugins and your usage history in one ranked list | `components/island/` |
 | **Dock** | The app bar, hidden until the pointer touches the bottom edge (horizontal pill) or the left edge (vertical pill). The island's dark glass, rim and grain; pinned and running apps with a quiet dot | `components/dock/` |
+| **Console** | The shelf, hidden on the right edge (`Win+C`): terminals (Konsole seated inside the glass, tmux on every host), an SSH/sftp file browser, containers and pods — one pane per server, sessions that survive drops and reboots. Imports `~/.ssh/config` | `components/console/` |
 | **Toasts** | Notification cards that drop from the top edge. A separate program: it only listens, Plasma stays the notification server | `components/toasts/` |
 | **Lens** | Circle to Search for the desktop: `Win+G`, or hold the dock's glass. Freezes the screen; circle or tap to search it on Google, send it to Google Lens, translate it (or the whole screen in place) or copy the text. OCR is local (tesseract, Hebrew + English) | `components/lens/` |
 | **Login** | SDDM login screen in the same material | `login/` |
-| **System** | Windows-style keyboard shortcuts, touchpad gestures, panel layout, light/dark sync | `system/` |
+| **System** | Windows-style keyboard shortcuts, touchpad gestures, panel layout, light/dark sync, vibe-coding sessions (lid-safe) | `system/` |
 | **Direction** | Per-app RTL/LTR launch rules: run any app Hebrew-RTL or force English-LTR; dock, KRunner, xdg-open and Flatpak all honor the rules | `system/direction/` |
 
-Both components are Qt 6 / QML apps (C++ for the window and system bits) running as systemd **user services**. They draw with real KWin blur, so they need a Wayland session with KWin.
+All five programs are Qt 6 / QML apps (C++ for the window and system bits) running as systemd **user services**. They draw with real KWin blur, so they need a Wayland session with KWin.
+
+## Screenshots
+
+| The island bar | The large panel |
+|---|---|
+| ![The island bar](docs/img/island-bar.png) | ![The island's large panel](docs/img/island-panel.png) |
+
+| The dock | The console shelf |
+|---|---|
+| ![The dock springs from the bottom edge](docs/img/dock.png) | ![The console shelf: terminals and files inside the glass](docs/img/console.png) |
+
+| Toasts | |
+|---|---|
+| ![Toasts drop from the island's edge](docs/img/toasts.png) | |
 
 ## Quick start
+
+Needs KDE Plasma 6 on **Wayland** (tested: KDE neon, Plasma 6.8) — every other dependency, and what each optional tool adds, is in **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ```bash
 git clone <this repo> aether && cd aether
 make install        # backs up your KDE settings first, then installs everything for your user
 ```
 
-Prerequisites, build dependencies and what each step changes: **[docs/INSTALL.md](docs/INSTALL.md)**.
 Undo: `make uninstall` (services) and `make restore` (KDE settings from the backup).
 
 ## Direction rules
 
-Every app launches exactly as the system launches it unless a rule says otherwise, so newly installed applications need nothing. A rule applies at the app's next launch.
+Installed with `make install` (or standalone: `make direction-install`). Every app launches exactly as the system launches it unless a rule says otherwise, so newly installed applications need nothing. A rule applies at the app's next launch.
 
 ```bash
-make direction-install
 aether-direction set dolphin rtl    # Hebrew UI, RTL layout (date/number formats stay en_IL)
 aether-direction set kate ltr       # force English/LTR even if defaults change later
 aether-direction unset dolphin      # back to system default
@@ -42,14 +57,14 @@ Rules shadow the application's .desktop file through `~/.local/share/application
 ## Layout of the repository
 
 ```
-components/   island/  toasts/  shared/AetherShared/   Qt apps and the QML module they share
+components/   island/  toasts/  dock/  console/  lens/  shared/AetherShared/   Qt apps and the QML module they share
 theme/        generators/ (Python)  vendor/  icons/    the theme is *generated*; output goes to theme/generated/ (not in git)
 login/        aether-lock/                              SDDM theme
-plasmoids/    org.aether.appname/
-system/       shortcuts/  gestures/  layout.js  ...      per-user desktop configuration
+plasmoids/    org.aether.appname/                       bold name of the focused app
+system/       shortcuts/  direction/  gestures/  vibe/  agents/  layout.js  ...   per-user desktop configuration
 install/      install.sh  install-island.sh  backup.sh  restore.sh  ...
 tools/        pointer-test.py                           a virtual mouse for UI tests
-docs/         INSTALL, ARCHITECTURE, CONTRIBUTING, DOCK-SPEC, history/
+docs/         INSTALL, ARCHITECTURE, CONTRIBUTING, DESIGN-SYSTEM, DOCK-SPEC, PANELS-SPEC, WIDGETS-SPEC, history/
 ```
 
 `make help` lists every target. To understand how the pieces fit, read **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**; to work on the code, **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)**.
@@ -68,8 +83,10 @@ Aether is a thin layer over KDE - almost everything hard is a ready-made project
 - **Kate + KIO (kio_sftp) + Dolphin** — remote files open and save straight over `sftp://`, folders open in Dolphin, all from the shelf.
 - **Docker CLI / kubectl** — container and pod discovery, start/stop actions, log streams and death events.
 - **NetworkManager, KWallet, freedesktop notifications** — reachability, secrets and the toast pipeline.
+- **KDE Connect** — the phone card: battery, connectivity, clipboard and file sharing.
+- **KRunner** — the island's search runs its own runner plugins in-process.
 
-Design references: the resting tab and pull-out drawer are an homage to the **OxygenOS Smart Sidebar**; the per-connection cards follow **MobaXterm**'s session panel and **Termius**' SFTP UX; the files explorer aims at **VS Code**'s Remote Explorer rather than a desktop file manager.
+Design references: the resting tab and pull-out drawer are an homage to the **OxygenOS Smart Sidebar**; the per-connection cards follow **MobaXterm**'s session panel and **Termius**' SFTP UX; the files explorer aims at **VS Code**'s Remote Explorer rather than a desktop file manager; **Android's** circle-to-search and taskbar shaped the lens and the dock.
 
 ## License
 

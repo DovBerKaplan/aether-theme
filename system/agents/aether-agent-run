@@ -132,8 +132,12 @@ def main():
 
     env = os.environ.copy()                      # the nested KWin must attach to the REAL session
     kwin_log = open(AGENTS_DIR / f"{pid}.kwin.log", "wb")
+    # --no-lockscreen: the sandbox shares the login session, so without this a
+    # locked host session makes the nested KWin come up locked (greeter hiding
+    # every sandbox window behind a clock).
     kwin = subprocess.Popen(
-        ["kwin_wayland", "--virtual", "--socket", sock, "--width", str(w), "--height", str(h)],
+        ["kwin_wayland", "--virtual", "--no-lockscreen", "--socket", sock,
+         "--width", str(w), "--height", str(h)],
         env=env, stdout=kwin_log, stderr=subprocess.STDOUT, start_new_session=True)
     atexit.register(teardown)
 
