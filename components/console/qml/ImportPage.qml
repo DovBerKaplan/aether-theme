@@ -4,6 +4,7 @@ import AetherShared
 // One-tap setup: read the user's ~/.ssh/config and let them tick which hosts to keep.
 PanelScaffold {
     id: root
+    bottomInset: 14
     property var candidates: []
     property var picked: ({})
 
@@ -81,7 +82,7 @@ PanelScaffold {
                             anchors.centerIn: parent
                             text: "✓"
                             visible: !!root.picked[modelData.name]
-                            font.pixelSize: 12
+                            font.pixelSize: Tokens.type.label
                             color: Theme.onAccent
                         }
                     }

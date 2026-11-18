@@ -5,6 +5,7 @@ import AetherShared
 // in a visible Konsole window (the password is typed there, never here).
 PanelScaffold {
     id: root
+    bottomInset: 14
     property var session: ({})
     signal saved()
 

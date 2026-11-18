@@ -1,7 +1,7 @@
 // aether-console-seat: the one owner of the console shelf's terminal windows.
 //
-// Each terminal exists only inside the shelf's glass (a hole in the detail card's
-// "Terminal" view). Windows are matched BY PID - the console launches Konsole itself and
+// Each terminal exists only inside the shelf's glass (a hole in a terminal pane; split
+// view can seat several at once). Windows are matched BY PID - the console launches Konsole itself and
 // answers ownsWindow(pid) over D-Bus - so the user's other Konsole windows are never
 // touched. Several terminals can live concealed at once (one per connection); the wanted
 // one is seated, the rest stay hidden. A window that disappears (ssh died, network drop)
@@ -11,7 +11,8 @@
 // Script -> console: org.aether.Console slots via callDBus.
 //   Aether Console Seat Show   seat the window (pid+geometry asked from the console)
 //   Aether Console Seat Hide   conceal the wanted window and give focus back
-//   SeatReady                  the wanted window is seated and visible: the frost may clear
+//   SeatReady(pid)             that window is seated and visible: the frost may clear
+//   SeatFocused(pid)           the user clicked into that window: its pane takes focus
 //   SeatClosed(pid)            a terminal window is gone (crash, user close): reconnect
 
 const CONSOLE = ["org.aether.Console", "/Console", "org.aether.Console"];
@@ -19,20 +20,27 @@ const CONSOLE = ["org.aether.Console", "/Console", "org.aether.Console"];
 // transparent through it so the effect is never seen.
 const REVEAL_MS = 420;
 
-let wantedPid = 0;      // the terminal the shelf wants on screen right now
-let seat = null;        // {x, y, width, height} in screen coordinates
+let wanted = {};        // pid -> {x, y, width, height} for every terminal on stage (split view: many)
+let focusPid = 0;       // the pane that owns the keyboard
 let prevActive = null;  // focus to give back on hide
 let windows = {};       // pid -> our adopted windows (dressed; concealed unless wanted)
+let reveals = {};       // pid -> the timer that unveils that window once its squash effect is over
 
-const revealTimer = new QTimer();
-revealTimer.singleShot = true;
-revealTimer.interval = REVEAL_MS;
-revealTimer.timeout.connect(function () {
-    const w = windows[wantedPid];
-    if (!wantedPid || !w) return;
-    w.opacity = 1;
-    callDBus(CONSOLE[0], CONSOLE[1], CONSOLE[2], "SeatReady");
-});
+function revealTimer(pid) {
+    if (!reveals[pid]) {
+        const t = new QTimer();
+        t.singleShot = true;
+        t.interval = REVEAL_MS;
+        t.timeout.connect(function () {
+            const w = windows[pid];
+            if (!wanted[pid] || !w) return;
+            w.opacity = 1;
+            callDBus(CONSOLE[0], CONSOLE[1], CONSOLE[2], "SeatReady", String(pid));
+        });
+        reveals[pid] = t;
+    }
+    return reveals[pid];
+}
 
 function dress(w) {
     w.noBorder = true;
@@ -48,6 +56,7 @@ function conceal(w) {
 }
 
 function place(w) {
+    const seat = wanted[w.pid];
     if (!seat) return;
     const g = w.frameGeometry;
     if (g.x === seat.x && g.y === seat.y && g.width === seat.width && g.height === seat.height) return;
@@ -56,13 +65,13 @@ function place(w) {
 
 function present(pid) {
     const w = windows[pid];
-    if (!wantedPid || !w || !seat) return;
+    if (!wanted[pid] || !w) return;
     dress(w);
     w.opacity = 0;
     if (w.minimized) w.minimized = false;
     place(w);
-    workspace.activeWindow = w;
-    revealTimer.start();
+    if (focusPid === pid || !workspace.activeWindow || !windows[workspace.activeWindow.pid]) workspace.activeWindow = w;
+    revealTimer(pid).start();
 }
 
 function adopt(w) {
@@ -73,9 +82,9 @@ function adopt(w) {
         dress(w);
         w.frameGeometryChanged.connect(function () {
             // Konsole restores its own saved bounds on show; while seated, the seat wins.
-            if (wantedPid === w.pid && !w.minimized) place(w);
+            if (wanted[w.pid] && !w.minimized) place(w);
         });
-        if (w.pid === wantedPid) {
+        if (wanted[w.pid]) {
             present(w.pid);
         } else {
             conceal(w);
@@ -97,42 +106,59 @@ workspace.windowRemoved.connect(function (w) {
     }
 });
 
-registerShortcut("Aether Console Seat Show", "Aether: seat the console terminal in the shelf", "", function () {
+// the user clicked into a terminal: its pane becomes the focused one
+workspace.windowActivated.connect(function (w) {
+    if (w && windows[w.pid] && wanted[w.pid]) {
+        callDBus(CONSOLE[0], CONSOLE[1], CONSOLE[2], "SeatFocused", String(w.pid));
+    }
+});
+
+registerShortcut("Aether Console Seat Show", "Aether: seat the console terminals in the shelf", "", function () {
     callDBus(CONSOLE[0], CONSOLE[1], CONSOLE[2], "seatRect", function (s) {
-        const p = String(s).split(",").map(Number);
-        if (p.length !== 5 || p[1] <= 0 || p[2] <= 0 || p[3] <= 0 || p[4] <= 0) return;
-        const pid = p[0];
-        seat = { x: p[1], y: p[2], width: p[3], height: p[4] };
-        if (wantedPid !== pid) {
-            // conceal whoever is on stage before handing it over
-            const prev = windows[wantedPid];
-            if (prev) conceal(prev);
-            if (workspace.activeWindow === prev) {
-                const a = workspace.activeWindow;
-                prevActive = a && a !== prev ? a : null;
+        const halves = String(s).split("|");
+        const next = {};
+        (halves[1] || "").split(";").forEach(function (part) {
+            const p = part.split(",").map(Number);
+            if (p.length !== 5 || !(p[3] > 0) || !(p[4] > 0)) return;
+            next[p[0]] = { x: p[1], y: p[2], width: p[3], height: p[4] };
+        });
+        const prevFocus = focusPid;
+        focusPid = Number(halves[0]) || 0;
+        if (workspace.activeWindow && !prevActive && !windows[workspace.activeWindow.pid]) prevActive = workspace.activeWindow;
+        // everyone leaving the stage is concealed before the rest is handed over
+        for (const pid in wanted) {
+            if (!next[pid] && windows[pid]) conceal(windows[pid]);
+        }
+        const before = wanted;
+        wanted = next;
+        for (const pid in next) {
+            const w = windows[pid];
+            if (!w) continue;   // a launch is in flight - windowAdded adopts and presents it
+            // already seated and showing: the hole only moved - just follow it
+            if (before[pid] && !w.minimized && w.opacity === 1) {
+                place(w);
+            } else {
+                present(Number(pid));
             }
         }
-        // already seated and showing: the hole only moved (the glass settled) - just follow it
-        const cur = windows[pid];
-        if (wantedPid === pid && cur && !cur.minimized && cur.opacity === 1) {
-            place(cur);
-            return;
+        if (focusPid && focusPid !== prevFocus && windows[focusPid] && wanted[focusPid] && !windows[focusPid].minimized) {
+            workspace.activeWindow = windows[focusPid];
         }
-        wantedPid = pid;
-        if (windows[pid]) {
-            present(pid);
-        }   // else: a launch is in flight - windowAdded adopts and presents it
     });
 });
 
-registerShortcut("Aether Console Seat Hide", "Aether: hide the console terminal", "", function () {
-    if (!wantedPid) return;
-    const w = windows[wantedPid];
-    const hadFocus = w && w.active;
-    if (w) conceal(w);
+registerShortcut("Aether Console Seat Hide", "Aether: hide the console terminals", "", function () {
+    let hadFocus = false;
+    for (const pid in wanted) {
+        const w = windows[pid];
+        if (!w) continue;
+        if (w.active) hadFocus = true;
+        conceal(w);
+    }
     if (hadFocus && prevActive && workspace.windowList().indexOf(prevActive) >= 0 && !prevActive.minimized) {
         workspace.activeWindow = prevActive;
     }
     prevActive = null;
-    wantedPid = 0;
+    wanted = {};
+    focusPid = 0;
 });

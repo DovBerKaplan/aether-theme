@@ -6,10 +6,13 @@
 #include <QDBusPendingCall>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QDBusUnixFileDescriptor>
+#include <QImage>
 #include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
+#include <QMap>
 #include <QSet>
 #include <QObject>
 #include <QPainterPath>
@@ -18,6 +21,9 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTimer>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
@@ -42,6 +48,8 @@ class ConsoleController : public QObject
     // the island's dark object, but the little tab lives directly on the desktop and should
     // rim itself against what is actually behind it.
     Q_PROPERTY(bool systemDark READ systemDark NOTIFY systemDarkChanged)
+    Q_PROPERTY(bool earShown READ earShown NOTIFY earShownChanged)   // [Console] EarShown in aetherislandrc: the resting tab
+    Q_PROPERTY(bool underLight READ underLight NOTIFY underLightChanged)   // the desktop beside the resting tab is bright
     // NetworkManager's reachability: when the machine loses the network, every open session's
     // dot goes orange (the tmux on the server kept the work); back online, they return green.
     Q_PROPERTY(bool online READ online NOTIFY onlineChanged)
@@ -78,6 +86,80 @@ public:
     QColor accent() const { return m_accent; }
     QString lang() const { return m_lang; }
     bool systemDark() const { return m_systemDark; }
+    bool underLight() const { return m_underLight; }
+    bool earShown() const { return m_earShown; }
+
+    // What is on screen right beside the resting tab (a strip just inside it, never the tab itself):
+    // KWin's ScreenShot2 hands back the raw pixels of a tiny area through a pipe. The mean luma
+    // flips underLight with hysteresis, so a mid-grey does not make the tab flicker.
+    Q_INVOKABLE void sampleUnder(int y, int h)
+    {
+        if (m_sampleBusy || !m_view->screen()) {
+            return;
+        }
+        int fds[2];
+        if (::pipe2(fds, O_CLOEXEC | O_NONBLOCK) != 0) {
+            return;
+        }
+        const QRect geo = m_view->screen()->geometry();
+        QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/org/kde/KWin/ScreenShot2"),
+                                                           QStringLiteral("org.kde.KWin.ScreenShot2"), QStringLiteral("CaptureArea"));
+        call << geo.right() - 23 << geo.y() + y << 8u << uint(qMax(1, h))
+             << QVariantMap{{QStringLiteral("native-resolution"), true}}
+             << QVariant::fromValue(QDBusUnixFileDescriptor(fds[1]));
+        ::close(fds[1]);   // KWin has its own copy; ours must go so the reader sees the end
+        m_sampleBusy = true;
+        const int rfd = fds[0];
+        auto *w = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(call, 1500), this);
+        connect(w, &QDBusPendingCallWatcher::finished, this, [this, rfd](QDBusPendingCallWatcher *w) {
+            w->deleteLater();
+            m_sampleBusy = false;
+            const QDBusPendingReply<QVariantMap> reply = *w;
+            QByteArray data;
+            char buf[8192];
+            for (int tries = 0; tries < 40; ++tries) {
+                const ssize_t n = ::read(rfd, buf, sizeof buf);
+                if (n > 0) {
+                    data.append(buf, int(n));
+                } else if (n == 0) {
+                    break;
+                } else {
+                    break;   // EAGAIN: KWin writes the little it has at once; nothing more is coming
+                }
+            }
+            ::close(rfd);
+            if (!reply.isValid()) {
+                if (!m_sampleWarned) {
+                    m_sampleWarned = true;
+                    qWarning() << "tab sampling unavailable:" << reply.error().message();
+                }
+                return;
+            }
+            const QVariantMap meta = reply.value();
+            const int iw = meta.value(QStringLiteral("width")).toInt();
+            const int ih = meta.value(QStringLiteral("height")).toInt();
+            const int stride = meta.value(QStringLiteral("stride")).toInt();
+            const auto fmt = QImage::Format(meta.value(QStringLiteral("format")).toInt());
+            if (iw <= 0 || ih <= 0 || data.size() < qsizetype(stride) * ih) {
+                return;
+            }
+            const QImage img(reinterpret_cast<const uchar *>(data.constData()), iw, ih, stride, fmt);
+            double sum = 0;
+            for (int yy = 0; yy < ih; ++yy) {
+                for (int xx = 0; xx < iw; ++xx) {
+                    const QRgb c = img.pixel(xx, yy);
+                    sum += 0.299 * qRed(c) + 0.587 * qGreen(c) + 0.114 * qBlue(c);
+                }
+            }
+            const double luma = sum / (double(iw) * ih * 255.0);
+            const bool light = m_underLight ? luma > 0.45 : luma > 0.62;
+            if (light != m_underLight) {
+                m_underLight = light;
+                qInfo().noquote() << "tab: desktop beside it is" << (light ? "light" : "dark") << "luma" << luma;
+                Q_EMIT underLightChanged();
+            }
+        });
+    }
     bool online() const { return m_online; }
 
     // Every launched terminal registers its pid, so the KWin script can ask (synchronously,
@@ -110,9 +192,10 @@ public:
     // The silhouette arrives as path commands (the same list QML draws from), so blur, input and
     // drawing cannot disagree. hot: an invisible strip that still gets the pointer (the resting
     // ear). hole: a rounded cut-out whose clicks and keyboard belong to the seated terminal
-    // window beneath the glass (OddEvenFill cuts it from both blur and input).
+    // window beneath the glass (OddEvenFill cuts it from both blur and input; holesTakeInput
+    // gives the clicks back to us while an overlay sits above the terminals).
     Q_INVOKABLE void setLayout(const QVariantList &cmds, const QRectF &hot, bool fullInput,
-                               const QVariantMap &hole = QVariantMap())
+                               const QVariantList &holes = QVariantList(), bool holesTakeInput = false)
     {
         QPainterPath p;
         for (const QVariant &v : cmds) {
@@ -128,10 +211,16 @@ public:
             }
         }
         p.closeSubpath();
-        QRectF holeRect(hole.value(QStringLiteral("x")).toReal(), hole.value(QStringLiteral("y")).toReal(),
-                        hole.value(QStringLiteral("w")).toReal(), hole.value(QStringLiteral("h")).toReal());
-        if (holeRect.width() > 0 && holeRect.height() > 0) {
-            p.addRoundedRect(holeRect, 12, 12);   // OddEvenFill (QPainterPath default) cuts it out
+        const QPainterPath outline = p;   // the silhouette before any hole is cut
+        QVector<QRectF> holeRects;
+        for (const QVariant &hv : holes) {
+            const QVariantMap hole = hv.toMap();
+            const QRectF r(hole.value(QStringLiteral("x")).toReal(), hole.value(QStringLiteral("y")).toReal(),
+                           hole.value(QStringLiteral("w")).toReal(), hole.value(QStringLiteral("h")).toReal());
+            if (r.width() > 0 && r.height() > 0) {
+                holeRects.append(r);
+                p.addRoundedRect(r, 12, 12);   // OddEvenFill (QPainterPath default) cuts it out
+            }
         }
         QRegion shape;
         if (!cmds.isEmpty()) {
@@ -144,11 +233,11 @@ public:
         }
         // While the panel is open the whole window takes input, to catch click-outside; at rest
         // only the ear listens, so nothing else on screen loses a single click.
-        QRegion input = fullInput ? QRegion(QRect(QPoint(0, 0), m_view->size())) : shape;
-        if (holeRect.width() > 0 && holeRect.height() > 0) {
-            // The seated terminal's window keeps its own clicks and keys.
-            input -= QRegion(holeRect.toRect());
-        }
+        // A seated terminal's window keeps its own clicks and keys (its hole is cut from the input
+        // too) - unless something of ours (a menu) is drawn over it: then the whole silhouette takes
+        // the clicks, while blur still skips the hole.
+        QRegion input = fullInput ? QRegion(QRect(QPoint(0, 0), m_view->size()))
+                                  : (holesTakeInput && !cmds.isEmpty() ? QRegion(outline.toFillPolygon().toPolygon()) : shape);
         if (!hot.isEmpty()) {
             input += QRegion(hot.toRect());
         }
@@ -157,14 +246,47 @@ public:
 
     // The terminal seat: pid + geometry travel together to the aether-console-seat KWin
     // script through these keyless global shortcuts (the media-seat handshake).
+    // Several terminals can be on stage at once (split view): every pid with a rect is wanted,
+    // every other window stays concealed. "Show" re-syncs the script with the whole table.
     Q_INVOKABLE void showSeat(int pid, int x, int y, int w, int h)
     {
-        m_seatPid = pid;
         // local (window) coordinates -> screen: the window is anchored right+top, full height
-        m_seatRect = QRect(screenWidth() - m_view->width() + x, y, w, h);
+        m_seats.insert(pid, QRect(screenWidth() - m_view->width() + x, y, w, h));
         invokeKwinShortcut(QStringLiteral("Aether Console Seat Show"));
     }
-    Q_INVOKABLE void hideSeat() { invokeKwinShortcut(QStringLiteral("Aether Console Seat Hide")); }
+    Q_INVOKABLE void hideSeat(int pid)
+    {
+        if (m_seats.remove(pid) > 0) {
+            if (m_focusPid == pid) {
+                m_focusPid = 0;
+            }
+            invokeKwinShortcut(m_seats.isEmpty() ? QStringLiteral("Aether Console Seat Hide")
+                                                 : QStringLiteral("Aether Console Seat Show"));
+        }
+    }
+    // The terminal that should own the keyboard (the focused pane's).
+    Q_INVOKABLE void focusSeat(int pid)
+    {
+        if (m_focusPid != pid) {
+            m_focusPid = pid;
+            if (m_seats.contains(pid)) {
+                invokeKwinShortcut(QStringLiteral("Aether Console Seat Show"));
+            }
+        }
+    }
+
+    // Small persisted preferences (shelf width, split layout) next to the tab position.
+    Q_INVOKABLE QString setting(const QString &key) const
+    {
+        QSettings s(consoleCfg(), QSettings::IniFormat);
+        return s.value(QStringLiteral("General/") + key).toString();
+    }
+    Q_INVOKABLE void setSetting(const QString &key, const QString &value)
+    {
+        QSettings s(consoleCfg(), QSettings::IniFormat);
+        s.setValue(QStringLiteral("General/") + key, value);
+        s.sync();
+    }
 
     Q_INVOKABLE void setKeyboard(bool wanted)
     {
@@ -181,17 +303,26 @@ public Q_SLOTS:
     void Hide() { Q_EMIT stateRequested(QStringLiteral("hidden")); }
     void Toggle() { Q_EMIT stateRequested(QStringLiteral("toggle")); }
     // Called by the aether-console-seat KWin script.
-    QString seatRect() const   // "pid,x,y,w,h" in screen coordinates
+    QString seatRect() const   // "focusPid|pid,x,y,w,h;pid,x,y,w,h" in screen coordinates
     {
-        return QStringLiteral("%1,%2,%3,%4,%5").arg(m_seatPid).arg(m_seatRect.x()).arg(m_seatRect.y())
-            .arg(m_seatRect.width()).arg(m_seatRect.height());
+        QStringList parts;
+        for (auto it = m_seats.cbegin(); it != m_seats.cend(); ++it) {
+            parts << QStringLiteral("%1,%2,%3,%4,%5").arg(it.key()).arg(it.value().x()).arg(it.value().y())
+                         .arg(it.value().width()).arg(it.value().height());
+        }
+        return QString::number(m_focusPid) + QLatin1Char('|') + parts.join(QLatin1Char(';'));
     }
-    void SeatReady() { Q_EMIT seatReady(); }   // seated and visible: the frost may clear
+    void SeatReady(const QString &pid) { Q_EMIT seatReady(pid.toInt()); }   // seated and visible
+    void SeatFocused(const QString &pid) { Q_EMIT seatFocused(pid.toInt()); }   // the user clicked into it
     bool ownsWindow(const QString &pid) { return m_seatPids.contains(pid.toInt()); }
     void SeatClosed(const QString &pid)       // a terminal window is gone (ssh died, user closed)
     {
         qWarning("SEATCLOSED %s (registered: %d)", qPrintable(pid), m_seatPids.contains(pid.toInt()));
         m_seatPids.remove(pid.toInt());
+        m_seats.remove(pid.toInt());
+        if (m_focusPid == pid.toInt()) {
+            m_focusPid = 0;
+        }
         Q_EMIT seatClosed(pid.toInt());
     }
 
@@ -201,7 +332,10 @@ Q_SIGNALS:
     void langChanged();
     void tabRatioChanged();
     void systemDarkChanged();
-    void seatReady();
+    void underLightChanged();
+    void earShownChanged();
+    void seatReady(int pid);
+    void seatFocused(int pid);
     void seatClosed(int pid);
     void onlineChanged();
 
@@ -262,6 +396,11 @@ private:
                 accent = Qt::transparent;
             }
         }
+        const bool ear = s.value(QStringLiteral("Console/EarShown"), true).toBool();
+        if (ear != m_earShown) {
+            m_earShown = ear;
+            Q_EMIT earShownChanged();
+        }
         const QString lang = s.value(QStringLiteral("Interface/Language"), QStringLiteral("en")).toString();
         if (accent != m_accent) {
             m_accent = accent;
@@ -310,8 +449,12 @@ private:
     QColor m_accent = Qt::transparent;
     QString m_lang = QStringLiteral("en");
     bool m_systemDark = true;
-    int m_seatPid = 0;
-    QRect m_seatRect;
+    bool m_underLight = false;
+    bool m_earShown = true;
+    bool m_sampleBusy = false;
+    bool m_sampleWarned = false;
+    QMap<int, QRect> m_seats;   // pid -> where its terminal window is wanted (screen coordinates)
+    int m_focusPid = 0;
     QSet<int> m_seatPids;
     bool m_online = true;
 
