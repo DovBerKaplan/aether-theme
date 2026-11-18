@@ -45,12 +45,21 @@ Item {
     }
 
     // ---- State ------------------------------------------------------------------------------------------
-    property bool broom: !desk.clean            // the glyph: broom while the files are out
+    property bool broom                         // the face: broom while the files are out (set once,
+    Component.onCompleted: broom = !desk.clean  // then by the animations, not bound to the filter)
     property string phase: "idle"               // "idle" | "spread" | "sweep"
     property int landed: 0
+    property real open: 0                       // the folder's front flap, 0 shut .. 1 tipped open
+    property real swish: 0                      // the broom's stroke, degrees
+    property real jolt: 0                       // the stand-ins' shiver under a stroke, -1 .. 1
+    property real pressScale: 1
+    property real hoverScale: hover.containsMouse && phase === "idle" ? 1.06 : 1
     readonly property int count: ghosts.count
     readonly property int stagger: 18
     readonly property int flight: Tokens.motion.duration.morph + Tokens.motion.duration.fast
+    // Where the stand-ins go in and come out: just under the flap's top edge.
+    readonly property real mouthX: button.x + button.width / 2
+    readonly property real mouthY: button.y + button.height / 2 + 3
 
     function toggle() {
         if (phase !== "idle")
@@ -61,51 +70,83 @@ Item {
             return;
         }
         landed = 0;
+        ghostLayer.opacity = 1;
         if (desk.clean) {
             phase = "spread";
-            ghostLayer.opacity = 1;
             for (let i = 0; i < count; i++)
-                ghosts.itemAt(i).launch(0, 1, i * stagger);
-            broom = true;
-            button.gulp();
+                ghosts.itemAt(i).t = 0;
+            spread.start();
         } else {
             phase = "sweep";
-            ghostLayer.opacity = 1;
             for (let i = 0; i < count; i++)
                 ghosts.itemAt(i).t = 1;
             handOver.start();                    // let the stand-ins reach the screen before the icons go
+            sweep.start();
         }
     }
     Connections {
         target: desk
         function onToggleRequested() { root.toggle(); }
     }
+    function launchAll(out) {
+        for (let i = 0; i < count; i++)
+            ghosts.itemAt(i).launch(out ? 0 : 1, out ? 1 : 0, (out ? i : count - 1 - i) * stagger);
+    }
 
-    // Sweep, step 2: the stand-ins cover the icons; Folder View hides them, then the flight starts.
+    // Spread: the folder tips open, the files fly out, it shuts and turns into the broom.
+    SequentialAnimation {
+        id: spread
+        NumberAnimation { target: root; property: "open"; to: 1; duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter }
+        ScriptAction { script: root.launchAll(true) }
+        PauseAnimation { duration: (root.count - 1) * root.stagger + Tokens.motion.duration.slow }
+        NumberAnimation { target: root; property: "open"; to: 0; duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.spring }
+        ScriptAction { script: { root.broom = true; button.gulp(); } }
+    }
+
+    // Sweep: three strokes of the broom (the files shiver, dust flies), the broom becomes the folder,
+    // it tips open, everything flies in, it shuts.
     Timer {
         id: handOver
         interval: 60
-        onTriggered: {
-            desk.setClean(true);
-            sweepStart.start();
-        }
+        onTriggered: desk.setClean(true)         // the stand-ins already cover the icons
     }
-    Timer {
-        id: sweepStart
-        interval: Tokens.motion.duration.base   // Folder View's filter lands in about one frame; leave room
-        onTriggered: {
-            for (let i = 0; i < root.count; i++)
-                ghosts.itemAt(i).launch(1, 0, (root.count - 1 - i) * root.stagger);
+    component Stroke: ParallelAnimation {
+        id: stroke
+        property real to
+        property int ms
+        property int dir
+        NumberAnimation { target: root; property: "swish"; to: stroke.to; duration: stroke.ms; easing.type: Easing.InOutQuad }
+        SequentialAnimation {
+            NumberAnimation { target: root; property: "jolt"; to: stroke.dir; duration: stroke.ms / 2; easing.type: Easing.OutQuad }
+            NumberAnimation { target: root; property: "jolt"; to: 0; duration: stroke.ms / 2; easing.type: Easing.InQuad }
         }
+        ScriptAction { script: dust.puff(stroke.dir) }
     }
+    SequentialAnimation {
+        id: sweep
+        Stroke { to: 24; ms: 160; dir: 1 }
+        Stroke { to: -24; ms: 220; dir: -1 }
+        Stroke { to: 18; ms: 200; dir: 1 }
+        NumberAnimation { target: root; property: "swish"; to: 0; duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.spring }
+        ScriptAction { script: root.broom = false }
+        PauseAnimation { duration: Tokens.motion.duration.base }
+        NumberAnimation { target: root; property: "open"; to: 1; duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter }
+        ScriptAction { script: root.launchAll(false) }
+    }
+    SequentialAnimation {
+        id: shut
+        PauseAnimation { duration: Tokens.motion.duration.micro }
+        NumberAnimation { target: root; property: "open"; to: 0; duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.spring }
+    }
+
     function arrived() {
         landed++;
         if (phase === "sweep") {
             button.gulp();
             if (landed === count) {
-                broom = false;
                 phase = "idle";
                 ghostLayer.opacity = 0;
+                shut.start();
             }
         } else if (phase === "spread" && landed === count) {
             desk.setClean(false);                // the real icons return under their stand-ins
@@ -117,6 +158,117 @@ Item {
         PauseAnimation { duration: Tokens.motion.duration.slow }
         NumberAnimation { target: ghostLayer; property: "opacity"; to: 0; duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.exit }
         ScriptAction { script: root.phase = "idle" }
+    }
+
+    // ---- The button's back: glass, the folder's back wall, the broom ---------------------------------------
+    // (the stand-ins fly between this and the folder's front flap below them in the stacking order)
+    component Face: Item {
+        id: face
+        property bool on
+        property real tilt: -40
+        anchors.centerIn: parent
+        width: 30
+        height: 30
+        opacity: on ? 1 : 0
+        scale: on ? 1 : 0.6
+        rotation: on ? 0 : tilt
+        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
+        Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.spring } }
+        Behavior on rotation { NumberAnimation { duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.spring } }
+    }
+    component ButtonScale: Scale {
+        origin.x: button.width / 2; origin.y: button.height / 2
+        xScale: root.pressScale * root.hoverScale; yScale: xScale
+    }
+    Behavior on hoverScale { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.spring } }
+
+    Item {
+        id: button
+        readonly property int size: 60
+        readonly property int margin: 24
+        width: size
+        height: size
+        x: root.width - size - margin
+        y: root.height - size - margin
+        onXChanged: report()
+        onYChanged: report()
+        Component.onCompleted: report()
+        function report() { desk.setButtonRect(Qt.rect(x, y, width, height), size / 2); }
+        transform: ButtonScale {}
+
+        // A small swallow: squeezed in, sprung back out.
+        function gulp() { squeeze.restart(); }
+        SequentialAnimation {
+            id: squeeze
+            NumberAnimation { target: root; property: "pressScale"; to: 0.9; duration: Tokens.motion.duration.micro; easing.type: Tokens.motion.easing.exit }
+            NumberAnimation { target: root; property: "pressScale"; to: 1; duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.spring }
+        }
+
+        // Frosted glass: a thin veil over KWin's blur, a sheen on top, a hairline rim, grain.
+        Rectangle {
+            id: glass
+            anchors.fill: parent
+            radius: width / 2
+            gradient: Gradient {
+                GradientStop { position: 0; color: Qt.rgba(Theme.bodyTop.r, Theme.bodyTop.g, Theme.bodyTop.b, 0.34) }
+                GradientStop { position: 1; color: Qt.rgba(Theme.bodyBottom.r, Theme.bodyBottom.g, Theme.bodyBottom.b, 0.26) }
+            }
+            border.width: 1
+            border.color: Theme.rim
+            Rectangle {                              // sheen
+                anchors.fill: parent
+                anchors.margins: 1
+                radius: width / 2
+                gradient: Gradient {
+                    GradientStop { position: 0; color: Qt.rgba(1, 1, 1, Theme.dark ? 0.13 : 0.22) }
+                    GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0) }
+                }
+            }
+            Image {
+                anchors.fill: parent
+                anchors.margins: 1
+                source: Theme.grain
+                fillMode: Image.Tile
+                opacity: Theme.dark ? Tokens.material.dockGrainDark : Tokens.material.dockGrainLight
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    maskEnabled: true
+                    maskSource: mask
+                }
+            }
+            Rectangle {
+                id: mask
+                anchors.fill: parent
+                radius: width / 2
+                visible: false
+                layer.enabled: true
+            }
+            Rectangle {                              // hover / press veil
+                anchors.fill: parent
+                radius: width / 2
+                color: Theme.chip
+                opacity: hover.pressed ? 1 : hover.containsMouse ? 0.6 : 0
+                Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+            }
+        }
+
+        Face {
+            on: !root.broom
+            FolderGlyph { part: "back"; open: root.open }
+        }
+        Face {
+            on: root.broom
+            tilt: 40
+            BroomGlyph { id: broomGlyph; swish: root.swish }
+        }
+
+        MouseArea {
+            id: hover
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.toggle()
+        }
     }
 
     // ---- Stand-ins ----------------------------------------------------------------------------------------
@@ -133,19 +285,21 @@ Item {
                 id: g
                 required property var modelData
                 required property int index
-                property real t: 0                // 0 = inside the button, 1 = in its cell
+                property real t: 0                // 0 = inside the folder, 1 = in its cell
                 readonly property point cell: root.cellOf(index)
-                readonly property real fromX: button.x + button.width / 2 - width / 2
-                readonly property real fromY: button.y + button.height / 2 - height / 2
+                readonly property real fromX: root.mouthX - width / 2
+                readonly property real fromY: root.mouthY - height / 2
                 readonly property real dist: Math.hypot(cell.x - fromX, cell.y - fromY)
+                readonly property real side: index % 2 ? 1 : -1
                 width: root.cellW
                 height: root.cellH
                 visible: cell.y + root.cellH <= root.height
-                // A thrown arc: straight in x, lifted in y by a share of the distance.
-                x: fromX + (cell.x - fromX) * t
+                // A thrown arc: straight in x, lifted in y by a share of the distance. Under a
+                // broom stroke the parked ones shiver toward the stroke.
+                x: fromX + (cell.x - fromX) * t + root.jolt * 5 * t
                 y: fromY + (cell.y - fromY) * t - Math.sin(Math.PI * t) * dist * 0.18
-                scale: 0.2 + 0.8 * t
-                rotation: (1 - t) * -24
+                scale: 0.12 + 0.88 * t
+                rotation: (1 - t) * -24 + root.jolt * 4 * side * t
                 opacity: Math.min(1, t * 4)
 
                 function launch(from, to, delay) {
@@ -194,105 +348,59 @@ Item {
         }
     }
 
-    // Folder and broom trade places: the outgoing glyph tips away and fades, the new one swings in.
-    component Face: Item {
-        id: face
-        property string name
-        property bool on
-        anchors.centerIn: parent
-        width: 22
-        height: 22
-        opacity: on ? 1 : 0
-        scale: on ? 1 : 0.6
-        rotation: on ? 0 : (name === "broom" ? 40 : -40)
-        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
-        Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.spring } }
-        Behavior on rotation { NumberAnimation { duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.spring } }
-        Image {
-            id: img
-            anchors.fill: parent
-            source: Qt.resolvedUrl("assets/" + face.name + ".svg")
-            sourceSize: Qt.size(66, 66)
-            visible: false
-        }
-        MultiEffect {
-            anchors.fill: img
-            source: img
-            colorization: 1.0
-            colorizationColor: Theme.text
+    // ---- The folder's front flap, over the stand-ins: they go in and come out behind it -------------------
+    Item {
+        x: button.x
+        y: button.y
+        width: button.width
+        height: button.height
+        transform: ButtonScale {}
+        Face {
+            on: !root.broom
+            FolderGlyph { part: "front"; open: root.open }
         }
     }
-    // ---- The button ---------------------------------------------------------------------------------------
+
+    // ---- Dust: a few motes kicked up by each stroke ---------------------------------------------------------
     Item {
-        id: button
-        readonly property int size: 48
-        readonly property int radius: 16
-        readonly property int margin: 24
-        width: size
-        height: size
-        x: root.width - size - margin
-        y: root.height - size - margin
-        onXChanged: report()
-        onYChanged: report()
-        Component.onCompleted: report()
-        function report() { desk.setButtonRect(Qt.rect(x, y, width, height), radius); }
-
-        // A small swallow: squeezed in, sprung back out.
-        function gulp() { squeeze.restart(); }
-        transform: Scale { id: bs; origin.x: button.width / 2; origin.y: button.height / 2 }
-        SequentialAnimation {
-            id: squeeze
-            NumberAnimation { target: bs; properties: "xScale,yScale"; to: 0.88; duration: Tokens.motion.duration.micro; easing.type: Tokens.motion.easing.exit }
-            NumberAnimation { target: bs; properties: "xScale,yScale"; to: 1; duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.spring }
+        id: dust
+        anchors.fill: parent
+        function puff(dir) {
+            const p = broomGlyph.tip();
+            const at = broomGlyph.mapToItem(dust, p.x, p.y);
+            for (let i = 0; i < motes.count; i++)
+                motes.itemAt(i).kick(at.x, at.y, dir);
         }
-
-        // The island's glass: gradient body, hairline rim, grain.
-        Rectangle {
-            anchors.fill: parent
-            radius: button.radius
-            gradient: Gradient {
-                GradientStop { position: 0; color: Theme.bodyTop }
-                GradientStop { position: 1; color: Theme.bodyBottom }
-            }
-            border.width: 1
-            border.color: Theme.rim
-            Image {
-                anchors.fill: parent
-                anchors.margins: 1
-                source: Theme.grain
-                fillMode: Image.Tile
-                opacity: Theme.dark ? Tokens.material.dockGrainDark : Tokens.material.dockGrainLight
-                layer.enabled: true
-                layer.effect: MultiEffect {
-                    maskEnabled: true
-                    maskSource: mask
+        Repeater {
+            id: motes
+            model: 5
+            delegate: Rectangle {
+                id: mote
+                required property int index
+                width: 3 + (index % 3)
+                height: width
+                radius: width / 2
+                color: Theme.text
+                opacity: 0
+                function kick(px, py, dir) {
+                    life.stop();
+                    x = px - width / 2;
+                    y = py - height / 2;
+                    dx.to = x + dir * (10 + index * 6);
+                    dy.to = y - 4 - (index % 3) * 5;
+                    life.start();
+                }
+                ParallelAnimation {
+                    id: life
+                    NumberAnimation { id: dx; target: mote; property: "x"; duration: Tokens.motion.duration.morph; easing.type: Tokens.motion.easing.enter }
+                    NumberAnimation { id: dy; target: mote; property: "y"; duration: Tokens.motion.duration.morph; easing.type: Easing.OutQuad }
+                    SequentialAnimation {
+                        NumberAnimation { target: mote; property: "opacity"; to: 0.55; duration: Tokens.motion.duration.micro }
+                        NumberAnimation { target: mote; property: "opacity"; to: 0; duration: Tokens.motion.duration.morph - Tokens.motion.duration.micro; easing.type: Tokens.motion.easing.exit }
+                    }
+                    NumberAnimation { target: mote; property: "scale"; from: 0.6; to: 1.6; duration: Tokens.motion.duration.morph }
                 }
             }
-            Rectangle {
-                id: mask
-                anchors.fill: parent
-                radius: button.radius
-                visible: false
-                layer.enabled: true
-            }
-            Rectangle {                              // hover / press veil
-                anchors.fill: parent
-                radius: button.radius
-                color: Theme.chip
-                opacity: hover.pressed ? 1 : hover.containsMouse ? 0.6 : 0
-                Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
-            }
-        }
-
-        Face { name: "folder"; on: !root.broom }
-        Face { name: "broom"; on: root.broom }
-
-        MouseArea {
-            id: hover
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.toggle()
         }
     }
 }
