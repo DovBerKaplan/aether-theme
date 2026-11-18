@@ -1,7 +1,7 @@
-# Aether: a Plasma 6 desktop layer (theme, island, toasts, dock, console, lens). `make help` lists the targets.
+# Aether: a Plasma 6 desktop layer (theme, island, toasts, dock, console, lens, desk). `make help` lists the targets.
 SHELL := /bin/bash
 GEN   := theme/generators
-APPS  := island toasts dock console lens
+APPS  := island toasts dock console lens desk
 
 .DEFAULT_GOAL := help
 .PHONY: help all tokens theme fonts components install install-island install-login install-gestures direction-install zcode-rtl-install uninstall restore check clean
@@ -9,7 +9,7 @@ APPS  := island toasts dock console lens
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-18s %s\n", $$1, $$2}'
 
-all: theme components ## Generate the theme and build the island, toasts, dock, console and lens
+all: theme components ## Generate the theme and build the island, toasts, dock, console, lens and desk
 
 tokens: ## Regenerate the QML design tokens from theme/tokens.toml
 	python3 $(GEN)/build_tokens_qml.py
@@ -26,7 +26,7 @@ theme: tokens ## Generate colors, Kvantum, Plasma theme, global themes, Konsole,
 fonts: ## Fetch Inter and JetBrainsMono Nerd Font into ~/.local/share/fonts (skips what is present)
 	install/fonts.sh
 
-components: ## Build aether-island, aether-toasts, aether-dock, aether-console and aether-lens (needs the Qt/KF6 dev packages, see docs/INSTALL.md)
+components: ## Build aether-island, aether-toasts, aether-dock, aether-console, aether-lens and aether-desk (needs the Qt/KF6 dev packages, see docs/INSTALL.md)
 	@for app in $(APPS); do \
 	  cmake -S components/$$app -B components/$$app/build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null && \
 	  cmake --build components/$$app/build || exit 1; \
@@ -35,7 +35,7 @@ components: ## Build aether-island, aether-toasts, aether-dock, aether-console a
 install: ## Full install for the current user: theme, island, toasts, shortcuts, panel layout (backs up first)
 	install/install.sh
 
-install-island: ## Build and (re)start the five aether services (quick rebuild path)
+install-island: ## Build and (re)start the six aether services (quick rebuild path)
 	install/install-island.sh
 
 install-login: ## Install the login screen (asks for sudo)
@@ -50,13 +50,13 @@ direction-install: ## Install per-app RTL/LTR launch rules (aether-direction)
 zcode-rtl-install: ## Install the ZCode (Electron) RTL kit: Hebrew locale hint + DevTools port + desktop override
 	system/zcode-rtl/install-zcode-rtl.sh
 
-uninstall: ## Stop and remove all five aether services
+uninstall: ## Stop and remove all six aether services
 	install/uninstall-island.sh
 
 restore: ## Restore the KDE settings from the latest backup
 	install/restore.sh
 
-check: ## Syntax-check scripts, run the split-model test and build all five components
+check: ## Syntax-check scripts, run the split-model test and build all six components
 	@for f in install/*.sh system/*.sh system/gestures/*.sh system/direction/*.sh system/zcode-rtl/*.sh; do bash -n $$f || exit 1; done
 	python3 -m py_compile $(GEN)/*.py system/shortcuts/*.py tools/*.py system/direction/aether-direction system/direction/aether-direction-run system/vibe/aether-vibe system/agents/aether-agent-run
 	node --check system/zcode-rtl/zcode-rtl-inspect.mjs

@@ -13,7 +13,7 @@ for tool in cmake ninja; do
   command -v "$tool" >/dev/null || { echo "missing $tool (sudo apt install cmake ninja-build qt6-base-dev qt6-declarative-dev qt6-wayland-dev kf6-kwindowsystem-dev liblayershellqtinterface-dev extra-cmake-modules)" >&2; exit 1; }
 done
 
-for app in island toasts dock console lens; do
+for app in island toasts dock console lens desk; do
   echo "== build $app"
   cmake -S "$ROOT/components/$app" -B "$ROOT/components/$app/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" >/dev/null
   cmake --build "$ROOT/components/$app/build"
@@ -60,7 +60,7 @@ qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start 2>/dev/null || true
 
 echo "== services"
 mkdir -p "$HOME/.config/systemd/user" "$HOME/.local/share/applications"
-for app in island toasts dock console lens; do
+for app in island toasts dock console lens desk; do
   cat > "$HOME/.config/systemd/user/aether-$app.service" <<EOF
 [Unit]
 Description=Aether ${app^}
@@ -111,7 +111,7 @@ Icon=edit-find
 EOF
 kbuildsycoca6 >/dev/null 2>&1 || true
 systemctl --user daemon-reload
-systemctl --user enable aether-island.service aether-toasts.service aether-dock.service aether-console.service aether-lens.service >/dev/null 2>&1
+systemctl --user enable aether-island.service aether-toasts.service aether-dock.service aether-console.service aether-lens.service aether-desk.service >/dev/null 2>&1
 
 if [[ $NO_START == 0 ]]; then
   pkill -x aether-island 2>/dev/null || true
@@ -119,9 +119,10 @@ if [[ $NO_START == 0 ]]; then
   pkill -x aether-dock 2>/dev/null || true
   pkill -x aether-console 2>/dev/null || true
   pkill -x aether-lens 2>/dev/null || true
+  pkill -x aether-desk 2>/dev/null || true
   sleep 1
-  systemctl --user restart aether-island.service aether-toasts.service aether-dock.service aether-console.service aether-lens.service
+  systemctl --user restart aether-island.service aether-toasts.service aether-dock.service aether-console.service aether-lens.service aether-desk.service
   sleep 2
-  systemctl --user is-active aether-island.service aether-toasts.service aether-dock.service aether-console.service aether-lens.service
+  systemctl --user is-active aether-island.service aether-toasts.service aether-dock.service aether-console.service aether-lens.service aether-desk.service
 fi
-echo "Installed. Quit with: systemctl --user stop aether-island aether-toasts aether-dock aether-console aether-lens"
+echo "Installed. Quit with: systemctl --user stop aether-island aether-toasts aether-dock aether-console aether-lens aether-desk"
