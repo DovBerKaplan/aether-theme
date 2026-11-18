@@ -17,7 +17,7 @@ Aether has two kinds of parts: things that are **generated** into your desktop c
 
 The generators are deterministic: running them twice gives the same bytes (gzip timestamps are pinned).
 
-**Light/dark switching:** the two Global Themes are registered for KDE's automatic day/night. `system/aether-mode-sync` (a systemd path unit on `kdeglobals`) keeps Kvantum and Konsole in step with the active color scheme.
+**Light/dark switching:** off by default. The Theme tile cycles dark → light → by-hours; a mode picked by hand writes the scheme and turns KDE's `AutomaticLookAndFeel` off, so the clock never overrides a deliberate choice. The by-hours mode registers the two Global Themes as KDE's dark/light pair — KDE re-evaluates only at its next transition (verified: the key alone flips nothing), so the tile also applies the hour-appropriate scheme immediately, using Night Color's fixed times when set (else dusk 18:00 / dawn 06:00). `system/aether-mode-sync` (a systemd path unit on `kdeglobals`) keeps Kvantum and Konsole in step with the active color scheme.
 
 **Frames and blur:** KSvg builds panel and popup backgrounds from 9-slice SVGs. `build_frames.py` draws them with Bézier curves only (KSvg sizes arcs wrongly), uses filled shapes instead of strokes, and gives every frame zero insets so blur covers the whole shape.
 

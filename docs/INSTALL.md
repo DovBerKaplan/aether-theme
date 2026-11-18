@@ -42,8 +42,9 @@ services — `aether-island`, `aether-toasts`, `aether-dock`, `aether-console`,
 `aether-lens` (from now on they start with the graphical session) — turns off
 the global menu, sets the Windows-style shortcuts, and removes your Plasma
 panels (`system/layout.js`; the top bar is the island, the bottom/left dock is
-the `aether-dock` service). **It changes your desktop layout**, so read
-`install/install.sh` first if that worries you.
+the `aether-dock` service). The theme starts dark; time-of-day switching is
+off until you turn it on from the island's Theme tile. **It changes your
+desktop layout**, so read `install/install.sh` first if that worries you.
 
 Keys you get: `Win+N` (island), `Win+C` (console shelf), `Win+G` (lens).
 

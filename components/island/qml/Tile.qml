@@ -49,10 +49,15 @@ Item {
             glyph: "moon", label: I18n.tr("Night"), sub: displaySettings.nightEnabled ? I18n.tr("On") : I18n.tr("Off"),
             active: displaySettings.nightEnabled, panel: "display", tap: () => displaySettings.setNightEnabled(!displaySettings.nightEnabled),
             trail: displaySettings.nightEnabled ? { kind: "text", text: displaySettings.nightTemperature + "K" } : { kind: "chevron" } }
-        case "darktheme": {      // names the mode you are in now; a tap goes to the other one
-            const dk = displaySettings.dark
-            return { glyph: dk ? "moon" : "sun", label: dk ? I18n.tr("Dark") : I18n.tr("Light"), sub: dk ? I18n.tr("Tap for light") : I18n.tr("Tap for dark"),
-                active: !dk, panel: "display", tap: () => displaySettings.setDark(!displaySettings.dark), trail: { kind: "chevron" } }
+        case "darktheme": {      // dark -> light -> by hours -> dark; a mode picked by hand is never overridden by the clock
+            const dk = displaySettings.dark, auto = displaySettings.autoTheme
+            return {
+                glyph: auto ? "sun-moon" : dk ? "moon" : "sun",
+                label: auto ? I18n.tr("Auto") : dk ? I18n.tr("Dark") : I18n.tr("Light"),
+                sub: auto ? I18n.tr("By hours") : dk ? I18n.tr("Tap for light") : I18n.tr("Tap for dark"),
+                active: auto || !dk, panel: "display",
+                tap: () => { if (auto) displaySettings.setDark(true); else if (dk) displaySettings.setDark(false); else displaySettings.setAutoTheme(true) },
+                trail: { kind: "chevron" } }
         }
         case "airplane": {
             const on = !system.wifiEnabled && !system.bluetoothOn

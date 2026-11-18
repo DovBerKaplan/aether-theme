@@ -584,7 +584,7 @@ World clocks
 ## 11. Phase 3+: more tiles
 
 Once panels exist, the four chips can grow into an Android-style tile set.
-**Built** (`TileStore.h`): Night Light, Dark theme, Airplane mode, Keep awake
+**Built** (`TileStore.h`): Night Light, Dark theme (three states — dark, light, by-hours; a picked mode is never overridden by the clock), Airplane mode, Keep awake
 (inhibit sleep), Vibe coding (aether-vibe: agents keep running with the lid
 closed and the panel dark while the lid is shut; stays on until tapped off),
 Screenshot (Spectacle region), Screen record, Power saver, Microphone mute,

@@ -105,10 +105,9 @@ kwriteconfig6 --file kwinrc --group Desktops --key Rows 1
 for i in 1 2 3 4; do kwriteconfig6 --file kwinrc --group Desktops --key "Name_$i" "Workspace $i"; done
 kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile Aether.profile
 
-echo "== automatic day/night"
+echo "== theme pair registered (time-of-day switching stays off until the island's Theme tile turns it on)"
 kwriteconfig6 --file kdeglobals --group KDE --key DefaultDarkLookAndFeel org.aether.glass.desktop
 kwriteconfig6 --file kdeglobals --group KDE --key DefaultLightLookAndFeel org.aether.serenity.desktop
-kwriteconfig6 --file kdeglobals --group KDE --key AutomaticLookAndFeel true
 
 echo "== apply Glass"
 plasma-apply-lookandfeel -a org.aether.glass.desktop
