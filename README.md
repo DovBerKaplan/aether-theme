@@ -8,6 +8,7 @@ A desktop layer for **KDE Plasma 6** (Wayland): a dark, blurred, rounded look, p
 | **Island** | The top bar. Hidden until the pointer touches the top edge, then a full-width bar with a small notch (search, power). A click on the clock side opens a large panel: media, Wi-Fi, Bluetooth, sound, timer, volume, brightness | `components/island/` |
 | **Dock** | The app bar, hidden until the pointer touches the bottom edge (horizontal pill) or the left edge (vertical pill). The island's dark glass, rim and grain; pinned and running apps with a quiet dot | `components/dock/` |
 | **Toasts** | Notification cards that drop from the top edge. A separate program: it only listens, Plasma stays the notification server | `components/toasts/` |
+| **Lens** | Circle to Search for the desktop: `Win+G`, or hold the dock's glass. Freezes the screen; circle or tap to search it on Google, send it to Google Lens, translate it (or the whole screen in place) or copy the text. OCR is local (tesseract, Hebrew + English) | `components/lens/` |
 | **Login** | SDDM login screen in the same material | `login/` |
 | **System** | Windows-style keyboard shortcuts, touchpad gestures, panel layout, light/dark sync | `system/` |
 | **Direction** | Per-app RTL/LTR launch rules: run any app Hebrew-RTL or force English-LTR; dock, KRunner, xdg-open and Flatpak all honor the rules | `system/direction/` |

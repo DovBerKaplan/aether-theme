@@ -7,6 +7,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST=/usr/share/sddm/themes/aether-lock
 # System Settings writes the active theme here, and it is read after other conf.d files.
 CONF=/etc/sddm.conf.d/kde_settings.conf
+# Own drop-in: System Settings rewrites kde_settings.conf, so keep this override apart.
+INPUT=/etc/sddm.conf.d/aether-lock-input.conf
 PREV=/etc/sddm.conf.d/.aether-lock-previous-theme
 
 [[ $EUID -eq 0 ]] || { echo "run with sudo" >&2; exit 1; }
@@ -17,6 +19,7 @@ current="$(kreadconfig6 --file "$CONF" --group Theme --key Current 2>/dev/null |
 if [[ "${1:-}" == "--revert" ]]; then
   prev="$(cat "$PREV" 2>/dev/null || echo breeze)"
   kwriteconfig6 --file "$CONF" --group Theme --key Current "$prev"
+  rm -f "$INPUT"
   echo "Reverted SDDM theme to: $prev"
   exit 0
 fi
@@ -33,4 +36,7 @@ chmod -R a+rX "$DEST"
 kwriteconfig6 --file "$CONF" --group Theme --key Current aether-lock
 kwriteconfig6 --file "$CONF" --group Theme --key CursorTheme breeze_cursors
 kwriteconfig6 --file "$CONF" --group Theme --key Font "Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+# Empty InputMethod beats the greeter's default qtvirtualkeyboard.
+printf '[General]\nInputMethod=\n' > "$INPUT"
+echo "Virtual keyboard disabled on the SDDM greeter ($INPUT)."
 echo "Installed $DEST (previous theme: ${current:-none}). Active from the next login screen."

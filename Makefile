@@ -1,7 +1,7 @@
 # Aether: a Plasma 6 desktop layer (theme, island, toasts). `make help` lists the targets.
 SHELL := /bin/bash
 GEN   := theme/generators
-APPS  := island toasts dock console
+APPS  := island toasts dock console lens
 
 .DEFAULT_GOAL := help
 .PHONY: help all tokens theme fonts components install install-island install-login install-gestures direction-install zcode-rtl-install uninstall restore check clean
@@ -26,7 +26,7 @@ theme: tokens ## Generate colors, Kvantum, Plasma theme, global themes, Konsole,
 fonts: ## Fetch Inter and JetBrainsMono Nerd Font into ~/.local/share/fonts (skips what is present)
 	install/fonts.sh
 
-components: ## Build aether-island, aether-toasts, aether-dock and aether-console (needs the Qt/KF6 dev packages, see docs/INSTALL.md)
+components: ## Build aether-island, aether-toasts, aether-dock, aether-console and aether-lens (needs the Qt/KF6 dev packages, see docs/INSTALL.md)
 	@for app in $(APPS); do \
 	  cmake -S components/$$app -B components/$$app/build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null && \
 	  cmake --build components/$$app/build || exit 1; \

@@ -394,8 +394,9 @@ Bluetooth settings ↗                         Rename device
   Success moves the device into "Connected" (shared-element move).
 - **Device detail:** rename (alias), battery, type, address (copy), audio
   profile (`SegmentedControl` High quality (A2DP) | Headset (HFP), headphones
-  only), "Use for audio" (sets it as the default sink), "Forget" (second-tap
-  confirm).
+  only), "Use for audio" (sets it as the default sink), "Fallback router"
+  (marks the device as the tether failover uplink — see below), "Forget"
+  (second-tap confirm).
 - Icons come from BlueZ `Icon` (audio-headset, input-keyboard, phone…), mapped
   to the island's glyph set by `BtIcons.js` with a generic fallback; each family
   also has a friendly translated label for the detail page ("Type" row).
@@ -407,6 +408,25 @@ Bluetooth settings ↗                         Rename device
   BlueZ reports RSSI mainly during discovery, so bars mostly appear on nearby
   devices; a connected device's raw dBm is read on demand (`readRssi`, refreshed
   every 3 s while its detail page is open) and shown there as bars + dBm.
+- **Fallback router (`TetherController`)** — one device, marked from its detail
+  page, serves as the machine's uplink when the internet dies. Marking it
+  writes `Failover/Router` (the address) and points the `phone-tether` NM
+  profile at it (bluetooth/nap on bnep0, created on demand, route metric 50 /
+  dns-priority 50, autoconnect off — below the wifi's 600, so traffic moves the
+  moment bnep0 is up and nothing ever needs root). The engine watches NM's
+  `Connectivity`: after 5 s of `none/portal/limited` it connects the device
+  (`Device1.Connect` → `Network1.Connect("nap")`), finds bnep0 and activates the
+  profile. While riding, the real upstream is probed (`ping -I <iface>`); two
+  answers in a row drop the tether and the wifi route takes over by itself. A
+  router that doesn't answer is retried with a 30 s → 1/2/5 min backoff and the
+  row reads "Router unreachable" — silently, no cards. A tether that stays up
+  without internet for 2 min is recycled for a fresh lease; a device the user
+  disconnected by hand (the row's disconnect button) is never re-engaged until
+  they connect it again. Only successful transitions speak: one island activity
+  card on engage ("No internet — riding %1") and one on recovery
+  ("Back on Wi-Fi"). While engaged the router row reads "Sharing internet",
+  and the Wi-Fi tile's subtitle says "via %1". `AETHER_TETHER_FAKE=1`
+  (sandboxes) simulates engage/disengage with no D-Bus for screenshots.
 - **The bluetooth tile** adopts a lone connected device's glyph and name, keeps
   the battery text at its far end, and falls back to signal bars when the
   device reports no battery.
@@ -567,7 +587,7 @@ Once panels exist, the four chips can grow into an Android-style tile set.
 The candidate tiles are: Do not disturb (pauses toasts; island history still
 fills), Night Light, Dark theme, Airplane mode, Keep awake (inhibit sleep),
 Vibe coding (aether-vibe: agents keep running with the lid closed and the
-panel dark, until the lid opens), Screenshot (Spectacle region), Screen
+panel dark while the lid is shut; stays on until tapped off), Screenshot (Spectacle region), Screen
 record, Hotspot, Power saver and Microphone mute.
 
 - Layout: 4 per row, 2 rows (8 tiles). Horizontal paging with dots if there
