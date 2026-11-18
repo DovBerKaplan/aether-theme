@@ -1,3 +1,15 @@
 Glyph 1.0 Glyph.qml
 SessionEditor 1.0 SessionEditor.qml
 ImportPage 1.0 ImportPage.qml
+ActionGlyph 1.0 ActionGlyph.qml
+StatusDot 1.0 StatusDot.qml
+StatBar 1.0 StatBar.qml
+HomeView 1.0 HomeView.qml
+CardView 1.0 CardView.qml
+TermView 1.0 TermView.qml
+FilesView 1.0 FilesView.qml
+Pane 1.0 Pane.qml
+SplitHandle 1.0 SplitHandle.qml
+PaneMenu 1.0 PaneMenu.qml
+Workspace 1.0 Workspace.qml
+Fixtures 1.0 Fixtures.qml

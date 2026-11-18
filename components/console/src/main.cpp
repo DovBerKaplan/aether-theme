@@ -13,6 +13,7 @@
 #include <QQuickView>
 #include <QQmlContext>
 #include <QQmlEngine>
+#include <QtQml>
 
 #include "ConsoleController.h"
 #include "Discovery.h"
@@ -66,9 +67,10 @@ int main(int argc, char **argv)
     view->rootContext()->setContextProperty(QStringLiteral("store"), store);
     view->rootContext()->setContextProperty(QStringLiteral("discovery"), discovery);
     view->rootContext()->setContextProperty(QStringLiteral("launcher"), launcher);
-    view->rootContext()->setContextProperty(QStringLiteral("metrics"), new Metrics(controller));
-    view->rootContext()->setContextProperty(QStringLiteral("logStream"), new LogStream(controller));
-    view->rootContext()->setContextProperty(QStringLiteral("sftp"), new Sftp(controller));
+    // One backend per view (every split pane polls, tails and browses on its own).
+    qmlRegisterType<Metrics>("AetherConsole", 1, 0, "Metrics");
+    qmlRegisterType<LogStream>("AetherConsole", 1, 0, "LogStream");
+    qmlRegisterType<Sftp>("AetherConsole", 1, 0, "Sftp");
     // live-test fixture, like the island's AETHER_ISLAND_FAKE_BT: AETHER_CONSOLE_TEST_DETAIL=cont|session
     view->rootContext()->setContextProperty(QStringLiteral("testDetail"),
                                              qEnvironmentVariable("AETHER_CONSOLE_TEST_DETAIL"));

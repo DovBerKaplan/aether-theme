@@ -1,6 +1,9 @@
 #pragma once
 
+#include <csignal>
+
 #include <QFile>
+#include <QSet>
 #include <QObject>
 #include <QProcess>
 #include <QRegularExpression>
@@ -88,6 +91,7 @@ public:
         if (!QProcess::startDetached(konsole(), args, QString(), &pid)) {
             return 0;
         }
+        m_seated.insert(pid);
         Q_EMIT launched(QStringLiteral("session"), QString());
         return pid;
     }
@@ -160,6 +164,38 @@ public:
                         QStringLiteral("-s"), QStringLiteral("aether_local") });
     }
 
+    // The local shell as its own process, for the shelf's seat (see sshSessionPid). slot > 0
+    // opens an independent tmux session beside the main one.
+    Q_INVOKABLE qint64 localPid(int slot = 0)
+    {
+        if (konsole().isEmpty()) {
+            return 0;
+        }
+        qint64 pid = 0;
+        QStringList args;
+        const QString profile = QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
+            + QStringLiteral("/.local/share/konsole/Aether.profile");
+        if (QFile::exists(profile)) {
+            args << QStringLiteral("--profile") << QStringLiteral("Aether");
+        }
+        args << QStringLiteral("--hide-tabbar") << QStringLiteral("--hide-toolbars") << QStringLiteral("-e")
+             << QStringLiteral("tmux") << QStringLiteral("new") << QStringLiteral("-A") << QStringLiteral("-s")
+             << (QStringLiteral("aether_local") + (slot > 0 ? QStringLiteral("_%1").arg(slot) : QString()));
+        if (!QProcess::startDetached(konsole(), args, QString(), &pid)) {
+            return 0;
+        }
+        m_seated.insert(pid);
+        return pid;
+    }
+    // Closes a terminal window the shelf seated. Only pids this launcher started are ever
+    // signalled; the tmux session on the server (or here) survives.
+    Q_INVOKABLE void killPid(qint64 pid)
+    {
+        if (pid > 0 && m_seated.remove(pid)) {
+            ::kill(static_cast<pid_t>(pid), SIGTERM);
+        }
+    }
+
     // Remote files open in Kate over KIO's sftp worker (edit and save straight on the server,
     // credentials from the keys/agent), folders open in Dolphin - both stock KDE.
     Q_INVOKABLE bool editRemote(const QString &url)
@@ -189,7 +225,10 @@ private:
     static QStringList konsoleSshArgs(const QVariantMap &s)
     {
         const QString host = s.value(QStringLiteral("host")).toString().trimmed();
-        const QString sess = QStringLiteral("aether_") + sanitize(host);
+        // the first terminal of a host is the shared "main" session; further ones (split panes,
+        // "New terminal") get their own, so two panes never mirror each other
+        const int slot = s.value(QStringLiteral("slot")).toInt();
+        const QString sess = QStringLiteral("aether_") + sanitize(host) + (slot > 0 ? QStringLiteral("_%1").arg(slot) : QString());
         const QString remote = QStringLiteral(
             "if command -v tmux >/dev/null 2>&1; then exec tmux new -A -s %1; "
             "else echo \"tmux not found - plain shell (sessions will not survive disconnects)\"; exec $SHELL; fi").arg(sess);
@@ -240,4 +279,5 @@ private:
         }
         return ok;
     }
+    QSet<qint64> m_seated;   // the terminal windows this launcher started for the shelf's seats
 };

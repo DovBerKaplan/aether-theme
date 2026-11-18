@@ -4,3 +4,4 @@ Name=Aether Console
 Exec=@EXEC@
 NoDisplay=true
 X-KDE-Wayland-Interfaces=org_kde_plasma_window_management,org_kde_kwin_blur
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2
