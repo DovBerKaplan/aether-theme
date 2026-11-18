@@ -52,7 +52,7 @@ Item {
         case "darktheme": {      // dark -> light -> by hours -> dark; a mode picked by hand is never overridden by the clock
             const dk = displaySettings.dark, auto = displaySettings.autoTheme
             return {
-                glyph: auto ? "sun-moon" : dk ? "moon" : "sun",
+                glyph: auto ? "sunclock" : dk ? "contrast" : "sunrise",   // moon belongs to Night Light, sun to brightness
                 label: auto ? I18n.tr("Auto") : dk ? I18n.tr("Dark") : I18n.tr("Light"),
                 sub: auto ? I18n.tr("By hours") : dk ? I18n.tr("Tap for light") : I18n.tr("Tap for dark"),
                 active: auto || !dk, panel: "display",
