@@ -35,6 +35,8 @@ class TileStore : public QObject
     Q_PROPERTY(QStringList widgets READ widgets NOTIFY widgetsChanged)         // large-island widgets that are on, in order
     Q_PROPERTY(QVariantList widgetCatalog READ widgetCatalog CONSTANT)          // every widget that can be on
     Q_PROPERTY(bool keepAwake READ keepAwake NOTIFY stateChanged)
+    Q_PROPERTY(bool consoleEarOn READ consoleEarOn NOTIFY stateChanged)   // the console's resting tab is shown ([Console] EarShown; aether-console reads it)
+    Q_PROPERTY(bool lensOn READ lensOn NOTIFY stateChanged)     // Circle to Search is enabled ([Lens] Enabled; aether-lens and the dock read it)
     Q_PROPERTY(bool vibeOn READ vibeOn NOTIFY stateChanged)     // the aether-vibe session (lid-safe agents) is running
     Q_PROPERTY(bool micMuted READ micMuted NOTIFY stateChanged)
     Q_PROPERTY(bool wifiBefore READ wifiBefore NOTIFY stateChanged)  // radios as they were before airplane mode
@@ -57,6 +59,16 @@ public:
             m_settings.setValue(QStringLiteral("Tiles/VibeAdded"), true);
             if (!m_order.contains(QLatin1String("vibe"))) {
                 m_order << QStringLiteral("vibe");
+                m_settings.setValue(QStringLiteral("Tiles/Order"), m_order);
+            }
+            m_settings.sync();
+        }
+        m_lensOn = m_settings.value(QStringLiteral("Lens/Enabled"), true).toBool();
+        m_consoleEarOn = m_settings.value(QStringLiteral("Console/EarShown"), true).toBool();
+        if (!m_settings.contains(QStringLiteral("Tiles/LensAdded"))) {        // one-time: surface the Circle to Search tile
+            m_settings.setValue(QStringLiteral("Tiles/LensAdded"), true);
+            if (!m_order.contains(QLatin1String("lens"))) {
+                m_order << QStringLiteral("lens");
                 m_settings.setValue(QStringLiteral("Tiles/Order"), m_order);
             }
             m_settings.sync();
@@ -120,11 +132,7 @@ public:
             return;
         }
         m_settings.setValue(QStringLiteral("Widgets/Configured"), true);
-        if (clean.isEmpty()) {
-            m_settings.remove(QStringLiteral("Widgets/Order"));
-        } else {
-            m_settings.setValue(QStringLiteral("Widgets/Order"), clean);
-        }
+        m_settings.setValue(QStringLiteral("Widgets/Order"), clean);   // empty stays a key: PrefsGuard puts back keys that vanish
         m_settings.sync();
         Q_EMIT widgetsChanged();
     }
@@ -190,6 +198,8 @@ public:
     }
     bool keepAwake() const { return m_cookie != 0; }
     bool vibeOn() const { return m_vibeOn; }
+    bool lensOn() const { return m_lensOn; }
+    bool consoleEarOn() const { return m_consoleEarOn; }
     bool micMuted() const { return m_micMuted; }
     bool wifiBefore() const { return m_wifiBefore; }
     bool bluetoothBefore() const { return m_btBefore; }
@@ -221,11 +231,7 @@ public:
         m_settings.remove(QStringLiteral("Tiles/Wide"));
         m_settings.remove(QStringLiteral("Tiles/WideSet"));
         m_settings.setValue(QStringLiteral("Tiles/SizesSet"), true);       // an empty list is "all one cell", not "never set"
-        if (m_sizes.isEmpty()) {
-            m_settings.remove(QStringLiteral("Tiles/Sizes"));
-        } else {
-            m_settings.setValue(QStringLiteral("Tiles/Sizes"), m_sizes);
-        }
+        m_settings.setValue(QStringLiteral("Tiles/Sizes"), m_sizes);
         m_settings.sync();
         Q_EMIT orderChanged();
     }
@@ -243,6 +249,24 @@ public:
             const QDBusReply<uint> r = QDBusConnection::sessionBus().call(m, QDBus::Block, 1500);
             m_cookie = r.isValid() ? r.value() : 0;
         }
+        Q_EMIT stateChanged();
+    }
+    // The console's access strip on the screen edge, shown or hidden. Hidden, the console is still
+    // there (Win+C and the bar open it); only its resting tab is gone.
+    Q_INVOKABLE void toggleConsoleEar()
+    {
+        m_consoleEarOn = !m_consoleEarOn;
+        m_settings.setValue(QStringLiteral("Console/EarShown"), m_consoleEarOn);
+        m_settings.sync();
+        Q_EMIT stateChanged();
+    }
+    // Circle to Search on or off. The flag lives in aetherislandrc; the dock stops offering the hold on
+    // its grab line and aether-lens ignores Win+G (and lets go of its model's memory) while it is off.
+    Q_INVOKABLE void toggleLens()
+    {
+        m_lensOn = !m_lensOn;
+        m_settings.setValue(QStringLiteral("Lens/Enabled"), m_lensOn);
+        m_settings.sync();
         Q_EMIT stateChanged();
     }
     // Vibe coding: aether-vibe holds the logind inhibitors and manages the panel's DPMS;
@@ -363,7 +387,7 @@ private:
         tile("wifi", "Wi‑Fi", "wifi-3"), tile("bluetooth", "Bluetooth", "bluetooth"),
         tile("nightlight", "Night Light", "moon"), tile("darktheme", "Theme", "contrast"), tile("airplane", "Airplane mode", "plane"),
         tile("keepawake", "Keep awake", "coffee"), tile("vibe", "Vibe coding", "vibe"), tile("micmute", "Microphone", "mic"), tile("powersaver", "Power saver", "leaf"),
-        tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record"), tile("accent", "Color", "palette")};
+        tile("lens", "Circle to Search", "lens"), tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record"), tile("accent", "Color", "palette"), tile("console", "Console", "terminal")};
     const QVariantList m_widgetCatalog = connectInstalled() ? QVariantList{tile("media", "YouTube Music", "logo"), tile("connect", "KDE Connect", "phone")} : QVariantList{tile("media", "YouTube Music", "logo")};
     QSettings m_settings;
     QTimer m_saveAccent;
@@ -374,6 +398,8 @@ private:
     QStringList m_order, m_sizes;
     QTimer m_vibePoll;
     bool m_vibeOn = false;
+    bool m_lensOn = true;
+    bool m_consoleEarOn = true;
     uint m_cookie = 0;
     bool m_micMuted = false, m_wifiBefore = true, m_btBefore = true;
 };

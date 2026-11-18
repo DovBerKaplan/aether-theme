@@ -16,7 +16,7 @@ Item {
         width: 22; height: 12; radius: Tokens.radius.xs
         color: "transparent"
         border.width: 1.4
-        border.color: Qt.rgba(1, 1, 1, Tokens.tint.edge)
+        border.color: Theme.veil(Tokens.tint.edge)
         Rectangle {
             x: 2.4; y: 2.4
             width: Math.max(2, (shell.width - 4.8) * root.percent / 100)
@@ -27,6 +27,6 @@ Item {
     }
     Rectangle {
         x: 23; y: 4; width: 2; height: 4; radius: Tokens.radius.hair
-        color: Qt.rgba(1, 1, 1, Tokens.tint.edge)
+        color: Theme.veil(Tokens.tint.edge)
     }
 }

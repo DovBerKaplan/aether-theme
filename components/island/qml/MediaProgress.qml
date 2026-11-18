@@ -55,13 +55,13 @@ Item {
             width: parent.width
             height: area.containsMouse || root.dragging ? 5 : 3
             radius: height / 2
-            color: Qt.rgba(1, 1, 1, Tokens.tint.soft)
+            color: Theme.veil(Tokens.tint.soft)
             Behavior on height { NumberAnimation { duration: Tokens.motion.duration.fast; easing.type: Tokens.motion.easing.enter } }
             Rectangle {
                 width: Math.max(track.height, track.width * root.shown)
                 height: parent.height
                 radius: parent.radius
-                color: Theme.accent
+                color: Theme.accentFill
                 Behavior on width {
                     enabled: !root.dragging
                     NumberAnimation { duration: root.playing ? 1100 : 0; easing.type: Easing.Linear }

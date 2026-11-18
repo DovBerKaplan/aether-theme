@@ -18,15 +18,15 @@ Item {
     signal panelRequested()
 
     readonly property bool small: size === 1
-    readonly property color ink: Tokens.role.dark.textOnAccent
+    readonly property color ink: Theme.objectInk
     readonly property int iconZone: 48        // a wide tile's icon area, the part that toggles
 
     Rectangle {
         id: body
         anchors.fill: parent
         radius: Math.round(Math.min(width, height) * 0.3)
-        color: root.active ? Qt.rgba(1, 1, 1, bodyTap.pressed ? 0.80 : bodyHover.hovered ? 0.96 : 0.90)
-                           : Qt.rgba(1, 1, 1, bodyTap.pressed ? Tokens.tint.strong : bodyHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+        color: root.active ? (bodyTap.pressed ? Theme.objectFillPressed : bodyHover.hovered ? Theme.objectFillHover : Theme.objectFill)
+                           : Theme.veil(bodyTap.pressed ? Tokens.tint.strong : bodyHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
         scale: bodyTap.pressed ? 0.97 : 1
         Behavior on color { ColorAnimation { duration: Tokens.motion.duration.base } }
         Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.micro } }
@@ -94,7 +94,7 @@ Item {
             visible: trailing.kind === "dot"
             anchors.centerIn: parent
             width: root.trail.color !== undefined ? 14 : 8; height: width; radius: width / 2
-            color: root.trail.color !== undefined ? root.trail.color : "#ff6b61"
+            color: root.trail.color !== undefined ? root.trail.color : Tokens.role.island.negative
             border { width: root.trail.color !== undefined ? 1 : 0; color: Qt.rgba(1, 1, 1, 0.5) }
         }
     }

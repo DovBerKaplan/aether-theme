@@ -25,7 +25,7 @@ Item {
     Rectangle {      // card surface + hairline, like the media card
         anchors.fill: parent
         radius: Tokens.radius.xl
-        color: Qt.rgba(1, 1, 1, tap.pressed ? Tokens.tint.subtle : hover.hovered ? Tokens.tint.faint * 1.6 : Tokens.tint.faint)
+        color: Theme.veil(tap.pressed ? Tokens.tint.subtle : hover.hovered ? Tokens.tint.faint * 1.6 : Tokens.tint.faint)
         border { width: drop.dragging ? 2 : 1; color: drop.dragging ? Theme.accent : Theme.rim }
         Behavior on color { ColorAnimation { duration: Tokens.motion.duration.micro } }
     }
@@ -105,7 +105,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 Rectangle {
                     anchors.fill: parent; radius: 17
-                    color: Qt.rgba(1, 1, 1, bellTap.pressed ? Tokens.tint.strong : bellHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                    color: Theme.veil(bellTap.pressed ? Tokens.tint.strong : bellHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                     Behavior on color { ColorAnimation { duration: Tokens.motion.duration.micro } }
                 }
                 Glyph { anchors.centerIn: parent; name: "bell"; size: 15 }
@@ -129,7 +129,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 Rectangle {
                     anchors.fill: parent; radius: 17
-                    color: Qt.rgba(1, 1, 1, sendTap.pressed ? Tokens.tint.strong : sendHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                    color: Theme.veil(sendTap.pressed ? Tokens.tint.strong : sendHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                     Behavior on color { ColorAnimation { duration: Tokens.motion.duration.micro } }
                 }
                 Glyph { anchors.centerIn: parent; name: "send"; size: 15 }

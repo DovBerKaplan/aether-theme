@@ -300,7 +300,7 @@ Item {
                 delegate: Rectangle {
                     required property var modelData
                     height: 34; width: chipRow.width + 2 * Tokens.space.md; radius: height / 2
-                    color: Qt.rgba(1, 1, 1, addTap.pressed ? Tokens.tint.strong : addHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                    color: Theme.veil(addTap.pressed ? Tokens.tint.strong : addHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                     Row {
                         id: chipRow
                         anchors.centerIn: parent

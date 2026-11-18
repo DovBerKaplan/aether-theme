@@ -15,37 +15,23 @@ Item {
     property alias headerTrailing: trailingRow.data
     property alias footer: footerSlot.data
     property real footerHeight: 0
+    property real bottomInset: 34          // room under the footer (the island's grab line); a window that owns its edge sets less
     signal backRequested()
 
     readonly property real headerHeight: subtitle.length > 0 ? 64 : 56
     readonly property real contentHeight: Math.min(maxHeight,
-        headerHeight + bodyColumn.implicitHeight + Tokens.space.md + footerHeight + 34)
+        headerHeight + bodyColumn.implicitHeight + Tokens.space.md + footerHeight + bottomInset)
     readonly property bool scrolled: flick.contentY > 0
 
     Item {
         id: header
         width: parent.width; height: root.headerHeight
-        Item {
+        BackButton {
             id: back
             visible: root.showBack
-            anchors.left: parent.left; anchors.leftMargin: Tokens.space.sm; width: 40; height: 40
+            anchors.left: parent.left; anchors.leftMargin: Tokens.space.sm
             anchors.verticalCenter: parent.verticalCenter
-            activeFocusOnTab: true
-            Keys.onReturnPressed: root.backRequested()
-            Keys.onSpacePressed: root.backRequested()
-            Rectangle {
-                anchors.fill: parent; radius: 20
-                color: Qt.rgba(1, 1, 1, backTap.pressed ? Tokens.material.tintAttention : backHover.hovered ? Tokens.material.tintHover : 0)
-                border { width: back.activeFocus ? 2 : 0; color: Theme.accent }
-            }
-            Text {
-                anchors.centerIn: parent
-                text: I18n.rtl ? "›" : "‹"
-                font { family: Theme.font; pixelSize: Tokens.type.heading; weight: Font.Medium }
-                color: Theme.text
-            }
-            HoverHandler { id: backHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { id: backTap; onTapped: root.backRequested() }
+            onActivated: root.backRequested()
         }
         Column {
             anchors {
@@ -95,7 +81,7 @@ Item {
     }
     Item {
         id: footerSlot
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: 34 }
+        anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: root.bottomInset }
         height: root.footerHeight
     }
 }

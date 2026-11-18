@@ -10,6 +10,7 @@
 #include <QDBusServiceWatcher>
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QFileSystemWatcher>
 #include <QGuiApplication>
 #include <QIcon>
@@ -30,6 +31,7 @@
 #include <QTimer>
 #include <QUrl>
 
+#include <BackdropSampler.h>
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
 
@@ -178,7 +180,8 @@ public:
 
 Q_SIGNALS:
     void received(const QString &app, const QString &icon, const QString &summary, const QString &body,
-                  int urgency, int timeoutMs, int islandBottom, bool islandOpen);
+                  int urgency, int timeoutMs, bool islandOpen,
+                  const QString &desktop, bool phone);
 
 private:
     void inhibit()
@@ -222,19 +225,24 @@ private:
         QString summary = d.at(3).toString();
         QString body = d.at(4).toString();
         QString icon = NotificationIcon::resolve(app, d.at(2).toString(), hints);
-        if (isPhoneApp(app)) {
-            const PhoneMatch phone = phoneMatch(summary, body);
-            if (!phone.app.isEmpty()) {
-                app = phone.app;   // the card speaks the phone app's name, with its icon
+        // The desktop-entry hint names the .desktop file of the app that sent this; clicking the
+        // card uses it to find (or launch) that app. Phone cards have no desktop app - the island's
+        // KDE Connect page is their home.
+        QString desktop = hints.value(QStringLiteral("desktop-entry")).toObject().value(QStringLiteral("data")).toString();
+        const bool phone = isPhoneApp(app);
+        if (phone) {
+            desktop.clear();
+            const PhoneMatch phoneMatchFound = phoneMatch(summary, body);
+            if (!phoneMatchFound.app.isEmpty()) {
+                app = phoneMatchFound.app;   // the card speaks the phone app's name, with its icon
             }
-            if (!phone.icon.isEmpty()) {
-                icon = phone.icon;
+            if (!phoneMatchFound.icon.isEmpty()) {
+                icon = phoneMatchFound.icon;
             }
         }
-        // Where should this card land? The island owns the top of the screen: while its
-        // double bar (expanded) is open, the history list shows it there and no card is
-        // spawned at all; otherwise the card drops just below the island's current edge.
-        int islandBottom = 0;
+        // The island owns the top of the screen: while its double bar (expanded) is open, the
+        // history list shows the notification there and no card is spawned at all. Where the
+        // cards sit is not decided here - the stack follows the island's glass live.
         bool islandOpen = false;
         QDBusInterface island(QStringLiteral("org.aether.Island"), QStringLiteral("/Island"),
                               QStringLiteral("org.aether.Island"));
@@ -242,13 +250,9 @@ private:
         if (islandMode.isValid() && islandMode.value() == QLatin1String("expanded")) {
             islandOpen = true;
         }
-        const QDBusReply<int> bottom = island.call(QStringLiteral("bottom"));
-        if (bottom.isValid()) {
-            islandBottom = bottom.value();
-        }
         Q_EMIT received(app, icon, summary, body,
                         hints.value(QStringLiteral("urgency")).toObject().value(QStringLiteral("data")).toInt(1),
-                        d.at(7).toInt(-1), islandBottom, islandOpen);
+                        d.at(7).toInt(-1), islandOpen, desktop, phone);
     }
 
     QProcess m_proc;
@@ -294,6 +298,9 @@ class ToastsController : public QObject
     Q_PROPERTY(int screenWidth READ screenWidth CONSTANT)
     Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
     Q_PROPERTY(qreal bodyAlpha READ bodyAlpha NOTIFY darkChanged)
+    Q_PROPERTY(QColor accentOverride READ accentOverride NOTIFY accentChanged)
+    Q_PROPERTY(int islandBottom READ islandBottom NOTIFY islandChanged)    // where the island's glass ends right now
+    Q_PROPERTY(QString islandMode READ islandMode NOTIFY islandChanged)
 
 public:
     explicit ToastsController(QQuickView *view)
@@ -301,19 +308,55 @@ public:
         , m_view(view)
     {
         m_kdeglobals = QStandardPaths::locate(QStandardPaths::GenericConfigLocation, QStringLiteral("kdeglobals"));
+        m_islandRc = QDir::homePath() + QStringLiteral("/.config/aetherislandrc");
         m_watcher.addPath(m_kdeglobals);
+        m_watcher.addPath(m_islandRc);
         connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this](const QString &path) {
             m_watcher.addPath(path);   // editors replace the file, so re-arm the watch
             readScheme();
+            readAccent();
         });
         readScheme();
+        readAccent();
+
+        // The island announces every move of its glass; the cards ride along under it.
+        auto bus = QDBusConnection::sessionBus();
+        bus.connect(QStringLiteral("org.aether.Island"), QStringLiteral("/Island"), QStringLiteral("org.aether.Island"),
+                    QStringLiteral("UiState"), this, SLOT(onIslandState(QString, int)));
+        auto *islandWatch = new QDBusServiceWatcher(QStringLiteral("org.aether.Island"), bus,
+                                                    QDBusServiceWatcher::WatchForOwnerChange, this);
+        connect(islandWatch, &QDBusServiceWatcher::serviceOwnerChanged, this, [this](const QString &, const QString &, const QString &newOwner) {
+            if (newOwner.isEmpty()) {
+                onIslandState(QString(), 0);
+            } else {
+                QTimer::singleShot(500, this, [this] { pullIsland(); });
+            }
+        });
+        pullIsland();
+
+        // A strip of the desktop just to the side of the cards, level with the stack.
+        connect(&m_sampler, &BackdropSampler::lightChanged, this, &ToastsController::darkChanged);
+        m_sample.setInterval(1000);
+        connect(&m_sample, &QTimer::timeout, this, [this] {
+            if (!m_view->screen()) {
+                return;
+            }
+            const QRect g = m_view->screen()->geometry();
+            m_sampler.sample(QRect(g.center().x() + 190 + 24, g.y() + qMax(10, m_islandBottom + 10), 10, 150));
+        });
+        m_sample.start();
     }
+    QColor accentOverride() const { return m_accent; }
+    int islandBottom() const { return m_islandBottom; }
+    QString islandMode() const { return m_islandMode; }
     int screenWidth() const { return m_view->screen() ? m_view->screen()->size().width() : 1920; }
-    bool dark() const { return m_dark; }
+    // Light or dark follows what the desktop shows beside the stack (sampled); the system scheme
+    // only stands in until the first sample arrives or where sampling is not allowed.
+    bool dark() const { return m_sampler.valid() ? !m_sampler.light() : m_dark; }
     // Light mode is the dock's white-veil alpha; dark keeps the island glass (or the env override).
     qreal bodyAlpha() const
     {
-        if (!m_dark) {
+        if (!dark()) {
             return 0.50;
         }
         return qEnvironmentVariableIsSet("AETHER_BODY_ALPHA") ? qEnvironmentVariable("AETHER_BODY_ALPHA").toDouble() : 0.75;
@@ -324,6 +367,45 @@ public:
         if (h != m_view->height()) {
             m_view->resize(m_view->width(), h);
         }
+    }
+    // A card was clicked and its app is not running: launch it by desktop-entry id. kioclient
+    // carries KDE startup notification (single-instance apps just come forward); gio is the fallback.
+    Q_INVOKABLE void launchDesktop(const QString &desktop)
+    {
+        if (desktop.isEmpty()) {
+            return;
+        }
+        const QString id = desktop + QStringLiteral(".desktop");
+        const QStringList roots = {
+            QDir::homePath() + QStringLiteral("/.local/share/applications"),
+            QStringLiteral("/usr/share/applications"),
+            QStringLiteral("/usr/local/share/applications"),
+            QDir::homePath() + QStringLiteral("/.local/share/flatpak/exports/share/applications"),
+            QStringLiteral("/var/lib/flatpak/exports/share/applications"),
+        };
+        QString path;
+        for (const QString &r : roots) {
+            const QFileInfo fi(r + QLatin1Char('/') + id);
+            if (fi.isFile()) {
+                path = fi.absoluteFilePath();
+                break;
+            }
+        }
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!QProcess::startDetached(QStringLiteral("kioclient"), {QStringLiteral("exec"), path})) {
+            QProcess::startDetached(QStringLiteral("gio"), {QStringLiteral("launch"), path});
+        }
+    }
+    // A phone notification's "app" (WhatsApp, the phone's messenger) lives on the phone: the
+    // island's KDE Connect notifications page is the closest thing to opening it.
+    Q_INVOKABLE void openConnectPanel()
+    {
+        QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.aether.Island"), QStringLiteral("/Island"),
+                                                        QStringLiteral("org.aether.Island"), QStringLiteral("OpenPanel"));
+        m << QStringLiteral("connect:notifications");
+        QDBusConnection::sessionBus().asyncCall(m);
     }
     // Cards as {x, y, w, h, r}: blur and input are limited to them, so clicks everywhere else
     // pass straight through to the windows below.
@@ -346,10 +428,56 @@ public:
         }
     }
 
+public Q_SLOTS:
+    void onIslandState(const QString &mode, int bottom)
+    {
+        if (mode == m_islandMode && bottom == m_islandBottom) {
+            return;
+        }
+        m_islandMode = mode;
+        m_islandBottom = bottom;
+        Q_EMIT islandChanged();
+    }
+
 Q_SIGNALS:
     void darkChanged();
+    void accentChanged();
+    void islandChanged();
 
 private:
+    // One-off read of where the island is now (startup, or the island restarted).
+    void pullIsland()
+    {
+        auto call = [](const char *member) {
+            QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.aether.Island"), QStringLiteral("/Island"),
+                                                            QStringLiteral("org.aether.Island"), QString::fromLatin1(member));
+            return QDBusConnection::sessionBus().call(m, QDBus::Block, 800);
+        };
+        const QDBusMessage mode = call("mode");
+        const QDBusMessage bottom = call("bottom");
+        if (mode.type() == QDBusMessage::ReplyMessage && bottom.type() == QDBusMessage::ReplyMessage
+            && !mode.arguments().isEmpty() && !bottom.arguments().isEmpty()) {
+            onIslandState(mode.arguments().first().toString(), bottom.arguments().first().toInt());
+        }
+    }
+    // The colour the user picked in the island's colour panel (read-only here): transparent
+    // means none chosen and the theme's own accent applies. Same reading as the dock's.
+    void readAccent()
+    {
+        QSettings s(m_islandRc, QSettings::IniFormat);
+        QColor c(Qt::transparent);
+        if (s.value(QStringLiteral("Appearance/AccentSet")).toBool()) {
+            const qreal hue = qBound(0, s.value(QStringLiteral("Appearance/AccentHue"), 183).toInt(), 359) / 360.0;
+            const qreal light = qBound(0.25, s.value(QStringLiteral("Appearance/AccentLight"), 0.5).toDouble(), 0.8);
+            const qreal sat = qBound(0.15, s.value(QStringLiteral("Appearance/AccentSat"), 1.0).toDouble(), 1.0);
+            c = QColor::fromHslF(hue, sat, light);
+        }
+        if (c != m_accent) {
+            m_accent = c;
+            Q_EMIT accentChanged();
+        }
+    }
+
     // Same rule as the island: AetherSerenity is our light scheme, everything else is dark.
     // The key sits at the top level: QSettings maps an INI [General] section to the root.
     void readScheme()
@@ -368,6 +496,12 @@ private:
     QQuickView *m_view;
     QFileSystemWatcher m_watcher;
     QString m_kdeglobals;
+    QString m_islandRc;
+    QTimer m_sample;
+    BackdropSampler m_sampler;
+    QColor m_accent = Qt::transparent;
+    QString m_islandMode;
+    int m_islandBottom = 0;
     bool m_dark = true;
 };
 
@@ -391,7 +525,7 @@ int main(int argc, char **argv)
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("aether-toasts"));
-    app.setDesktopFileName(QStringLiteral("aether-toasts"));
+    app.setDesktopFileName(QStringLiteral("org.aether.toasts"));
 
     QQuickView view;
     view.setColor(Qt::transparent);

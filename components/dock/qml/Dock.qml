@@ -18,6 +18,13 @@ Item {
     LayoutMirroring.enabled: false
     LayoutMirroring.childrenInherit: true
 
+    // The vanish shrinks the glass, icons and tooltips toward the grab line: each of them carries this
+    // Scale (one object per item). Wrapping them in a parent item dimmed the whole dock, so no wrapper.
+    component PopScale: Scale {
+        origin.x: root.popOx; origin.y: root.popOy
+        xScale: root.popScale; yScale: root.popScale
+    }
+
     readonly property bool horiz: dock.edge === "bottom"
     readonly property int iconSize: Tokens.dock.icon
     readonly property int cell: iconSize + 2 * Tokens.dock.cellInset
@@ -32,18 +39,20 @@ Item {
     // Material: the island's glass (gradient body, hairline rim, grain), tuned per scheme - a touch
     // denser and rougher in dark mode, lighter, smoother and clearer in light mode.
     readonly property bool dark: dock.dark
-    readonly property color ink: dark ? Theme.text : Tokens.palette.graphite950
+    readonly property color ink: dark || Theme.tinted ? Theme.text : Tokens.palette.graphite950
     // Light mode is a white veil over the blur, nothing darker: clear, frosted, with a light rim.
-    readonly property color bodyTop: dark ? Qt.alpha(Tokens.palette.ink750, Tokens.material.dockAlphaDark)
-                                          : Qt.rgba(0.95, 0.96, 0.99, Tokens.material.dockAlphaLight)
-    readonly property color bodyBottom: dark ? Qt.alpha(Tokens.palette.ink850, Tokens.material.dockAlphaDark)
-                                             : Qt.rgba(0.90, 0.92, 0.97, Tokens.material.dockAlphaLight * 0.8)
-    readonly property color rim: dark ? Theme.rim : Qt.rgba(0.42, 0.48, 0.60, 0.28)   // cool grey hairline: shows on white and on dark
+    // The veil's hues are Theme's light material (Theme.dark follows the scheme here), re-alphaed
+    // with the dock's own calibration: one owner for the numbers, per-surface density.
+    readonly property color bodyTop: Theme.tinted ? Theme.bodyTop : dark ? Qt.alpha(Tokens.palette.ink750, Tokens.material.dockAlphaDark)
+                                          : Qt.rgba(Theme.bodyTop.r, Theme.bodyTop.g, Theme.bodyTop.b, Tokens.material.dockAlphaLight)
+    readonly property color bodyBottom: Theme.tinted ? Theme.bodyBottom : dark ? Qt.alpha(Tokens.palette.ink850, Tokens.material.dockAlphaDark)
+                                             : Qt.rgba(Theme.bodyBottom.r, Theme.bodyBottom.g, Theme.bodyBottom.b, Tokens.material.dockAlphaLight * 0.8)
+    readonly property color rim: Theme.rim   // cool grey hairline on the light veil; white hairline on dark glass
     readonly property real grainOpacity: dark ? Tokens.material.dockGrainDark : Tokens.material.dockGrainLight
 
     property bool shown: false
     property bool pointerIn: false
-    readonly property bool holdOpen: menuOn || drag.active || allCell.holding
+    readonly property bool holdOpen: menuOn || drag.active || allCell.holding || lensProg > 0
 
     // ---- Jelly motion ---------------------------------------------------------------
     // Everything is drawn in (u, v): u runs along the screen edge, v is the distance from it.
@@ -163,7 +172,29 @@ Item {
     readonly property string outline: svg(segments)
     readonly property rect hotRect: open ? (horiz ? Qt.rect(0, vWin - 2, lWin, 2) : Qt.rect(0, 0, 2, lWin))
                                          : (horiz ? Qt.rect(0, height - 2, width, 2) : Qt.rect(0, 0, 2, height))   // input only on the 2px edge strip
-    function report() { dock.setLayout(segments, hotRect, popupRects) }
+    // The vanish: a hold on the grab line pops the whole dock like a bubble - a small swell, then it
+    // shrinks into the line and is gone. The glass is drawn through the Scale below; the blur and
+    // input regions get the same scaling here so they follow it.
+    property real popScale: 1
+    property real popOx: width / 2
+    property real popOy: height
+    function popped(cmds) {
+        const k = popScale
+        if (k >= 0.999) return cmds
+        if (k <= 0.01) return []
+        const ox = popOx, oy = popOy
+        return cmds.map(c => {
+            const o = { t: c.t }
+            if (c.x !== undefined) { o.x = ox + (c.x - ox) * k; o.y = oy + (c.y - oy) * k }
+            if (c.x1 !== undefined) {
+                o.x1 = ox + (c.x1 - ox) * k; o.y1 = oy + (c.y1 - oy) * k
+                o.x2 = ox + (c.x2 - ox) * k; o.y2 = oy + (c.y2 - oy) * k
+            }
+            return o
+        })
+    }
+    onPopScaleChanged: report()
+    function report() { dock.setLayout(popped(segments), hotRect, popupRects, grabRect) }
     onSegmentsChanged: report()
     onHotRectChanged: report()
     onPopupRectsChanged: report()
@@ -215,16 +246,67 @@ Item {
     }
 
     // Home indicator: the bar's quiet grab line, just inside the screen edge while the bar is out.
-    Rectangle {
+    // Holding it charges Circle to Search (see HomeLine); the hold lands after lensCharge.
+    HomeLine {
+        id: homeLine
+        z: 5
         readonly property real len: Math.round(root.along * Tokens.dock.homeW)
+        horiz: root.horiz
         width: root.horiz ? len : Tokens.dock.homeH
         height: root.horiz ? Tokens.dock.homeH : len
-        radius: Tokens.dock.homeH / 2
         x: root.horiz ? root.uPad + (root.along - len) / 2 : Tokens.dock.homeInset
         y: root.horiz ? root.vWin - Tokens.dock.homeInset - height : root.uPad + (root.along - len) / 2
-        color: root.dark ? Theme.text : "white"
-        opacity: root.shown ? (root.dark ? 0.45 : 0.9) : 0
+        baseColor: "white"
+        baseOpacity: 0.92
+        pressed: root.lensGrow
+        opacity: root.shown ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
+    }
+
+    // The hold: charge for 560 ms (the colour builds along the line), then the dock folds away and
+    // Lens opens out of this point on the screen edge. Letting go early relaxes it.
+    property real lensProg: 0
+    property bool lensGrow: false          // the line stretches only once the bar has vanished
+    readonly property rect grabRect: !shown || !dock.lensEnabled ? Qt.rect(0, 0, 0, 0)
+        : (horiz ? Qt.rect(homeLine.x - 24, vWin - 14, homeLine.width + 48, 14)
+                 : Qt.rect(0, homeLine.y - 24, 14, homeLine.height + 48))
+    onGrabRectChanged: report()
+    NumberAnimation { id: lensCharge; target: root; property: "lensProg"; to: 1; duration: 560; easing.type: Easing.InOutQuad; onFinished: { root.lensFire() } }
+    NumberAnimation { id: lensRelax; target: root; property: "lensProg"; to: 0; duration: 220; easing.type: Easing.OutQuad }
+    property real lensFrac: 0.5
+    function lensFire() {
+        lensFrac = horiz ? (homeLine.x + homeLine.width / 2) / width : (homeLine.y + homeLine.height / 2) / height
+        popOx = homeLine.x + homeLine.width / 2
+        popOy = homeLine.y + homeLine.height / 2
+        pop.restart()
+    }
+    SequentialAnimation {
+        id: pop
+        NumberAnimation { target: root; property: "popScale"; to: 1.05; duration: 70; easing.type: Easing.OutQuad }
+        NumberAnimation { target: root; property: "popScale"; to: 0; duration: 280; easing.type: Easing.InCubic }
+        // The bar is completely gone (a beat of just the line), only then the line stretches, then it
+        // fades and Lens captures the screen.
+        PauseAnimation { duration: 140 }
+        ScriptAction { script: root.lensGrow = true }
+        PauseAnimation { duration: 280 }
+        ScriptAction { script: { root.setShown(false); lensGo.restart() } }
+    }
+    Timer { id: lensGo; interval: 200; onTriggered: { dock.activateLens(dock.edge, root.lensFrac); lensReset.restart() } }
+    Timer { id: lensReset; interval: 700; onTriggered: { root.popScale = 1; root.lensGrow = false; lensRelax.restart() } }
+    // The hold zone over the grab line. A TapHandler, not a MouseArea: a MouseArea there swallowed the
+    // hover that opens and keeps the dock, so merely reaching for the line closed the bar.
+    Item {
+        id: lensGrab
+        z: 6
+        x: root.grabRect.x; y: root.grabRect.y; width: root.grabRect.width; height: root.grabRect.height
+        enabled: root.shown && !lensGo.running && !lensReset.running
+        TapHandler {
+            gesturePolicy: TapHandler.DragThreshold
+            onPressedChanged: {
+                if (pressed) { lensRelax.stop(); lensCharge.restart() }
+                else if (lensCharge.running) { lensCharge.stop(); lensRelax.restart() }
+            }
+        }
     }
 
     // ---- Tasks -------------------------------------------------------------------
@@ -294,6 +376,7 @@ Item {
 
     // ---- The glass: the island's material on the silhouette --------------------------
     Shape {
+        transform: PopScale {}
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
@@ -308,6 +391,7 @@ Item {
         }
     }
     Shape {
+        transform: PopScale {}
         id: maskShape
         anchors.fill: parent
         visible: false
@@ -316,6 +400,7 @@ Item {
     }
     Image { id: grain; anchors.fill: parent; source: Theme.grain; fillMode: Image.Tile; visible: false }
     MultiEffect {
+        transform: PopScale {}
         anchors.fill: parent
         source: grain
         maskEnabled: true
@@ -324,6 +409,7 @@ Item {
     }
 
     Grid {
+        transform: PopScale {}
         id: grid
         readonly property real implicitLength: (root.horiz ? implicitWidth : implicitHeight)
         readonly property real centerV: root.d + thicknessNow / 2
@@ -431,6 +517,7 @@ Item {
     // (again = bring them back). Long-press and drag it along the row: it follows the pointer and
     // settles at whichever end is nearer, and stays there.
     Item {
+        transform: PopScale {}
         id: allCell
         readonly property real span: 22
         readonly property real reserve: span + root.gap          // room the dots take from the row
@@ -580,6 +667,7 @@ Item {
 
     // Hover label: name, and below it the window title or the state - quiet, two lines at most.
     Item {
+        transform: PopScale {}
         id: tip
         readonly property point pos: root.popPos(root.tipAnchor, width, height)
         readonly property bool on: root.tipOn && !root.menuOn
@@ -617,6 +705,7 @@ Item {
 
     // Right-click menu: head (name + state), primary action, the app's own actions, pin, close last.
     Item {
+        transform: PopScale {}
         id: menuCard
         readonly property point pos: root.popPos(root.menuAnchor, width, height)
         x: pos.x; y: pos.y

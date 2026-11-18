@@ -146,7 +146,7 @@ Item {
                         visible: !held.dragging
                         anchors { right: parent.right; rightMargin: Tokens.space.md; verticalCenter: parent.verticalCenter }
                         width: 24; height: 24; radius: 12
-                        color: Qt.rgba(1, 1, 1, rmTap.pressed ? Tokens.tint.strong : rmHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                        color: Theme.veil(rmTap.pressed ? Tokens.tint.strong : rmHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                         Glyph { anchors.centerIn: parent; name: "minus"; size: 12 }
                         HoverHandler { id: rmHover; cursorShape: Qt.PointingHandCursor }
                         TapHandler { id: rmTap; onTapped: root.removeAt(slot.index) }
@@ -164,7 +164,7 @@ Item {
                 delegate: Rectangle {
                     required property var modelData
                     height: 34; width: pill.width + 2 * Tokens.space.md; radius: height / 2
-                    color: Qt.rgba(1, 1, 1, addTap.pressed ? Tokens.tint.strong : addHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                    color: Theme.veil(addTap.pressed ? Tokens.tint.strong : addHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                     Row {
                         id: pill
                         anchors.centerIn: parent

@@ -6,7 +6,7 @@ Item {
     id: root
     property real value: 0
     property bool mirrored: I18n.rtl      // fills from the start edge; media progress sets this false and stays left-to-right
-    property color fillColor: Theme.text
+    property color fillColor: Theme.dark && !Theme.tinted ? Theme.text : Theme.objectFill
     signal moved(real v)
 
     height: 26
@@ -18,7 +18,7 @@ Item {
         id: track
         anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
         height: 8; radius: Tokens.radius.xs
-        color: Qt.rgba(1, 1, 1, Tokens.tint.soft)
+        color: Theme.veil(Tokens.tint.soft)
         Rectangle {
             anchors.left: parent.left
             width: Math.max(track.height, track.width * root.shown)

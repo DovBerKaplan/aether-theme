@@ -24,7 +24,7 @@ Item {
             const r = (Math.min(width, height) - root.ringWidth) / 2, cx = width / 2, cy = height / 2
             ctx.lineWidth = root.ringWidth
             ctx.lineCap = "round"
-            ctx.strokeStyle = Qt.rgba(1, 1, 1, Tokens.tint.soft)
+            ctx.strokeStyle = Theme.veil(Tokens.tint.soft)
             ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke()
             if (p > 0) {
                 ctx.strokeStyle = Theme.text

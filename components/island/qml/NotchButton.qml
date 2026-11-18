@@ -12,7 +12,7 @@ Item {
     Rectangle {   // the seat exists only under the pointer: at rest the tab is pure ink on glass
         anchors.fill: parent
         radius: width / 2
-        color: Qt.rgba(1, 1, 1, tap.pressed ? Tokens.tint.strong : hover.hovered ? Tokens.tint.soft : 0)
+        color: Theme.veil(tap.pressed ? Tokens.tint.strong : hover.hovered ? Tokens.tint.soft : 0)
         Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
     }
     Glyph {

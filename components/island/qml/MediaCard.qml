@@ -70,7 +70,7 @@ Item {
     Rectangle {                                 // card surface + machined hairline
         anchors.fill: parent
         radius: Tokens.radius.xl
-        color: Qt.rgba(1, 1, 1, Tokens.tint.faint)
+        color: Theme.veil(Tokens.tint.faint)
         border.width: 1
         border.color: Theme.rim
     }
@@ -163,7 +163,7 @@ Item {
                 radius: art.radius
                 color: "transparent"
                 border.width: 1
-                border.color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+                border.color: Theme.veil(Tokens.tint.subtle)
             }
             EqBars {                            // no artwork: the eq is the artwork
                 anchors.centerIn: parent
@@ -230,7 +230,7 @@ Item {
                 opacity: media.hasPlayer ? 1 : 0.4
                 Rectangle {
                     anchors.fill: parent; radius: Tokens.radius.lg
-                    color: Qt.rgba(1, 1, 1, prevTap.pressed ? Tokens.tint.strong : prevHover.hovered ? Tokens.tint.soft : 0)
+                    color: Theme.veil(prevTap.pressed ? Tokens.tint.strong : prevHover.hovered ? Tokens.tint.soft : 0)
                     Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
                 }
                 Glyph {
@@ -248,7 +248,7 @@ Item {
                 opacity: media.hasPlayer ? 1 : 0.4
                 Rectangle {
                     anchors.fill: parent; radius: Tokens.radius.lg
-                    color: heroTap.pressed ? Tokens.role.island.heroPressed : Tokens.role.island.hero
+                    color: !Theme.dark || Theme.tinted ? (heroTap.pressed ? Theme.objectFillPressed : Theme.objectFill) : heroTap.pressed ? Tokens.role.island.heroPressed : Tokens.role.island.hero
                     Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
                 }
                 Item {
@@ -256,8 +256,8 @@ Item {
                     width: 16; height: 16
                     scale: heroTap.pressed ? 0.94 : 1
                     Behavior on scale { NumberAnimation { duration: Tokens.motion.duration.micro } }
-                    Glyph { anchors.centerIn: parent; name: "play"; size: 16; color: Tokens.role.dark.surface; opacity: media.playing ? 0 : 1; Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } } }
-                    Glyph { anchors.centerIn: parent; name: "pause"; size: 16; color: Tokens.role.dark.surface; opacity: media.playing ? 1 : 0; Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } } }
+                    Glyph { anchors.centerIn: parent; name: "play"; size: 16; color: Theme.objectInk; opacity: media.playing ? 0 : 1; Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } } }
+                    Glyph { anchors.centerIn: parent; name: "pause"; size: 16; color: Theme.objectInk; opacity: media.playing ? 1 : 0; Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } } }
                 }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
                 TapHandler { id: heroTap; enabled: media.hasPlayer; onTapped: media.playPause() }
@@ -268,7 +268,7 @@ Item {
                 opacity: media.hasPlayer ? 1 : 0.4
                 Rectangle {
                     anchors.fill: parent; radius: Tokens.radius.lg
-                    color: Qt.rgba(1, 1, 1, nextTap.pressed ? Tokens.tint.strong : nextHover.hovered ? Tokens.tint.soft : 0)
+                    color: Theme.veil(nextTap.pressed ? Tokens.tint.strong : nextHover.hovered ? Tokens.tint.soft : 0)
                     Behavior on color { ColorAnimation { duration: Tokens.motion.duration.fast } }
                 }
                 Glyph {

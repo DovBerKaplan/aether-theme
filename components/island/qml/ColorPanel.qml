@@ -30,7 +30,7 @@ PanelScaffold {
             Rectangle { width: 40; height: 40; radius: 12; color: Theme.accent }
             Rectangle {
                 width: 74; height: 24; radius: 12; anchors.verticalCenter: parent.verticalCenter
-                color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+                color: Theme.veil(Tokens.tint.subtle)
                 Rectangle { x: 38; y: 3; width: 34; height: 18; radius: 9; color: Theme.accent }
             }
             Text {

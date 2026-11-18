@@ -18,6 +18,7 @@
 #include <QDBusPendingReply>
 #include <QDBusReply>
 #include <QDBusVariant>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
 #include <QMap>
@@ -135,7 +136,12 @@ public:
     // a new password goes into a NEW profile that lives in memory until the connection works.
     Q_INVOKABLE void connectTo(const QString &ssid, const QString &psk, bool autoconnect = true)
     {
-        if (m_dev.isEmpty() || !m_connecting.isEmpty()) {
+        qInfo().noquote() << "DIAG connectTo" << ssid << "dev=" << m_dev << "connecting=" << m_connecting;   // TEMP: remove after debugging
+        if (m_dev.isEmpty()) {
+            return;
+        }
+        if (!m_connecting.isEmpty()) {   // another join is pending: say so, don't swallow the tap
+            Q_EMIT connectFailed(ssid, QStringLiteral("busy"), QStringLiteral("Still connecting to %1").arg(m_connecting));
             return;
         }
         const QVariantMap net = find(ssid);
@@ -243,11 +249,7 @@ public:
             if (on) { manual.removeAll(p.uuid); } else if (!manual.contains(p.uuid)) { manual << p.uuid; }
             setProfileAutoconnect(p.uuid, on);
         }
-        if (manual.isEmpty()) {
-            prefs.remove(QStringLiteral("Network/ManualUuids"));
-        } else {
-            prefs.setValue(QStringLiteral("Network/ManualUuids"), manual);
-        }
+        prefs.setValue(QStringLiteral("Network/ManualUuids"), manual);   // empty stays a key (PrefsGuard)
         prefs.sync();
         m_savedDirty = true;
         QTimer::singleShot(700, this, [this] { refresh(true); });

@@ -8,14 +8,15 @@ set(CMAKE_AUTOMOC ON)
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick Qml DBus)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick Qml DBus Sql Concurrent)
 find_package(KF6WindowSystem REQUIRED)
+find_package(KF6Runner REQUIRED)   # the search engine runs KRunner's own plugins in-process
 find_package(LayerShellQt REQUIRED)
 
-qt_add_executable(aether-island src/main.cpp src/SystemInfo.h src/MediaController.h src/AudioLevels.h src/NotificationStore.h src/NetworkModel.h src/AudioModel.h src/BluetoothModel.h src/SystemPanels.h src/TileStore.h src/ConnectModel.h src/ConnectInput.h src/GlyphStore.h)
+qt_add_executable(aether-island src/main.cpp ../shared/src/BackdropSampler.h src/SystemInfo.h src/MediaController.h src/PrefsGuard.h src/AudioLevels.h src/NotificationStore.h src/NetworkModel.h src/AudioModel.h src/BluetoothModel.h src/TetherController.h src/SystemPanels.h src/TileStore.h src/ConnectModel.h src/ConnectInput.h src/GlyphStore.h src/SearchEngine.h src/UsageIndex.h)
 target_link_libraries(aether-island PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus
-    KF6::WindowSystem LayerShellQt::Interface)
+    Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus Qt6::Sql Qt6::Concurrent
+    KF6::WindowSystem KF6::Runner LayerShellQt::Interface)
 target_include_directories(aether-island PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src)
 
 install(TARGETS aether-island RUNTIME DESTINATION bin)

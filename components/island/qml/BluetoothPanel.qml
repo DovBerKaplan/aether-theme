@@ -64,6 +64,7 @@ PanelScaffold {
     function stateOf(d) {
         if (errPath === d.path) return I18n.tr(errText)
         if (bluetooth.busy === d.path) return d.paired ? I18n.tr("Connecting…") : I18n.tr("Pairing…")
+        if (tether.engaged && tether.routerAddress === d.address) return I18n.tr("Sharing internet")
         if (d.connected) return I18n.tr("Connected")
         return d.paired ? I18n.tr("Not connected") : I18n.tr("Tap to pair")
     }
@@ -106,7 +107,7 @@ PanelScaffold {
                 width: parent.width
                 height: visible ? pairCol.height + 2 * Tokens.space.lg : 0
                 radius: Tokens.radius.lg
-                color: Qt.rgba(1, 1, 1, Tokens.tint.subtle)
+                color: Theme.veil(Tokens.tint.subtle)
                 Column {
                     id: pairCol
                     x: Tokens.space.lg; y: Tokens.space.lg
@@ -180,12 +181,18 @@ PanelScaffold {
                 level: modelData.level
                 anchors.verticalCenter: parent.verticalCenter
             }
+            Glyph {             // the fallback-router mark; lit while it is actually carrying the machine
+                visible: tether.routerAddress === modelData.address
+                name: "router"; size: 13
+                color: tether.engaged ? Theme.text : Theme.subtext
+                anchors.verticalCenter: parent.verticalCenter
+            }
             Item {      // disconnect: an icon, never forgets the pairing
                 visible: modelData.connected
                 width: 32; height: 32
                 Rectangle {
                     anchors.fill: parent; radius: 16
-                    color: Qt.rgba(1, 1, 1, dTap.pressed ? Tokens.tint.strong : dHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                    color: Theme.veil(dTap.pressed ? Tokens.tint.strong : dHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                 }
                 Glyph { anchors.centerIn: parent; name: "disconnect"; size: 15 }
                 HoverHandler { id: dHover; cursorShape: Qt.PointingHandCursor }
@@ -217,6 +224,19 @@ PanelScaffold {
                 title: I18n.tr("Connect automatically")
                 subtitle: root.detailDev && root.detailDev.paused ? I18n.tr("Paused until you connect it again") : I18n.tr("Reconnects by itself when it is in range")
                 Switch { checked: root.detailDev ? root.detailDev.auto : true; onToggled: (c) => bluetooth.setAutoConnect(root.detailPath, c) }
+            }
+            ListRow {      // the fallback router: when the internet dies, this device carries the machine
+                readonly property bool mine: root.detailDev !== null && tether.routerAddress !== "" && tether.routerAddress === root.detailDev.address
+                visible: root.detailDev !== null && root.detailDev.paired
+                width: parent.width
+                title: I18n.tr("Fallback router")
+                subtitle: mine && tether.engaged ? I18n.tr("Sharing internet")
+                    : mine && tether.state === "unavailable" ? I18n.tr("Router unreachable")
+                    : I18n.tr("Use this device's internet when Wi‑Fi has none")
+                Switch {
+                    checked: root.detailDev !== null && tether.routerAddress === root.detailDev.address
+                    onToggled: (c) => tether.setRouter(root.detailDev ? root.detailDev.address : "", c)
+                }
             }
             KeyValueRow { width: parent.width; key: I18n.tr("Status"); copyable: false
                 value: root.detailDev ? (root.detailDev.connected ? I18n.tr("Connected") : I18n.tr("Not connected")) : "" }

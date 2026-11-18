@@ -67,7 +67,7 @@ Item {
                 Rectangle {   // an icon-only button
                     visible: parent.iconOnly
                     anchors.fill: parent; radius: 18
-                    color: Qt.rgba(1, 1, 1, iTap.pressed ? Tokens.tint.strong : iHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
+                    color: Theme.veil(iTap.pressed ? Tokens.tint.strong : iHover.hovered ? Tokens.tint.soft : Tokens.tint.subtle)
                     Glyph { anchors.centerIn: parent; name: parent.parent.modelData.glyph || ""; size: 16 }
                     HoverHandler { id: iHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { id: iTap; onTapped: root.activated(parent.parent.modelData.id) }

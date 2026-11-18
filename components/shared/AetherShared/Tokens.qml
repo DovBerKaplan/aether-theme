@@ -84,15 +84,28 @@ QtObject {
         readonly property color accent: "#00f2fe"
         readonly property color chip: "#2a2d34"
         readonly property color negative: "#ff6b6b"
+        readonly property color attention: "#e08a3c"
+        readonly property color warning: "#c9a26d"
         readonly property color hero: "#ffffff"
         readonly property color heroPressed: "#dfe3e8"
         readonly property color bodyTop: "#1c1e24"
         readonly property color bodyBottom: "#121418"
     }
+    component RoleLensTokens: QtObject {
+        readonly property color ringBlue: "#4285f4"
+        readonly property color ringRed: "#ea4335"
+        readonly property color ringYellow: "#fbbc04"
+        readonly property color ringGreen: "#34a853"
+        readonly property color primary: "#a8c7fa"
+        readonly property color primaryPressed: "#8fb4ff"
+        readonly property color textOnPrimary: "#062e6f"
+        readonly property color selection: "#4285f4"
+    }
     component RoleTokens: QtObject {
         readonly property RoleDarkTokens dark: RoleDarkTokens {}
         readonly property RoleLightTokens light: RoleLightTokens {}
         readonly property RoleIslandTokens island: RoleIslandTokens {}
+        readonly property RoleLensTokens lens: RoleLensTokens {}
     }
     component MaterialTokens: QtObject {
         readonly property real islandBodyAlpha: 0.75

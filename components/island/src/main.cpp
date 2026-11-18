@@ -34,17 +34,21 @@
 
 #include "AudioLevels.h"
 #include "MediaController.h"
+#include "PrefsGuard.h"
 #include "NotificationStore.h"
 #include "AudioModel.h"
 #include "ConnectInput.h"
 #include "ConnectModel.h"
 #include "BluetoothModel.h"
 #include "NetworkModel.h"
+#include "TetherController.h"
 #include "SystemPanels.h"
 #include "TileStore.h"
 #include "GlyphStore.h"
 #include "SystemInfo.h"
+#include "SearchEngine.h"
 
+#include <BackdropSampler.h>
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
 
@@ -94,6 +98,7 @@ class IslandController : public QObject
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.aether.Island")
     Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
+    Q_PROPERTY(bool backdropLight READ backdropLight NOTIFY backdropChanged)   // the desktop under the bar is bright
     Q_PROPERTY(int screenWidth READ screenWidth CONSTANT)
     Q_PROPERTY(int screenHeight READ screenHeight CONSTANT)
     Q_PROPERTY(qreal bodyAlpha READ bodyAlpha CONSTANT)
@@ -111,9 +116,23 @@ public:
         });
         readScheme();
         ensureMediaScript();
+
+        // A strip of the desktop just under the glass (it follows the glass's edge), so the bar
+        // dresses light or dark for what it sits on.
+        connect(&m_sampler, &BackdropSampler::lightChanged, this, &IslandController::backdropChanged);
+        m_sample.setInterval(800);
+        connect(&m_sample, &QTimer::timeout, this, [this] {
+            if (!m_view->screen()) {
+                return;
+            }
+            const QRect g = m_view->screen()->geometry();
+            m_sampler.sample(QRect(g.center().x() - 120, g.y() + m_uiBottom + 8, 240, 10));
+        });
+        m_sample.start();
     }
 
     bool dark() const { return m_dark; }
+    bool backdropLight() const { return m_sampler.valid() && m_sampler.light(); }
     int screenWidth() const { return m_view->screen() ? m_view->screen()->size().width() : 1920; }
     int screenHeight() const { return m_view->screen() ? m_view->screen()->size().height() : 1080; }
     // AETHER_BODY_ALPHA lets us compare opacity levels while tuning the look.
@@ -173,19 +192,8 @@ public:
         m_view->setMask(input.isEmpty() ? QRegion(0, 0, 1, 1) : input);
     }
 
-    // The two buttons in the notch. Search opens KRunner; power opens KDE's own shutdown screen
-    // (shut down / restart / log out), which asks for confirmation instead of acting at once.
-    Q_INVOKABLE void openSearch()
-    {
-        QDBusInterface i(QStringLiteral("org.kde.krunner"), QStringLiteral("/App"), QStringLiteral("org.kde.krunner.App"));
-        i.asyncCall(QStringLiteral("toggleDisplay"));
-    }
-    Q_INVOKABLE void openPowerMenu()
-    {
-        QDBusInterface i(QStringLiteral("org.kde.LogoutPrompt"), QStringLiteral("/LogoutPrompt"), QStringLiteral("org.kde.LogoutPrompt"));
-        i.asyncCall(QStringLiteral("promptAll"));
-    }
-
+    // Search and power live inside the island now (SearchHost / PowerBar): the tab's buttons
+    // open them as modes, and org.aether.Island.Search() lets a shortcut open the search too.
     Q_INVOKABLE void setKeyboard(bool wanted)
     {
         if (auto *ls = LayerShellQt::Window::get(m_view)) {
@@ -204,6 +212,12 @@ public:
         const QPoint origin = m_view->screen() ? m_view->screen()->geometry().topLeft() : QPoint();
         m_mediaRect = QRect(x, y, w, h).translated(origin);
         invokeKwinShortcut(QStringLiteral("Aether Media Show"));
+    }
+    // The bar's console button: show the console shelf, or fold it back to its resting tab.
+    Q_INVOKABLE void toggleConsole()
+    {
+        QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(
+            QStringLiteral("org.aether.Console"), QStringLiteral("/Console"), QStringLiteral("org.aether.Console"), QStringLiteral("Toggle")));
     }
     Q_INVOKABLE void hideMediaWindow() { invokeKwinShortcut(QStringLiteral("Aether Media Hide")); }
 
@@ -227,6 +241,10 @@ public Q_SLOTS:
     // Detail panels: wifi, bluetooth, sound, display, battery, calendar, power.
     void OpenPanel(const QString &id) { Q_EMIT panelRequested(id); }
     void ClosePanel() { Q_EMIT stateRequested(QStringLiteral("close")); }
+    // The island-native search (the tab's morphing pill). SearchWithQuery opens it with the
+    // query already typed - scripts and shortcuts can drop a search straight onto the glass.
+    void Search() { Q_EMIT searchRequested(QString()); }
+    void SearchWithQuery(const QString &query) { Q_EMIT searchRequested(query); }
     // Where the island's glass currently ends, and in which mode - aether-toasts asks this
     // for every notification: cards drop just below the glass, and while the double bar
     // (expanded) is open no card is shown at all (the history list takes it).
@@ -234,17 +252,24 @@ public Q_SLOTS:
     int bottom() const { return m_uiBottom; }
     void setUiState(const QString &mode, int bottom)
     {
+        if (mode == m_uiMode && bottom == m_uiBottom) {
+            return;
+        }
         m_uiMode = mode;
         m_uiBottom = bottom;
+        Q_EMIT UiState(mode, bottom);
     }
 
 Q_SIGNALS:
+    void UiState(const QString &mode, int bottom);   // on the bus: aether-toasts follows the glass live
     void darkChanged();
+    void backdropChanged();
     void stateRequested(const QString &state);
     void mediaWindowReady();
     void mediaWindowMissing();
     void mediaFocusLost();
     void panelRequested(const QString &id);
+    void searchRequested(const QString &query);
 
 private:
     // Raw DBus messages, never QDBusInterface: its constructor introspects the target
@@ -306,6 +331,8 @@ private:
     }
 
     QQuickView *m_view;
+    QTimer m_sample;
+    BackdropSampler m_sampler;
     QFileSystemWatcher m_watcher;
     QString m_kdeglobals;
     bool m_dark = true;
@@ -383,14 +410,19 @@ int main(int argc, char **argv)
     view.setResizeMode(QQuickView::SizeRootObjectToView);
     view.resize(300, 4);
 
-    auto *ls = LayerShellQt::Window::get(&view);
-    ls->setLayer(LayerShellQt::Window::LayerOverlay);
-    ls->setAnchors(LayerShellQt::Window::AnchorTop);   // anchored to top only: centred horizontally
-    ls->setExclusiveZone(0);                           // 0 = never reserve edge space (-1 would make maximized windows stop short of the edge, like a Windows taskbar)
-    ls->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
-    ls->setScope(QStringLiteral("aether-island"));
+    // AETHER_NO_LAYER=1 skips the layer-shell attach outright - test sandboxes on X11, where
+    // even LayerShellQt::Window::get aborts without a Wayland platform.
+    auto *ls = qEnvironmentVariableIsSet("AETHER_NO_LAYER") ? nullptr : LayerShellQt::Window::get(&view);
+    if (ls) {                                          // null on X11 (test sandboxes): a plain window then
+        ls->setLayer(LayerShellQt::Window::LayerOverlay);
+        ls->setAnchors(LayerShellQt::Window::AnchorTop);   // anchored to top only: centred horizontally
+        ls->setExclusiveZone(0);                           // 0 = never reserve edge space (-1 would make maximized windows stop short of the edge, like a Windows taskbar)
+        ls->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
+        ls->setScope(QStringLiteral("aether-island"));
+    }
 
     view.engine()->addImageProvider(QStringLiteral("icon"), new IconProvider);
+    PrefsGuard prefsGuard;   // first: lost settings are back in the file before any store reads it
     MediaController media;
     view.rootContext()->setContextProperty(QStringLiteral("media"), &media);
     AudioLevels audio;
@@ -405,6 +437,8 @@ int main(int argc, char **argv)
     view.rootContext()->setContextProperty(QStringLiteral("network"), &network);
     BluetoothModel bluetooth;
     view.rootContext()->setContextProperty(QStringLiteral("bluetooth"), &bluetooth);
+    TetherController tether(&network, &bluetooth);
+    view.rootContext()->setContextProperty(QStringLiteral("tether"), &tether);
     AudioModel audio_;
     view.rootContext()->setContextProperty(QStringLiteral("sound"), &audio_);
     PowerModel power;
@@ -419,13 +453,15 @@ int main(int argc, char **argv)
     view.rootContext()->setContextProperty(QStringLiteral("connectModel"), &connectModel);
     ConnectInput connectInput;
     view.rootContext()->setContextProperty(QStringLiteral("connectInput"), &connectInput);
+    SearchEngine search;
+    view.rootContext()->setContextProperty(QStringLiteral("search"), &search);
     IslandController controller(&view);
     view.rootContext()->setContextProperty(QStringLiteral("island"), &controller);
     NotificationSink sink;
 
     auto bus = QDBusConnection::sessionBus();
     bus.registerService(QStringLiteral("org.aether.Island"));
-    bus.registerObject(QStringLiteral("/Island"), &controller, QDBusConnection::ExportAllSlots);
+    bus.registerObject(QStringLiteral("/Island"), &controller, QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals);
 
     // The island also owns org.freedesktop.Notifications: every Notify is accepted (so
     // clients succeed and the bus monitors see the traffic) and nothing is shown by the
