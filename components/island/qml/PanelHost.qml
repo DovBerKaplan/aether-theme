@@ -12,6 +12,8 @@ Item {
     property string page: ""
     property real maxHeight: 10000
     readonly property real contentHeight: current.contentHeight
+    // panels may ask for a narrower island; the rest keep the standard 480
+    readonly property real contentWidth: stage.item && stage.item.contentWidth > 0 ? stage.item.contentWidth : 480
     readonly property bool onList: page === ""
     signal backRequested()
     signal pullStarted()

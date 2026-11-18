@@ -11,7 +11,9 @@ Item {
     id: root
     property real maxHeight: 10000
     readonly property real contentHeight: Math.min(maxHeight,
-        8 + 68 + (session.canFirmware ? 20 : 0) + 10)
+        8 + 68 + (session.canFirmware ? 20 : 0) + 24)   // 24: room for the host's handle
+    // pebbles (56 wide, 8 apart) plus the back button's lane mirrored on both sides
+    readonly property real contentWidth: pebbles.length * 56 + (pebbles.length - 1) * 8 + 2 * (8 + 40 + 8)
     signal closeRequested()
 
     readonly property color danger: Tokens.role.island.negative

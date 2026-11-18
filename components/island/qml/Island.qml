@@ -83,7 +83,7 @@ Item {
         "large":     { sw: 0, sh: 0, nw: 480, nb: Math.max(170, largeContent.contentHeight), r: 30, win: Qt.size(screenW, screenH) },
         "expanded":  { sw: 0, sh: 0, nw: 480, nb: Math.min(largeContent.expandedHeight, screenH - 80), r: 30, win: Qt.size(screenW, screenH) },
         "activity":  { sw: 0, sh: 0, nw: 440, nb: 112, r: 26, win: Qt.size(screenW, screenH) },
-        "panel":     { sw: 0, sh: 0, nw: 480, nb: Math.max(120, panelFrom === "large" ? largeContent.contentHeight : 0, Math.min(panelHost.contentHeight, screenH - 120)), r: 30, win: Qt.size(screenW, screenH) },
+        "panel":     { sw: 0, sh: 0, nw: panelHost.contentWidth, nb: Math.max(120, panelFrom === "large" && panelHost.panelId !== "power" ? largeContent.contentHeight : 0, Math.min(panelHost.contentHeight, screenH - 120)), r: 30, win: Qt.size(screenW, screenH) },
         "search":    { sw: 0, sh: 0, nw: Math.min(560, screenW - 160), nb: Math.max(170, Math.min(searchHost.contentHeight, screenH - 120)), r: 30, win: Qt.size(screenW, screenH) },
         "media":     { sw: 0, sh: 0, nw: mediaAppW + 2 * mediaBezel, nb: mediaBezel + mediaAppH + mediaGrip, r: 30, win: Qt.size(screenW, screenH) }
     })
@@ -606,7 +606,7 @@ Item {
         }
         // Only the media panel springs its own width/corners; in the curtain modes they
         // ride on the height (see the bindings above) and must not animate separately.
-        Behavior on notchW { enabled: (root.mediaWidth || root.activityWidth) && !root.dragging; SpringAnimation { id: widthSpring; spring: 3.6; damping: 0.22; epsilon: 3.0 } }
+        Behavior on notchW { enabled: (root.mediaWidth || root.activityWidth || (root.mode === "panel" && root.panelFrom === "large")) && !root.dragging; SpringAnimation { id: widthSpring; spring: 3.6; damping: 0.22; epsilon: 3.0 } }
         Behavior on cornerR { enabled: (root.mediaWidth || root.activityWidth) && !root.dragging; SpringAnimation { spring: 3.6; damping: 0.22; epsilon: 3.0 } }
         onSegmentsChanged: root.syncLayout()
         onOpacityChanged: root.syncLayout()
@@ -744,7 +744,7 @@ Item {
         height: resting ? 2 : 4
         radius: height / 2
         color: resting ? "white" : Theme.subtext
-        opacity: resting ? 0.22 : 0.7 * (root.mode === "media" || root.mode === "activity" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
+        opacity: resting ? 0.22 : 0.7 * (root.mode === "media" || root.mode === "activity" || root.mode === "panel" || root.mode === "search" ? 0 : Math.max(0, Math.min(1, (0.4 - root.openT) / 0.3))) * surface.opacity
         visible: opacity > 0
         Behavior on width { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
         Behavior on height { NumberAnimation { duration: Tokens.motion.duration.base; easing.type: Tokens.motion.easing.enter } }
