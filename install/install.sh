@@ -67,6 +67,9 @@ StartLimitIntervalSec=0
 
 [Path]
 PathChanged=$HOME/.config/kdeglobals
+# a look-and-feel apply leaks ColorScheme into kdedefaults AFTER kdeglobals was written,
+# so watching only kdeglobals can miss the poison; watch both and clean it whenever either moves
+PathChanged=$HOME/.config/kdedefaults/kdeglobals
 
 [Install]
 WantedBy=default.target
