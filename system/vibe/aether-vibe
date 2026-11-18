@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """aether-vibe: keep AI agents working with the lid closed and the screen dark.
 
-One vibe session lasts one lid cycle. `on` starts a detached session that
+A vibe session lasts until it is turned off. `on` starts a detached session that
 holds logind inhibitors (sleep:idle:handle-lid-switch), so nothing suspends
 the machine while the agents run - not the lid switch, not an idle timeout,
 not powerdevil. When the lid closes, the screens' DPMS is switched off right
 away - but only when the laptop panel is the single live screen, so an
 external display you may be using is left alone; Plasma's own idle blanking
 is untouched. When the lid opens, the screens light again and the session
-ends by itself. Reacting only to a close *transition* keeps the panel
+keeps running (it used to end there, and the tile switched itself off under
+the user). Reacting only to a close *transition* keeps the panel
 dark-proof: if the ACPI lid switch stays stuck at "closed" (it does on some
-machines, the panel is then the screen you work on), nothing ever blanks and
-the session ends by a tap.
+machines, the panel is then the screen you work on), nothing ever blanks. A transition counts only after the new reading
+holds through three follow-up samples: a flapping lid switch (this panel's
+does - one stray "open" while the lid is shut used to end the session right
+after closing) is ignored. Every accepted and ignored transition is appended
+to $XDG_RUNTIME_DIR/aether-vibe.log.
 
-The island's Vibe tile reads $XDG_RUNTIME_DIR/aether-vibe.state (the session
-pid) and follows the session even when it ends without a tap.
+The session runs in a systemd scope of its own, so restarting the island (which
+starts it) no longer kills it. The island's Vibe tile reads
+$XDG_RUNTIME_DIR/aether-vibe.state (the session pid) and follows the session.
 
 Commands:
   on | off | toggle | status
@@ -22,6 +27,7 @@ Commands:
 """
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -29,8 +35,10 @@ import time
 from pathlib import Path
 
 STATE = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}") / "aether-vibe.state"
+LOG = STATE.parent / "aether-vibe.log"
 WHAT = "sleep:idle:handle-lid-switch"
 POLL = 2.0
+STABLE = 3                                   # consecutive agreeing samples before a transition counts
 
 
 def die(msg):
@@ -61,6 +69,24 @@ def lid_closed():
     return "true" in r.stdout
 
 
+def log(event):
+    try:
+        lines = LOG.read_text().splitlines()[-199:] if LOG.exists() else []
+        lines.append(f"{time.strftime('%m-%d %H:%M:%S')} {event}")
+        LOG.write_text("\n".join(lines) + "\n")
+    except OSError:
+        pass
+
+
+def holds(sample):
+    """True when `sample` survives STABLE follow-up reads - a flap does not."""
+    for _ in range(STABLE):
+        if lid_closed() != sample:
+            return False
+        time.sleep(0.4)
+    return True
+
+
 def panel_alone():
     """True when the laptop panel (eDP/LVDS) is the only screen that is on."""
     r = subprocess.run(["kscreen-doctor", "-o"], capture_output=True, text=True)
@@ -89,27 +115,38 @@ def dpms(on):
 def run():
     STATE.write_text(str(os.getppid()))        # systemd-inhibit is the session leader `off` will signal
     closed = lid_closed()
+    log(f"session start (pid {os.getppid()}, lid {'closed' if closed else 'open'})")
     try:
         while STATE.exists():
             now = lid_closed()
-            if now and not closed:
-                if panel_alone():              # the lid just closed: darken the screens, keep the machine awake
-                    dpms(False)
-            elif not now and closed:
-                break                          # the lid opened: wake the screens, end the session
+            if now != closed and holds(now):   # a real transition: the new reading held through the re-samples
+                closed = now
+                if closed:
+                    if panel_alone():          # the lid just closed: darken the screens, keep the machine awake
+                        log("lid closed -> dpms off")
+                        dpms(False)
+                else:
+                    log("lid open -> dpms on")
+                    dpms(True)                 # the lid opened: wake the screens, the session goes on
+            elif now != closed:
+                log(f"lid flap ignored ({'open' if now else 'closed'} sample while {'closed' if closed else 'open'})")
+                now = closed                   # keep tracking the stable state
             closed = now
             time.sleep(POLL)
     finally:
         dpms(True)
         STATE.unlink(missing_ok=True)
+        log("session end")
 
 
 def start():
     if running():
         return
     STATE.unlink(missing_ok=True)              # a stale state file from a killed session
-    subprocess.Popen(["systemd-inhibit", "--what", WHAT, "--mode", "block",
-                      sys.executable, os.path.abspath(__file__), "run"],
+    cmd = ["systemd-inhibit", "--what", WHAT, "--mode", "block", sys.executable, os.path.abspath(__file__), "run"]
+    if shutil.which("systemd-run"):            # out of the caller's cgroup: an island restart must not end it
+        cmd = ["systemd-run", "--user", "--scope", "--collect", "--quiet", "--unit", f"aether-vibe-{os.getpid()}", "--"] + cmd
+    subprocess.Popen(cmd,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)
     for _ in range(20):                        # the runner owns the state file: wait for it to appear
@@ -136,7 +173,10 @@ def stop():
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "run":
-        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        def term(*_):
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)   # one is enough: a second one used to cut the cleanup short (screens left dark)
+            sys.exit(0)
+        signal.signal(signal.SIGTERM, term)
         run()
     elif cmd == "on":
         start()

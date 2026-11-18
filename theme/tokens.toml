@@ -82,10 +82,24 @@ text-muted  = "fog-500"
 accent      = "cyan-400"
 chip        = "ink-600"
 negative    = "#ff6b6b"   # low battery
+attention   = "#e08a3c"   # session down / network gone (console's blinking dot)
+warning     = "#c9a26d"   # warn lines in logs (softer than attention)
 hero        = "paper-0"   # media play button
 hero-pressed = "#dfe3e8"
 body-top    = "ink-750"
 body-bottom = "ink-850"
+
+# Circle to Search wears Google's marks on purpose - its sheet posts to lens.google.com -
+# so these are brand constants: fixed like a logo, they never follow the accent.
+[role.lens]
+ring-blue       = "#4285f4"   # the entry glow's four-stop sweep
+ring-red        = "#ea4335"
+ring-yellow     = "#fbbc04"
+ring-green      = "#34a853"
+primary         = "#a8c7fa"   # the filled "Search with Lens" chip / active glass button
+primary-pressed = "#8fb4ff"
+text-on-primary = "#062e6f"   # ink on the filled chip and the active glass button
+selection       = "#4285f4"   # text selection and the word-highlight base
 
 # ---------- tier 3: calibrated numbers ----------
 [material]
