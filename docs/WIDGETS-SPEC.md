@@ -26,7 +26,7 @@ Both need the large island to stop hard-coding "media card, then tiles" and beco
 
 ### 1.2 KDE Connect (kdeconnect 26.08, daemon on the session bus)
 
-`kdeconnect-cli -l`: **OnePlus 15** (paired, reachable over LAN), **Pad 3** and **OnePlus Nord CE 3 Lite 5G** (paired, offline now).
+`kdeconnect-cli -l` in the development setup: a phone (paired, reachable over LAN), a tablet and a second phone (paired, offline at the moment).
 
 Per device the daemon already exposes (object `/modules/kdeconnect/devices/<id>/...`):
 
@@ -91,7 +91,7 @@ The KWin script and window rule stay installed; they do nothing without the Pear
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  ▯  OnePlus 15                          ▂▄▆  5G   19 %  │   glass card, radius card
+│  ▯  Pixel 9 (fake)                      ▂▄▆  5G   19 %  │   glass card, radius card
 │     Connected · Wi‑Fi                                    │
 │  ( ring )  ( send )  ( 💬 3 )  ( 🔔 5 )  ( files )   ›   │   quick actions, 34 px circles
 └──────────────────────────────────────────────────────────┘
@@ -115,7 +115,7 @@ Pages (shared-axis X like the rest):
 6. **Remote** — phone keyboard (a text field that types on the phone via `remotekeyboard`) and a trackpad area (`remotecontrol.moveCursor` / `sendCommand`) — only when the phone reports support.
 7. **Settings** — per-device plugin switches (`setPluginEnabled`: notifications, clipboard auto-share, SMS, files, battery alerts…), "Auto-share clipboard" (`isAutoShareDisabled`), pairing key (`verificationKey`), **Unpair** (two-tap), "Open KDE Connect settings ↗" (`kcmshell6 kcm_kdeconnect`).
 
-Pairing (any device the daemon lists as unpaired/visible, or a `pairingRequests` entry): an inline card like the Bluetooth one — "Confirm that OnePlus 15 shows this key **1512E695**" with Pair / Cancel (`requestPairing`, `acceptPairing`, `cancelPairing`).
+Pairing (any device the daemon lists as unpaired/visible, or a `pairingRequests` entry): an inline card like the Bluetooth one — "Confirm that the phone shows this key **1512E695**" with Pair / Cancel (`requestPairing`, `acceptPairing`, `cancelPairing`).
 
 ### 3.3 Live activities (the island reacts, then gets out of the way)
 The bar/large island grows a transient card, auto-dismissing:
@@ -126,7 +126,7 @@ The bar/large island grows a transient card, auto-dismissing:
 Each respects Do-not-disturb-like behavior once that exists; until then they follow the toasts' rules (never cover the media panel; wait while the island is expanded and showing history).
 
 ### 3.4 Drag and drop (the Android-level nicety)
-A `DropArea` on the card and on the Overview/Files pages: dropping files → `share.shareUrls`, dropping a URL → `shareUrl`, dropping text → `shareText`, with a progress line and a "Sent to OnePlus 15" confirmation. Must be verified to work on a layer-shell surface with drags from other Wayland clients (§8 risk R2).
+A `DropArea` on the card and on the Overview/Files pages: dropping files → `share.shareUrls`, dropping a URL → `shareUrl`, dropping text → `shareText`, with a progress line and a "Sent to the phone" confirmation. Must be verified to work on a layer-shell surface with drags from other Wayland clients (§8 risk R2).
 
 ### 3.5 Look and feel
 Tokens only (`Theme`/`Tokens`), the shared primitives (`ListRow`, `Button`, `Switch`, `SegmentedControl`, `ConfirmTile`, `TextField`, `LinearProgress`), glass cards, grain, calm type, mono numerals for battery/time, hairline separators, `tint-hover/attention` states, shared-axis motion, short ease-out presses. New glyphs (`phone`, `tablet`, `ring`, `send`, `message`, `folder`, `signal-0..4`, `bolt`, `share`) in the existing monoline style. Everything through `I18n.tr`/`f` with Hebrew in `strings_he.js`; RTL mirrored; the phone's own text (names, messages) is shown as plain text and bidi-isolated where needed.
@@ -158,7 +158,7 @@ So Messages is: **compose and send** (`sendSms`, built in C5), **reply from a me
 | Phase | Scope | Done when |
 |---|---|---|
 | **W1 — widget framework** | Registry + `[Widgets]` persistence, `WidgetStack` in `LargeIsland`, edit mode for widgets (remove/reorder/add tray), YouTube Music **removal semantics** (§2.3), RTL/Hebrew | the YouTube Music card can be removed and re-added; Pear stops/starts; island height follows; idle CPU back to baseline when off; order survives restart |
-| **C1 — device core** | `ConnectModel` (list, battery, connectivity, pairing, selection), compact card, Overview page: ring (two-tap), ping, send clipboard, share text/link, plugin switches, pairing card, fake backend | the card shows OnePlus 15 with its real battery/network; pairing card works with a fixture; switching devices works; no polling |
+| **C1 — device core** | `ConnectModel` (list, battery, connectivity, pairing, selection), compact card, Overview page: ring (two-tap), ping, send clipboard, share text/link, plugin switches, pairing card, fake backend | the card shows the paired phone with its real battery/network; pairing card works with a fixture; switching devices works; no polling |
 | **C2 — notifications** | Notifications page: live list, dismiss, reply, actions, clear all; history de-dup; no bodies persisted | replying to a phone notification from the island reaches the phone (owner-approved test) |
 | **C3 — files & drop** | Browse (sftp), send files, drag-and-drop, file-received activity | a dropped file arrives on the phone; received files offer Open/Show in folder |
 | **C4 — calls & phone media** | Call live activity, phone-media page, low-battery alert (off by default) | a (real or fixture) call shows and clears correctly |

@@ -48,7 +48,7 @@ design change, not a code change — discuss it first.
 | Same role, different value | Primary text: `#eceef2` (Theme.qml) vs `#e1e2eb` (colors, login). Secondary text: `#8d939d` vs `#b9cacb`. Dark surface: `#1c1e24/#121418` (island) vs `#10131a/#0b0e14` (scheme) |
 | No scales | 19 distinct `radius` values, 22 distinct durations (50–900 ms), 11 font sizes, 7 easing curves, ad-hoc `Qt.rgba(...)` in 9 QML files |
 | Lock screen is an island | `login/aether-lock` re-declares its own palette (SDDM cannot import `AetherShared`) |
-| Calibrated numbers are undocumented in code | dock scrim 0.28, frost 0.04, tint 8/10/14 % live only in `build_frames.py` and `DOCK-SPEC.md` |
+| Calibrated numbers are undocumented in code | dock scrim 0.28 and frost 0.10 now live in `theme/tokens.toml` (`[material]`) with the tints; DOCK-SPEC's 0.04 describes the retired plasmoid-era pill |
 
 `components/shared/AetherShared/Theme.qml` *exists* and is the right idea — it
 just covers only colors for the island, and nothing upstream feeds it.
@@ -74,7 +74,7 @@ components/shared/AetherShared/
 login/aether-lock/components/
   Tokens.qml                 ← GENERATED copy (step 5: needs a qmldir there, which must also list GlassButton/GlassMenu/Icon)
 tools/
-  check-tokens.sh            ← lint: no literals outside the allowlist (see §7)
+  pointer-test.py            ← a virtual mouse for UI tests (see CONTRIBUTING.md; the §7 lint is the plan)
 docs/
   DESIGN-SYSTEM.md           ← this file; §1 is the design line
 ```
@@ -163,7 +163,7 @@ rim-alpha         = 0.09     # white hairline on dark glass
 bevel-alpha       = 0.35
 grain-opacity     = 0.022
 dock-scrim        = 0.28     # live-calibrated, see DOCK-SPEC.md
-dock-frost        = 0.10     # what build_frames.py ships (DOCK-SPEC's 0.04 is stale)
+dock-frost        = 0.10     # what build_frames.py ships (DOCK-SPEC's 0.04 was the retired plasmoid-era pill)
 tint-hover        = 0.08
 tint-focus        = 0.10
 tint-attention    = 0.14
@@ -255,7 +255,9 @@ design tweak is one edit:
 
 ## 7. Guardrails (how conflicts are prevented)
 
-1. **Lint** — `tools/check-tokens.sh`, run by `make check`:
+1. **Lint** — planned, not built. What `make check` verifies today is that the
+   generated `Tokens.qml` is current (`build_tokens_qml.py --check`). The lint
+   that step 6 turns on:
    - no `#rrggbb` or `Qt.rgba(` in `*.qml` outside `Tokens.qml`;
    - no `pixelSize: <number>`, `radius: <number>`, `duration: <number>` in `*.qml`
      (allowed: `0`, expressions like `height / 2`);

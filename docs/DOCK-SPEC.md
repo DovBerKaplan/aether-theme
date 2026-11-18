@@ -14,7 +14,8 @@ reference screenshot; see [dock-verification.png](dock-verification.png).
 > nothing) and the owner called it right. The dock is now **stock
 > `org.kde.plasma.icontasks`** inside the same themed floating pill: KDE's own,
 > maintained widget; the pill glass/scrim/frost remain the theme's job. The
-> plasmoid stays in `plasmoids/` but is no longer installed. What that gives up
+> retired plasmoid itself is gone from the tree (`plasmoids/` today holds only
+> `org.aether.appname`, the focused-app name widget). What that gives up
 > vs the tablet: the pinned|running hairline and the dot/pill indicators —
 > icontasks indicates running apps with its button states (`tasks.svgz`).
 
@@ -32,9 +33,8 @@ reference screenshot; see [dock-verification.png](dock-verification.png).
 
 ## 1. The reference — the owner's Android 17 tablet taskbar
 
-From the tablet screenshot (kept at
-`~/Downloads/Screenshot_2026-10-27-03-12-01-90_*.jpg`, pill zone rows
-~2135–2325 of 3392×2400, pixel-profiled during calibration):
+From the tablet reference screenshot (kept locally by the owner, not shipped;
+pill zone rows ~2135–2325 of 3392×2400, pixel-profiled during calibration):
 
 1. **Stadium silhouette.** Corner radius = half the bar's height, exactly.
    Floating clear of the screen edge, width fits the content (not full-width).
@@ -65,7 +65,7 @@ From the tablet screenshot (kept at
 | Indicators | icontasks button states via `tasks.svgz` (quiet tints: hover 8 %, focus 10 %, attention 14 %) | `build_frames.py` |
 | Theme effects | `ContrastEffect` off (it read as glow), `BlurBehindEffect` on, `AdaptiveTransparency` off (a glass pill must not opacify when a window touches it) | `build_desktoptheme.py` → `plasmarc` |
 | Panel config | `panelOpacity=2` (translucent), floating, thickness 56, `hiding = "WindowsGoBelow"` — apps open the **full screen height**, the dock floats on top of them | `layout.js`, `plasmashellrc [PlasmaViews][Panel N]` |
-| Edge placement | any edge, live, launchers kept: `make dock-edge EDGE=left|right|top|bottom` | `system/dock-edge.sh` |
+| Edge placement | any edge, live, launchers kept: `make dock-edge EDGE=left|right|top|bottom` | `system/dock-edge.sh` (retired with the panel era; the service dock's edges are bottom/left) |
 
 The old `tasks.svgz` chip states remain in the theme for any stock task widget,
 but the dock itself draws all its states (NoBackground applet).
@@ -98,11 +98,10 @@ but the dock itself draws all its states (NoBackground applet).
   token must be the exact enum name — `"none"` is *invalid* and silently falls
   back to AlwaysVisible. Verified: KWin workarea 1920x1080 (was 1024), across
   restarts.
-- **Pinned apps vanish after `dock-edge`/reinstall** — icontasks saves its
-  empty init state over `launchers` written during scripted panel creation.
-  `dock-edge.sh` now captures the list first and re-applies it with the shell
-  stopped. (A stale `ksycoca` can also hide launchers: `kbuildsycoca6
-  --noincremental`, then re-run `dock-edge`.)
+- **Pinned apps vanish after scripted panel edits/reinstall** — icontasks saves
+  its empty init state over `launchers` written during scripted panel creation;
+  capture the list first and re-apply it with the shell stopped. (A stale
+  `ksycoca` can also hide launchers: `kbuildsycoca6 --noincremental`.)
 - **A desktop-file id must match the installed app**: VS Code here is the
   flatpak `com.microsoft.VSCode.desktop`, not `code.desktop` — a wrong id
   simply never shows.

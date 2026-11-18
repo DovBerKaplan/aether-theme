@@ -3,7 +3,7 @@
 ## Development loop
 
 ```bash
-make components                   # build island and toasts (in components/*/build)
+make components                   # build the five apps (in components/*/build)
 make theme                        # regenerate the theme into theme/generated/
 ```
 
@@ -18,7 +18,7 @@ Drive it without a mouse: `qdbus6 org.aether.Island /Island org.aether.Island.Ex
 
 ## Testing the UI
 
-There is no automated UI test yet. The manual loop is:
+The only automated test is the console's split model (`components/console/tests/split-model.test.js`, run by `make check`); the UI itself is tested by hand:
 
 1. `tools/pointer-test.py move 960 1 --hold 4` moves a virtual pointer to the top edge (needs write access to `/dev/uinput`); `click X Y --via-top 0.7` arrives through the edge the way a hand does.
 2. Take a screenshot (`spectacle -b -n -f -o /tmp/x.png`) *while the script is still holding*: when it exits, the virtual device vanishes and the island sees "pointer left".

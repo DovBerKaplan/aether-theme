@@ -14,3 +14,10 @@ Third-party material
   https://www.nerdfonts.com) and icon themes (Papirus) are not bundled;
   install/fonts.sh fetches the fonts at install time, Papirus comes from your
   distribution.
+- The lens segmenter, when enabled, runs Ultralytics YOLO (AGPL-3.0,
+  https://github.com/ultralytics/ultralytics; brings PyTorch and OpenCV) as a
+  separate local process — it is a user-installed optional dependency, never
+  linked or bundled here — and the MobileSAM weights (Apache-2.0,
+  https://github.com/ChaoningZhang/MobileSAM) downloaded from Ultralytics'
+  asset releases (https://github.com/ultralytics/assets). OCR runs tesseract
+  (Apache-2.0) from your distribution.

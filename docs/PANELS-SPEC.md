@@ -361,7 +361,7 @@ Advanced settings ↗
 
 ```
 ‹  Bluetooth                                     [●═══]
-   Visible as “dovber-laptop” while this panel is open
+   Visible as “your-hostname” while this panel is open
 Connected
   🎧 WH-1000XM5               Connected     [🔋80] [▮▮▮▮]  ⓘ
 Saved devices
@@ -584,18 +584,22 @@ World clocks
 ## 11. Phase 3+: more tiles
 
 Once panels exist, the four chips can grow into an Android-style tile set.
-The candidate tiles are: Do not disturb (pauses toasts; island history still
-fills), Night Light, Dark theme, Airplane mode, Keep awake (inhibit sleep),
-Vibe coding (aether-vibe: agents keep running with the lid closed and the
-panel dark while the lid is shut; stays on until tapped off), Screenshot (Spectacle region), Screen
-record, Hotspot, Power saver and Microphone mute.
+**Built** (`TileStore.h`): Night Light, Dark theme, Airplane mode, Keep awake
+(inhibit sleep), Vibe coding (aether-vibe: agents keep running with the lid
+closed and the panel dark while the lid is shut; stays on until tapped off),
+Screenshot (Spectacle region), Screen record, Power saver, Microphone mute,
+Color (the accent picker, `ColorPanel.qml`; the picked accent is baked into the
+Plasma color scheme), Circle to Search (lens) and Console (toggles the shelf).
+**Not built:** Do not disturb (pauses toasts; island history still fills) and
+Hotspot.
 
 - Layout: 4 per row, 2 rows (8 tiles). Horizontal paging with dots if there
   are more. The large island grows by 68 px.
 - **Edit mode:** tap ✎, drag tiles to reorder, drag in from an "Available"
   tray, then save to `~/.config/aetherislandrc`.
-- Also later: Wi‑Fi QR join (camera) and WPS, an island-native search
-  replacing KRunner, and a media output switcher inside the media card.
+- Also later: Wi‑Fi QR join (camera) and WPS, and a media output switcher
+  inside the media card. (An island-native search was built — it lives in the
+  notch's search seat, not in a tile; see ARCHITECTURE.md.)
 
 ---
 
@@ -662,8 +666,8 @@ the row and detail page are separate files from the start.
 
 ## 13. Delivery phases
 
-Each phase can ship on its own and is verified live (screenshots in `docs/`,
-the same as the dock).
+Each phase can ship on its own and is verified live (screenshots in
+`docs/img/`, linked from the README).
 
 | Phase | Scope | Done when |
 |---|---|---|
@@ -684,7 +688,8 @@ the same as the dock).
 - SSID with emoji, RTL (Hebrew) text, 32 bytes, or `<b>` markup: displayed
   literally and elided correctly.
 - Light scheme active: the island is still dark (DESIGN-SYSTEM §1.2).
-- `make check` token lint passes: no literals.
+- `make check` passes: script syntax, the console split-model test, and the
+  generated QML tokens are current.
 
 ---
 
