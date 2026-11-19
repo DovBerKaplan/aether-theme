@@ -98,7 +98,7 @@ void main() {
     vec3 day = mix(hue(acc, 0.80, 0.0), hue(acc, 0.90, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
     day = mix(day, hue(acc, 0.94, 0.0), clamp(pool * 1.5, 0.0, 0.4));
     day = mix(day, hue(acc, mix(0.62, 0.30, clamp(body * 0.7, 0.0, 1.0)), 0.0), clamp(ink * 0.85, 0.0, 0.85));
-    day = mix(day, hue(acc, 0.22, 0.0), clamp(vein * 0.5, 0.0, 0.5));
+    day = mix(day, hue(acc, 0.34, 0.0), clamp(vein * 0.3, 0.0, 0.3));   // the front, a fine wet edge
     day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 0.5);   // daylight is softer: half the colour
 
     vec3 col = mix(day, night, clamp(dark, 0.0, 1.0));
