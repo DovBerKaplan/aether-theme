@@ -41,7 +41,10 @@ def window_frame(body: str, rim: str, rim_alpha: float) -> str:
     sides and the bottom, so the glass has one outline with the titlebar's. Drawn opaque - Kvantum
     fades the whole window by reduce_window_opacity."""
     r = int(T["apps"]["radius"])
-    x0, y0, e = 4000, 0, 8          # a free corner of the canvas
+    # Inside WhiteSur's canvas (200mm x 354mm, no viewBox - ~756 x 1338 px), in its empty right
+    # strip (WhiteSur's pieces all end at x 697). Off-canvas pieces (x 4000+) render broken:
+    # Kvantum/Qt draw them mis-measured - light bands and stretched ring stubs at window bottoms.
+    x0, y0, e = 704, 0, 8
     xs = {"l": x0, "c": x0 + r, "r": x0 + r + e}
     ys = {"t": y0, "c": y0 + 1, "b": y0 + 1 + e}
     fill = f'fill="{body}"'

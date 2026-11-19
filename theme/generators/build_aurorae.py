@@ -94,20 +94,27 @@ def decoration(f: Frame, prefix: str, v: dict, alpha: float, active: bool):
         inner += f'<path d="{corner_path(kind, bx, y + P, R)}" {body}/>'
         inner += f'<path d="{corner_ring(kind, bx, y + P, R)}" {rim}/>'
         g(kind, inner, x, y)
-    # Bottom corners: the Kvantum frame rounds the window's bottom (apps.radius) and the client ends
-    # R into the tile. The shadow wraps that rounded corner: radial around its circle, everywhere in
-    # the tile outside the client's rect (the decoration is not drawn inside it).
+    # Bottom corners: the vertical mirror of the top corners. Measured on screen (probe tiles):
+    # KWin anchors each bottom tile so the frame's bottom edge cuts it at row R - rows [0, R) are
+    # the frame's last band inside (the client ends 4 px above the edge), rows [R, S) hang outside
+    # as the shadow below the window. So the glass silhouette is the same r=R circle as at the
+    # top, centred on the frame's bottom corner point, and the shadow wraps it.
     for kind, cx in (("bottomleft", "l"), ("bottomright", "r")):
         x, y = xs[cx], ys["b"]
-        client = (x + P, y) if kind == "bottomleft" else (x, y)
-        ccx = x + S if kind == "bottomleft" else x
+        bx = x + P if kind == "bottomleft" else x            # the arc's r x r bbox, rows [0, R)
+        ccx = x + S if kind == "bottomleft" else x + R       # the arc circle's centre
         tile = f"M{x},{y} H{x + S} V{y + S} H{x} Z "
-        hole = f"M{client[0]},{client[1]} h{R} v{R} h{-R} Z"
-        g(kind, f'<path d="{tile}{hole}" fill-rule="evenodd" fill="{sh.radial(ccx, y, S, R / S)}"/>', x, y)
-    # Edges: shadow outside, body inside (the inside part only shows in the title row).
+        fill = sh.radial(ccx, y, S, R / S)
+        inner = f'<path d="{tile}{corner_path(kind, bx, y, R)}" fill-rule="evenodd" fill="{fill}"/>'
+        inner += f'<path d="{corner_path(kind, bx, y, R)}" {body}/>'
+        inner += f'<path d="{corner_ring(kind, bx, y, R)}" {rim}/>'
+        g(kind, inner, x, y)
+    # Edges: shadow outside, body inside (the inside part only shows in the title row, and in the
+    # bottom row band - see the corners above).
     g("top", rect(xs["c"], ys["t"], E, P, f'fill="{sh.lin["t"]}"') + rect(xs["c"], ys["t"] + P, E, R, body)
       + rect(xs["c"], ys["t"] + P, E, 1, rim), xs["c"], ys["t"])
-    g("bottom", rect(xs["c"], ys["b"] + R, E, P, f'fill="{sh.lin["b"]}"'), xs["c"], ys["b"])
+    g("bottom", rect(xs["c"], ys["b"], E, R, body) + rect(xs["c"], ys["b"] + R - 1, E, 1, rim)
+      + rect(xs["c"], ys["b"] + R, E, P, f'fill="{sh.lin["b"]}"'), xs["c"], ys["b"])
     g("left", rect(xs["l"], ys["c"], P, E, f'fill="{sh.lin["l"]}"') + rect(xs["l"] + P, ys["c"], R, E, body)
       + rect(xs["l"] + P, ys["c"], 1, E, rim), xs["l"], ys["c"])
     g("right", rect(xs["r"] + R, ys["c"], P, E, f'fill="{sh.lin["r"]}"') + rect(xs["r"], ys["c"], R, E, body)
@@ -124,10 +131,14 @@ def decoration(f: Frame, prefix: str, v: dict, alpha: float, active: bool):
             f.add(f'<g id="mask-{kind}"><rect x="{x}" y="{ys["t"]}" width="{S}" height="{S}" {TINY}/>'
                   f'<path d="{corner_path(kind, bx, ys["t"] + P, R)}" {solid}/></g>')
         for kind, cx in (("bottomleft", "l"), ("bottomright", "r")):
-            f.add(f'<rect id="mask-{kind}" x="{mxs[cx]}" y="{ys["b"]}" width="{S}" height="{S}" {TINY}/>')
+            x = mxs[cx]
+            bx = x + P if kind == "bottomleft" else x      # mirror of the top corner masks
+            f.add(f'<g id="mask-{kind}"><rect x="{x}" y="{ys["b"]}" width="{S}" height="{S}" {TINY}/>'
+                  f'<path d="{corner_path(kind, bx, ys["b"], R)}" {solid}/></g>')
         f.add(f'<g id="mask-top"><rect x="{mxs["c"]}" y="{ys["t"]}" width="{E}" height="{S}" {TINY}/>'
               f'{rect(mxs["c"], ys["t"] + P, E, R, solid)}</g>')
-        f.add(f'<rect id="mask-bottom" x="{mxs["c"]}" y="{ys["b"]}" width="{E}" height="{S}" {TINY}/>')
+        f.add(f'<g id="mask-bottom"><rect x="{mxs["c"]}" y="{ys["b"]}" width="{E}" height="{S}" {TINY}/>'
+              f'{rect(mxs["c"], ys["b"], E, R, solid)}</g>')
         f.add(f'<g id="mask-left"><rect x="{mxs["l"]}" y="{ys["c"]}" width="{S}" height="{E}" {TINY}/>'
               f'{rect(mxs["l"] + P, ys["c"], R, E, solid)}</g>')
         f.add(f'<g id="mask-right"><rect x="{mxs["r"]}" y="{ys["c"]}" width="{S}" height="{E}" {TINY}/>'
