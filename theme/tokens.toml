@@ -196,7 +196,7 @@ fg = "fog-100"
 fg-inactive = "fog-300"
 accent = "cyan-400"
 accent-hover = "cyan-500"
-selection = "cyan-500"
+selection = "cyan-400"   # accent itself: the bake re-inks it to the island's colour (cyan-500 is taken by hover)
 selection-fg = "cyan-900"
 link = "cyan-500"
 visited = "violet-200"
@@ -344,7 +344,7 @@ base = "WhiteSur"
 chrome-alpha = 0.32   # the whole window's glass (Konsole's terminal.glass.opacity sits beside it)
 view-alpha   = 0.32   # content = frame: one glass
 view-tint    = 0.08   # the colour scheme's view background (file lists, text) over that glass: a faint veil
-radius       = 12     # window corners (Aurorae top, Kvantum frame bottom)
+radius       = 16     # window corners (Aurorae top, Kvantum frame bottom) - a soft, glassy curve
 button-size  = 22     # titlebar buttons (Aurorae): grey circles on the left - close, restore, minimise
 
 # Kvantum [%General]: translucency and blur (reduce_window_opacity comes from apps.chrome-alpha)

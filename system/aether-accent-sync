@@ -74,12 +74,13 @@ def dec(h: str) -> str:
 
 
 def recolor(text: str, colors: dict[str, str] | None) -> str:
-    """Placeholders as #rrggbb (SVG, Kvantum) and as r,g,b (KDE .colors files)."""
+    """Placeholders as #rrggbb (SVG, Kvantum) and as r,g,b (KDE .colors files), with or
+    without an alpha suffix (translucent selections: BackgroundNormal=r,g,b,a)."""
     if not colors:
         return text
     for ph, role in PLACEHOLDERS.items():
         text = re.sub(re.escape(ph), colors[role], text, flags=re.I)
-        text = re.sub(rf"(?<==){re.escape(dec(ph))}$", dec(colors[role]), text, flags=re.M)
+        text = re.sub(rf"(?<==){re.escape(dec(ph))}(,\d+)?$", dec(colors[role]) + r"\1", text, flags=re.M)
     return text
 
 
