@@ -23,6 +23,9 @@ rm -f "$HOME/.config/systemd/user/aether-island.service" "$HOME/.config/systemd/
       "$HOME/.local/share/applications/aether-console-toggle.desktop" \
       "$HOME/.local/bin/aether-island" "$HOME/.local/bin/aether-toasts"
 rm -rf "$HOME/.local/share/aether-island" "$HOME/.local/share/aether-toasts" "$HOME/.local/share/aether-dock" "$HOME/.local/share/aether-console" "$HOME/.local/share/aether-lens" "$HOME/.local/share/aether-desk"
+# The app accent sync (install-apps.sh); the themes themselves stay, restore.sh brings back the old look.
+systemctl --user disable --now aether-accent-sync.path 2>/dev/null || true
+rm -f "$HOME/.config/systemd/user/aether-accent-sync.service" "$HOME/.config/systemd/user/aether-accent-sync.path" "$HOME/.local/bin/aether-accent-sync"
 systemctl --user daemon-reload
 # The YouTube Music seat: KWin script and window rule
 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript aether-media >/dev/null 2>&1 || true

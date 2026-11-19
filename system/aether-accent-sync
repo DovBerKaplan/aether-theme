@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Carry the island's accent (its Color panel) into the app themes: the Kvantum theme, the Aurorae
+titlebar, Konsole's cursor and the installed colour-scheme files (sandboxed KDE apps - the Flatpak
+Dolphin, Konsole, Gwenview - read the scheme file, not the colours baked into kdeglobals). The scheme's own accent (KDE apps, and GTK through
+KDE's colors.css) is the island's job: TileStore::applySystemAccent runs plasma-apply-colorscheme
+with the scheme's name - never call it here without one, it falls back to BreezeLight.
+
+Triggered by aether-accent-sync.path whenever ~/.config/aetherislandrc changes. That file is only
+ever read here. The generated themes (installed under ~/.local/share/aether-apps by
+install/install-apps.sh) carry the dark theme's cyan as a placeholder; every run rebuilds the live
+copies from them, so it is idempotent and cheap, and writes only what actually changed.
+
+    AETHER_ISLANDRC=/path/to/copy aether-accent-sync    # try another colour without touching the real file
+"""
+import colorsys
+import configparser
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+ISLANDRC = Path(os.environ.get("AETHER_ISLANDRC", HOME / ".config/aetherislandrc"))
+TEMPLATES = HOME / ".local/share/aether-apps"
+KVANTUM = HOME / ".config/Kvantum"
+AURORAE = HOME / ".local/share/aurorae/themes"
+KONSOLE_PROFILE = HOME / ".local/share/konsole/Aether.profile"
+SCHEMES = HOME / ".local/share/color-schemes"
+
+# Placeholders in the generated themes (theme/tokens.toml cyan family) -> role of the accent.
+PLACEHOLDERS = {"#00f2fe": "accent", "#00dce6": "hover", "#00696f": "deep", "#00373a": "ink"}
+
+
+def accent() -> tuple[float, float, float] | None:
+    """The island's colour as HLS, by the same formula as the island (QColor::fromHslF)."""
+    cp = configparser.ConfigParser(interpolation=None)
+    try:
+        cp.read(ISLANDRC)
+    except configparser.Error:
+        return None
+    a = cp["Appearance"] if cp.has_section("Appearance") else {}
+    if str(a.get("AccentSet", "false")).lower() != "true":
+        return None
+    hue = min(max(int(float(a.get("AccentHue", 183))), 0), 359) / 360
+    light = min(max(float(a.get("AccentLight", 0.5)), 0.25), 0.8)
+    sat = min(max(float(a.get("AccentSat", 1.0)), 0.15), 1.0)
+    return hue, light, sat
+
+
+def hexof(h: float, l: float, s: float) -> str:
+    r, g, b = colorsys.hls_to_rgb(h, min(max(l, 0), 1), min(max(s, 0), 1))
+    return "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def roles(hls) -> dict[str, str]:
+    h, l, s = hls
+    return {"accent": hexof(h, l, s), "hover": hexof(h, l * 0.92, s), "deep": hexof(h, l * 0.45, s),
+            "ink": hexof(h, 0.12, s)}
+
+
+def write_if_changed(path: Path, text: str) -> bool:
+    if path.exists() and path.read_text() == text:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return True
+
+
+def dec(h: str) -> str:
+    return ",".join(str(int(h[i:i + 2], 16)) for i in (1, 3, 5))
+
+
+def recolor(text: str, colors: dict[str, str] | None) -> str:
+    """Placeholders as #rrggbb (SVG, Kvantum) and as r,g,b (KDE .colors files)."""
+    if not colors:
+        return text
+    for ph, role in PLACEHOLDERS.items():
+        text = re.sub(re.escape(ph), colors[role], text, flags=re.I)
+        text = re.sub(rf"(?<==){re.escape(dec(ph))}$", dec(colors[role]), text, flags=re.M)
+    return text
+
+
+def set_key(text: str, key: str, value: str) -> str:
+    return re.sub(rf"^{re.escape(key)}=.*$", f"{key}={value}", text, flags=re.M)
+
+
+def sync_tree(src: Path, dst: Path, fix) -> bool:
+    """Mirror src into dst, passing every text file through fix(name, text)."""
+    changed = False
+    for f in src.rglob("*"):
+        if f.is_dir():
+            continue
+        out = dst / f.relative_to(src)
+        if f.suffix in (".svg", ".kvconfig", ".rc", ".colorscheme", ".colors", ""):
+            changed |= write_if_changed(out, fix(f.name, f.read_text()))
+        elif not out.exists() or out.read_bytes() != f.read_bytes():
+            out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(f, out)
+            changed = True
+    return changed
+
+
+def main() -> int:
+    hls = accent()
+    colors = roles(hls) if hls else None
+    changed = []
+
+    # Kvantum: placeholders in the SVG; in the config the selection tint and links. The light theme
+    # carries no cyan, so there the keys are the whole story.
+    def kv_fix(name: str, text: str) -> str:
+        text = recolor(text, colors)
+        if colors and name.endswith(".kvconfig"):
+            light = "AetherSerenity" in name
+            text = set_key(text, "highlight.color", colors["accent"] + ("33" if light else "55"))
+            text = set_key(text, "inactive.highlight.color", colors["accent"] + ("22" if light else "33"))
+            text = set_key(text, "link.color", colors["deep"] if light else colors["accent"])
+        return text
+    for theme in sorted((TEMPLATES / "kvantum").glob("*")):
+        if sync_tree(theme, KVANTUM / theme.name, kv_fix):
+            changed.append(f"kvantum/{theme.name}")
+
+    if (TEMPLATES / "color-schemes").is_dir() and sync_tree(TEMPLATES / "color-schemes", SCHEMES, lambda n, t: recolor(t, colors)):
+        changed.append("color-schemes")
+        # KDE's GTK module writes ~/.config/gtk-{3,4}.0/colors.css from the scheme only when it
+        # (re)starts or the scheme's name changes: reload it so GTK apps follow the new accent - after
+        # the island's own scheme apply (TileStore::applySystemAccent) has landed in kdeglobals.
+        time.sleep(2)
+        for verb in ("unloadModule", "loadModule"):
+            subprocess.run(["qdbus6", "org.kde.kded6", "/kded", f"org.kde.kded6.{verb}", "gtkconfig"],
+                           check=False, capture_output=True)
+
+    # A scheme apply bakes the colours into kdeglobals but leaves some groups out of the accent
+    # ([Colors:Header][Inactive]): fix any placeholder left there, notifying running apps.
+    if colors:
+        globals_path = HOME / ".config/kdeglobals"
+        groups, fixed = [], 0
+        for line in globals_path.read_text().splitlines():
+            if line.startswith("["):
+                groups = re.findall(r"\[([^\]]+)\]", line)
+            elif "=" in line:
+                key, value = line.split("=", 1)
+                role = next((r for ph, r in PLACEHOLDERS.items() if dec(ph) == value), None)
+                if role and groups:
+                    args = ["kwriteconfig6", "--notify", "--file", "kdeglobals"]
+                    for g in groups:
+                        args += ["--group", g]
+                    subprocess.run(args + ["--key", key, dec(colors[role])], check=False)
+                    fixed += 1
+        if fixed:
+            changed.append(f"kdeglobals ({fixed} leftovers)")
+
+    for theme in sorted((TEMPLATES / "aurorae").glob("*")):
+        if sync_tree(theme, AURORAE / theme.name, lambda n, t: recolor(t, colors)):
+            changed.append(f"aurorae/{theme.name}")
+
+    # Konsole: the cursor wears the accent.
+    if KONSOLE_PROFILE.exists():
+        group = ["--file", str(KONSOLE_PROFILE), "--group", "Cursor Options"]
+        if colors:
+            rgb = dec(colors["accent"])
+            cur = subprocess.run(["kreadconfig6", *group, "--key", "CustomCursorColor"], capture_output=True, text=True).stdout.strip()
+            if cur != rgb:
+                subprocess.run(["kwriteconfig6", *group, "--key", "UseCustomCursorColor", "true"], check=False)
+                subprocess.run(["kwriteconfig6", *group, "--key", "CustomCursorColor", rgb], check=False)
+                changed.append("konsole")
+        else:
+            subprocess.run(["kwriteconfig6", *group, "--key", "UseCustomCursorColor", "false"], check=False)
+
+    # Sandboxed apps (Flatpak KDE apps, GTK, Chrome) take the palette from the desktop portal, which
+    # has been seen holding on to old colours after a scheme apply. If it disagrees with kdeglobals,
+    # restart it so it reads them again.
+    portal = subprocess.run(["gdbus", "call", "--session", "--dest", "org.freedesktop.portal.Desktop",
+                             "--object-path", "/org/freedesktop/portal/desktop", "--method",
+                             "org.freedesktop.portal.Settings.ReadOne", "org.kde.kdeglobals.Colors:Selection",
+                             "BackgroundNormal"], capture_output=True, text=True).stdout
+    local = subprocess.run(["kreadconfig6", "--file", "kdeglobals", "--group", "Colors:Selection", "--key",
+                            "BackgroundNormal"], capture_output=True, text=True).stdout.strip()
+    if portal and local and f"'{local}'" not in portal:
+        subprocess.run(["systemctl", "--user", "restart", "plasma-xdg-desktop-portal-kde.service"], check=False)
+        changed.append("portal (was stale)")
+
+    if any(c.startswith("aurorae") for c in changed):
+        subprocess.run(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"], check=False, capture_output=True)
+    print("accent", colors["accent"] if colors else "theme default", "->", ", ".join(changed) or "nothing to change")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
