@@ -84,17 +84,27 @@ echo "== direction rules"
 "$ROOT/system/direction/install-direction.sh"
 
 echo "== fonts, KWin, desktops"
-kwriteconfig6 --file kdeglobals --group General --key font "Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
-kwriteconfig6 --file kdeglobals --group General --key menuFont "Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
-kwriteconfig6 --file kdeglobals --group General --key toolBarFont "Inter,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
-kwriteconfig6 --file kdeglobals --group General --key smallestReadableFont "Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+kwriteconfig6 --file kdeglobals --group General --key font "Inter Display,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+kwriteconfig6 --file kdeglobals --group General --key menuFont "Inter Display,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+kwriteconfig6 --file kdeglobals --group General --key toolBarFont "Inter Display,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+kwriteconfig6 --file kdeglobals --group General --key smallestReadableFont "Inter Display,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
 kwriteconfig6 --file kdeglobals --group General --key fixed "JetBrainsMono Nerd Font,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
-kwriteconfig6 --file kdeglobals --group WM --key activeFont "Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1"
+kwriteconfig6 --file kdeglobals --group WM --key activeFont "Inter Display,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1"
 kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled true
 kwriteconfig6 --file kwinrc --group Plugins --key contrastEnabled true
 kwriteconfig6 --file kwinrc --group Effect-blur --key BlurStrength 14
 # Light grain only: the surfaces should read as smooth blurred glass.
 kwriteconfig6 --file kwinrc --group Effect-blur --key NoiseStrength 1
+# Windows move like the island: scale on open/close, magic-lamp liquid minimize
+# (Squash shares the exclusive "minimize" group, so it steps aside), and a jelly
+# wobble while dragging - tuned toward the drag curtain's spring (3.6/0.22).
+kwriteconfig6 --file kwinrc --group Plugins --key scaleEnabled true
+kwriteconfig6 --file kwinrc --group Plugins --key squashEnabled false
+kwriteconfig6 --file kwinrc --group Plugins --key magiclampEnabled true
+kwriteconfig6 --file kwinrc --group Plugins --key wobblywindowsEnabled true
+kwriteconfig6 --file kwinrc --group Effect-wobblywindows --key Stiffness 10
+kwriteconfig6 --file kwinrc --group Effect-wobblywindows --key Drag 5
+kwriteconfig6 --file kwinrc --group Effect-wobblywindows --key MoveFactor 15
 # Notifications are shown by the aether-toasts service (install-island.sh); the old KWin
 # slide effect is gone, so KDE's own popup effects are back to their defaults.
 kwriteconfig6 --file kwinrc --group Plugins --key aether_notification_slideEnabled --delete
