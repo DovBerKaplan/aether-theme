@@ -12,12 +12,13 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick Qml DBus)
 find_package(KF6WindowSystem REQUIRED)
 find_package(LayerShellQt REQUIRED)
 
-qt_add_executable(aether-desk src/main.cpp)
+qt_add_executable(aether-desk src/main.cpp ../shared/src/BackdropSampler.h)
 target_link_libraries(aether-desk PRIVATE
     Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus
     KF6::WindowSystem LayerShellQt::Interface)
 
 install(TARGETS aether-desk RUNTIME DESTINATION bin)
+target_include_directories(aether-desk PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src)
 target_compile_definitions(aether-desk PRIVATE
     AETHER_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
     AETHER_SHARED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../shared")
