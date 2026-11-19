@@ -60,14 +60,22 @@ systemctl --user enable --now aether-accent-sync.path >/dev/null 2>&1
 echo "== Konsole: the terminal is content - near-opaque, blurred behind"
 kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile Aether.profile
 kwriteconfig6 --file "$D/konsole/Aether.profile" --group General --key TerminalMargin 18
-# no toolbars, like a Mac terminal: the titlebar and the text, nothing between. Konsole keeps
-# toolbar visibility only in its binary window state, so the launcher passes --hide-toolbars:
-# a user-level copy of whichever org.kde.konsole.desktop is in effect (the Flatpak's or the host's).
+# The toolbars stay (new tab, split, copy, paste, find) as one quiet row of icons on the glass.
+# Konsole keeps toolbar visibility only in its binary window state, so the launcher passes
+# --show-toolbars: a user-level copy of whichever org.kde.konsole.desktop is in effect (the
+# Flatpak's or the host's). Icon-only, 16px, for the host Konsole and the Flatpak one.
+for rc in "$HOME/.config/konsolerc" "$HOME/.var/app/org.kde.konsole/config/konsolerc"; do
+  [[ $rc == "$HOME/.config/konsolerc" || -d $HOME/.var/app/org.kde.konsole ]] || continue
+  for tb in mainToolBar sessionToolbar; do
+    kwriteconfig6 --file "$rc" --group MainWindow --group "Toolbar $tb" --key ToolButtonStyle IconOnly
+    kwriteconfig6 --file "$rc" --group MainWindow --group "Toolbar $tb" --key IconSize 16
+  done
+done
 src=$(for d in "$HOME/.local/share/flatpak/exports/share" /var/lib/flatpak/exports/share /usr/share; do
   [[ -f $d/applications/org.kde.konsole.desktop ]] && { echo "$d/applications/org.kde.konsole.desktop"; break; }; done)
 if [[ -n $src ]]; then
   mkdir -p "$D/applications"
-  sed -E '/^Exec=/{/--hide-toolbars/!s/(org\.kde\.konsole|^Exec=konsole)/\1 --hide-toolbars/}' "$src" > "$D/applications/org.kde.konsole.desktop"
+  sed -E -e 's/ --hide-toolbars//' -e '/^Exec=/{/--show-toolbars/!s/(org\.kde\.konsole|^Exec=konsole)/\1 --show-toolbars/}' "$src" > "$D/applications/org.kde.konsole.desktop"
 fi
 
 echo "== prompt: the two-line Aether prompt in bash"
