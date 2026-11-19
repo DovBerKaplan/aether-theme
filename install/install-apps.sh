@@ -83,9 +83,9 @@ install -Dm 644 "$ROOT/system/aether-prompt.sh" "$D/aether/prompt.sh"
 grep -qs 'aether/prompt.sh' "$HOME/.bashrc" \
   || printf '\n# Aether prompt (install/install-apps.sh)\n[ -f "$HOME/.local/share/aether/prompt.sh" ] && . "$HOME/.local/share/aether/prompt.sh"\n' >> "$HOME/.bashrc"
 
-echo "== titlebar: round buttons on the left, the reference order (close, maximize, minimize)"
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft XAI
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnRight ""
+echo "== titlebar: round buttons on the right, the reference order (minimize, maximize, close)"
+kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft ""
+kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnRight XAI
 
 echo "== KDE Flatpaks (Dolphin, Konsole, Gwenview ...)"
 # A sandboxed Qt app sees neither the host's Kvantum style nor its themes: the style comes from the
