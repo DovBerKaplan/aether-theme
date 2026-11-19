@@ -81,6 +81,17 @@ if [[ -d "$HOME/.local/share/aurorae/themes/$scheme" ]] && [[ "$(kreadconfig6 --
   qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
   echo "titlebar -> $scheme"
 fi
+# The icons follow as well, for the same reason: the island's switch into Auto (by hours) changes
+# only the colours, so coming from a hand-picked Light at night left Colloid-Light's dark glyphs on
+# the dark glass. Only a Colloid variant is moved - an icon theme picked elsewhere stays.
+# plasma-changeicons writes the theme and tells every running app to repaint its icons.
+icons="$(kreadconfig6 --file kdeglobals --group Icons --key Theme)"
+[[ $scheme == AetherGlass ]] && want=Colloid-Dark || want=Colloid-Light
+changeicons=/usr/lib/x86_64-linux-gnu/libexec/plasma-changeicons
+[[ -x $changeicons ]] || changeicons="$(command -v plasma-changeicons || true)"
+if [[ $icons == Colloid-Dark || $icons == Colloid-Light ]] && [[ $icons != "$want" ]] && [[ -n $changeicons ]]; then
+  "$changeicons" "$want" >/dev/null 2>&1 && echo "icons -> $want"
+fi
 # Every aether wallpaper carries a dark and a light field: switch it on every desktop that wears one.
 # A stuck Mode here poisons every glass window at once (the translucency takes its tone from the
 # wallpaper), and the old write-if-different could fail silently: the config object can serve a
