@@ -103,20 +103,19 @@ Item {
         value: desk.language
     }
 
-    // While the panel is open the desk's glass dresses for the wallpaper, the island's recipe:
-    // bright backdrop -> the milky light material, dark -> the ink glass. The button rides the
-    // same material, so the surface stays one family while the panel shows and returns to its
-    // dark rest when it closes.
+    // While the panel is open the desk's glass goes the island's milky light (bright backdrop
+    // recipe); the button rides the same material, so the surface stays one family while the
+    // panel shows and returns to its dark rest when it closes.
     Binding {
         target: Theme
         property: "dark"
-        value: !desk.backdropLight
+        value: false
         when: arrangePanel.open
     }
     Binding {
         target: Theme
         property: "bodyAlpha"
-        value: desk.backdropLight ? 0.32 : Tokens.material.islandBodyAlpha
+        value: 0.32
         when: arrangePanel.open
     }
 

@@ -82,7 +82,6 @@ sed "s|@EXEC@|$PREFIX/bin/aether-island|" "$ROOT/components/island/aether-island
 sed "s|@EXEC@|$PREFIX/bin/aether-toasts|" "$ROOT/components/toasts/org.aether.toasts.desktop.in" > "$HOME/.local/share/applications/org.aether.toasts.desktop"
 sed "s|@EXEC@|$PREFIX/bin/aether-lens|" "$ROOT/components/lens/org.aether.lens.desktop.in" > "$HOME/.local/share/applications/org.aether.lens.desktop"
 sed "s|@EXEC@|$PREFIX/bin/aether-console|" "$ROOT/components/console/org.aether.console.desktop.in" > "$HOME/.local/share/applications/org.aether.console.desktop"
-sed "s|@EXEC@|$PREFIX/bin/aether-desk|" "$ROOT/components/desk/org.aether.desk.desktop.in" > "$HOME/.local/share/applications/org.aether.desk.desktop"
 # A launcher entry so a global shortcut (Win+N) can toggle the island over DBus.
 cat > "$HOME/.local/share/applications/aether-island-toggle.desktop" <<EOF
 [Desktop Entry]
