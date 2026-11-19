@@ -102,7 +102,7 @@ def decoration(f: Frame, prefix: str, v: dict, alpha: float, active: bool):
     for kind, cx in (("bottomleft", "l"), ("bottomright", "r")):
         x, y = xs[cx], ys["b"]
         bx = x + P if kind == "bottomleft" else x            # the arc's r x r bbox, rows [0, R)
-        ccx = x + S if kind == "bottomleft" else x + R       # the arc circle's centre
+        ccx = x + S if kind == "bottomleft" else x           # the arc circle's centre: bottomright's arc is centred on the tile origin (inner=(0,0)), bottomleft's on bbox+R (inner=(1,0))
         tile = f"M{x},{y} H{x + S} V{y + S} H{x} Z "
         fill = sh.radial(ccx, y, S, R / S)
         inner = f'<path d="{tile}{corner_path(kind, bx, y, R)}" fill-rule="evenodd" fill="{fill}"/>'
