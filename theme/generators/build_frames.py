@@ -97,7 +97,8 @@ def corner_ring(kind: str, x: float, y: float, r: float, w: float = 1.0) -> str:
 
 
 def glass(f: Frame, prefix: str, r: int, opacity: float, margins, border=0.10, highlight=0.0,
-          fill_class="ColorScheme-Background", shadow=0, mask=True, frost=0.0):
+          fill_class="ColorScheme-Background", shadow=0, mask=True, frost=0.0,
+          border_class="ColorScheme-Text"):
     """Add one prefixed frame (prefix '' or e.g. 'hover-')."""
     p = prefix
     e = 8                                    # edge/centre tile size
@@ -108,7 +109,7 @@ def glass(f: Frame, prefix: str, r: int, opacity: float, margins, border=0.10, h
     fill = f'class="{fill_class}" fill="currentColor" fill-opacity="{opacity}"'
     # Milky frost: a faint white veil over the tint, so blurred colours read as frosted glass.
     veil = f'fill="{WHITE}" fill-opacity="{frost}"'
-    line = f'class="ColorScheme-Text" fill="currentColor" fill-opacity="{border}"'
+    line = f'class="{border_class}" fill="currentColor" fill-opacity="{border}"'
     hl = f'fill="{WHITE}" fill-opacity="{highlight}"'
 
     def rim(x, y, w, h, style):  # hairline as a 1px filled rect (see corner_ring)
@@ -275,6 +276,30 @@ def build(theme: Path):
     glass(f, "hover-", 9, 0.14, (2, 2, 2, 2), fill_class="ColorScheme-Text", border=0.0, highlight=0.0, mask=False)
     glass(f, "active-", 9, 0.85, (2, 2, 2, 2), fill_class="ColorScheme-Highlight", border=0.0, highlight=0.15, mask=False)
     write(theme / "widgets/pager.svgz", f)
+    # The KWin Overview is the last stock surface; its search field and the
+    # "+ workspace" chip are Plasma widgets, so they dress through here.
+    # lineedit: a quiet glass well, focused = accent hairline (accent stays rare).
+    f = Frame()
+    glass(f, "base-", 8, 0.50, (6, 6, 6, 6), border=0.12, highlight=0.0, mask=False)
+    glass(f, "hover-", 8, 0.58, (6, 6, 6, 6), border=0.14, highlight=0.0, mask=False)
+    glass(f, "focus-", 8, 0.58, (6, 6, 6, 6), border=0.60, border_class="ColorScheme-Highlight",
+          highlight=0.0, mask=False)
+    write(theme / "widgets/lineedit.svgz", f)
+    # button: glass chips - the "+" tile, the "Add Virtual Desktop" button. No
+    # shadow- prefix: absence means qqc2 draws no drop shadow (no-glow line).
+    f = Frame()
+    glass(f, "normal-", 12, 0.35, (4, 4, 6, 6), border=0.10, highlight=0.0, mask=False)
+    glass(f, "hover-", 12, 0.45, (4, 4, 6, 6), border=0.14, highlight=0.0, mask=False)
+    glass(f, "pressed-", 12, 0.55, (4, 4, 6, 6), border=0.16, highlight=0.0, mask=False)
+    glass(f, "focus-", 12, 0.45, (4, 4, 6, 6), border=0.55, border_class="ColorScheme-Highlight",
+          highlight=0.0, mask=False)
+    glass(f, "toolbutton-hover-", 12, _M["tint-hover"], (2, 2, 2, 2), fill_class="ColorScheme-Text",
+          border=0.0, highlight=0.0, mask=False)
+    glass(f, "toolbutton-pressed-", 12, 0.16, (2, 2, 2, 2), fill_class="ColorScheme-Text",
+          border=0.0, highlight=0.0, mask=False)
+    glass(f, "toolbutton-focus-", 12, 0.0, (2, 2, 2, 2), border=0.55, border_class="ColorScheme-Highlight",
+          highlight=0.0, mask=False)
+    write(theme / "widgets/button.svgz", f)
     print("frames drawn in", theme)
 
 
