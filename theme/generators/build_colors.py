@@ -10,6 +10,9 @@ PALETTES = {k: {a.replace("-", "_"): b for a, b in v.items()} for k, v in load()
 # Views (file lists, text, item views) are a faint veil over the window's glass, not a solid sheet:
 # KDE takes r,g,b,a here, and Kvantum's translucent windows show what lies under it.
 VIEW_ALPHA = round(load()["apps"]["view-tint"] * 255)
+# Selection pills (Dolphin's places panel, list selections) ride the same glass: the accent at a
+# quarter opacity instead of a solid sticker. KFilePlacesView blends it into the glass itself.
+SEL_ALPHA = 64
 
 
 def rgb(h: str) -> str:
@@ -45,7 +48,7 @@ def build(key: str, p: dict) -> str:
         "[Colors:Complementary]\n" + section(p, p["complementary"], p["complementary"], comp_fg, dark["text-muted"]),
         "[Colors:Header]\n" + section(p, p["header"], p["alt"]),
         "[Colors:Header][Inactive]\n" + section(p, p["window"], p["alt"]),
-        "[Colors:Selection]\n" + section(p, p["selection"], p["accent_hover"], p["selection_fg"], p["selection_fg"]),
+        "[Colors:Selection]\n" + section(p, p["selection"], p["accent_hover"], p["selection_fg"], p["selection_fg"], alpha=SEL_ALPHA),
         "[Colors:Tooltip]\n" + section(p, p["tooltip"], p["alt"]),
         "[Colors:View]\n" + section(p, p["view"], p["alt"], alpha=VIEW_ALPHA),
         "[Colors:Window]\n" + section(p, p["window"], p["alt"]),
