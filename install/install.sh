@@ -62,6 +62,9 @@ W="$D/plasma/wallpapers/org.aether.ribbons"
 rm -rf "$W"; mkdir -p "$D/plasma/wallpapers"; cp -r "$ROOT/plasmoids/org.aether.ribbons" "$W"
 qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12 -o "$W/contents/shaders/ribbons.frag.qsb" "$W/contents/shaders/ribbons.frag"
 cp "$ROOT"/theme/icons/*.svg "$D/icons/hicolor/scalable/apps/"
+# Aether Sink: our own open/close animation, a scripted KWin effect.
+mkdir -p "$D/kwin/effects"
+rm -rf "$D/kwin/effects/aether-close"; cp -r "$ROOT/system/aether-close" "$D/kwin/effects/"
 
 echo "== mode sync service"
 cat > "$HOME/.config/systemd/user/aether-mode-sync.service" <<EOF
@@ -106,10 +109,12 @@ kwriteconfig6 --file kwinrc --group Plugins --key contrastEnabled true
 kwriteconfig6 --file kwinrc --group Effect-blur --key BlurStrength 14
 # Light grain only: the surfaces should read as smooth blurred glass.
 kwriteconfig6 --file kwinrc --group Effect-blur --key NoiseStrength 1
-# Windows move like the island: scale on open/close, magic-lamp liquid minimize
-# (Squash shares the exclusive "minimize" group, so it steps aside), and a jelly
+# Windows move like the island: Aether Sink opens like Scale and dives the
+# window into its taskbar seat on close, magic-lamp liquid minimize (Squash
+# shares the exclusive "minimize" group, so it steps aside), and a jelly
 # wobble while dragging - tuned toward the drag curtain's spring (3.6/0.22).
-kwriteconfig6 --file kwinrc --group Plugins --key scaleEnabled true
+kwriteconfig6 --file kwinrc --group Plugins --key scaleEnabled false
+kwriteconfig6 --file kwinrc --group Plugins --key aether-closeEnabled true
 kwriteconfig6 --file kwinrc --group Plugins --key squashEnabled false
 kwriteconfig6 --file kwinrc --group Plugins --key magiclampEnabled true
 kwriteconfig6 --file kwinrc --group Plugins --key wobblywindowsEnabled true
