@@ -86,9 +86,31 @@ Item {
             sweep.start();
         }
     }
+
+    // The glass: the button always, the arrange panel's card while it is open - blurred behind
+    // and the only parts of the surface that take the pointer.
+    function updateGlass() {
+        const rects = [{ x: button.x, y: button.y, w: button.width, h: button.height, r: button.size / 2 }];
+        if (arrangePanel.open)
+            rects.push({ x: arrangePanel.x, y: arrangePanel.y, w: arrangePanel.width, h: arrangePanel.height, r: Tokens.radius.card });
+        desk.setGlassRects(rects);
+    }
+
+    // The panel speaks the island's language (aetherislandrc), not the program's locale.
+    Binding {
+        target: I18n
+        property: "lang"
+        value: desk.language
+    }
+
     Connections {
         target: desk
         function onToggleRequested() { root.toggle(); }
+        function onArrangeRequested(x, y) { arrangePanel.openAt(x, y); }
+    }
+    Connections {
+        target: arrangePanel
+        function onGlassChanged() { updateGlass(); }
     }
     function launchAll(out) {
         for (let i = 0; i < count; i++)
@@ -194,10 +216,10 @@ Item {
         height: size
         x: Math.round((root.width - size) / 2)
         y: root.height - size - dockClear
-        onXChanged: report()
-        onYChanged: report()
-        Component.onCompleted: report()
-        function report() { desk.setButtonRect(Qt.rect(x, y, width, height), size / 2); }
+        onXChanged: updateGlass()
+        onYChanged: updateGlass()
+        Component.onCompleted: updateGlass()
+        function report() { updateGlass(); }
         transform: ButtonScale {}
 
         // A small swallow: squeezed in, sprung back out.
@@ -397,5 +419,10 @@ Item {
                 }
             }
         }
+    }
+
+    // ---- The arrange panel: the desktop's right click, drawn last (topmost) ---------------------------------
+    ArrangePanel {
+        id: arrangePanel
     }
 }
