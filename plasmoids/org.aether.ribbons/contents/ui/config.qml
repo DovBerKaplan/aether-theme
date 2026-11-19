@@ -24,7 +24,7 @@ Kirigami.FormLayout {
 
     QQC2.CheckBox {
         Kirigami.FormData.label: "Motion:"
-        text: "Let the ribbons sway slowly"
+        text: "Let the ribbons live"
         checked: cfg_Animate
         onToggled: cfg_Animate = checked
     }
