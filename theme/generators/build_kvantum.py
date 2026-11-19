@@ -47,7 +47,9 @@ def window_frame(body: str, rim: str, rim_alpha: float) -> str:
     x0, y0, e = 704, 0, 8
     xs = {"l": x0, "c": x0 + r, "r": x0 + r + e}
     ys = {"t": y0, "c": y0 + 1, "b": y0 + 1 + e}
-    fill = f'fill="{body}"'
+    # The frame's body rides the same glass as the window behind it: the explicit fill-opacity is
+    # what Qt SVG honours - an alpha byte inside the hex (window.color's #rrggbbaa) is not.
+    fill = f'fill="{body[:7]}" fill-opacity="{T["apps"]["chrome-alpha"]}"'
     line = f'fill="{rim}" fill-opacity="{rim_alpha}"'
     out = []
     for state in ("normal", "normal-inactive"):
@@ -86,6 +88,11 @@ def main() -> None:
         cfg = set_keys(cfg, "Window", {"frame.top": "1", "frame.bottom": r, "frame.left": r, "frame.right": r})
         # Toolbars are part of the one glass: no panel of their own, no line under them.
         cfg = set_keys(cfg, "Toolbar", {"interior": "false", "frame": "false"})
+        # The glass lets a bright desktop through, so light text needs a dark halo to stay legible
+        # over it (the adaptive-contrast stand-in: the halo carries the text over any backdrop).
+        for section in ("ItemView", "MenuBarItem", "Menu", "StatusBar", "TitleBar"):
+            cfg = set_keys(cfg, section, {"text.shadow": "true", "text.shadow.color": "#5e000000",
+                                          "text.shadow.offset": "1"})
         cfg = set_keys(cfg, "GeneralColors", t["colors"])
         cfg = set_keys(cfg, "Hacks", HACKS)
         (dest / f"{name}.kvconfig").write_text(cfg)
