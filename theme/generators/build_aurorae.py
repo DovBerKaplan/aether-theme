@@ -195,7 +195,7 @@ ActiveTextColor={rgb(v["text"])}
 InactiveTextColor={rgb(v["text_inactive"])}
 TitleAlignment=Center
 TitleVerticalAlignment=Center
-UseTextShadow=false
+UseTextShadow=true
 Shadow=true
 Animation=150
 
