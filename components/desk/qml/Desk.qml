@@ -103,6 +103,22 @@ Item {
         value: desk.language
     }
 
+    // While the panel is open the desk's glass goes the island's milky light (bright backdrop
+    // recipe); the button rides the same material, so the surface stays one family while the
+    // panel shows and returns to its dark rest when it closes.
+    Binding {
+        target: Theme
+        property: "dark"
+        value: false
+        when: arrangePanel.open
+    }
+    Binding {
+        target: Theme
+        property: "bodyAlpha"
+        value: 0.32
+        when: arrangePanel.open
+    }
+
     Connections {
         target: desk
         function onToggleRequested() { root.toggle(); }
