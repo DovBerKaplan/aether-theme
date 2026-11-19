@@ -269,8 +269,8 @@ base = "WhiteSurDark"
 "#1a1a1a" = "ink-750"   # the inactive window: same glass
 
 [kvantum.AetherGlass.colors]
-"window.color" = "ink-750"
-"inactive.window.color" = "ink-750"
+"window.color" = "#1c1e2452"         # ink-750 at the island's body alpha: what paints the palette (Dolphin's small statusbar note) becomes glass on the glass, not an opaque patch
+"inactive.window.color" = "#1c1e2452"
 "base.color" = "#1c1e2412"           # a breath over the window glass: views and fields read as one sheet
 "inactive.base.color" = "#1c1e2412"
 "alt.base.color" = "#ffffff0a"       # alternating rows: a faint veil
@@ -308,8 +308,8 @@ base = "WhiteSur"
 "#424242" = "graphite-800"
 
 [kvantum.AetherSerenity.colors]
-"window.color" = "paper-50"
-"inactive.window.color" = "paper-50"
+"window.color" = "#f8f9fa52"         # paper-50 at the body alpha, as the dark glass above
+"inactive.window.color" = "#f8f9fa52"
 "base.color" = "#ffffff1a"           # a breath over the window glass
 "inactive.base.color" = "#ffffff1a"
 "alt.base.color" = "#1a1d200a"       # alternating rows: a faint shade
@@ -351,6 +351,9 @@ button-size  = 22     # titlebar buttons (Aurorae): grey circles on the left - c
 [kvantum.general]
 composite = "true"
 translucent_windows = "true"
+# Dolphin's small statusbar sizes itself from the style's splitter width (its clipping fudge) - a
+# wide one starves the text into a middle ellipsis ("5...les"). One keeps the note whole.
+splitter_width = "1"
 blurring = "true"
 popup_blurring = "true"
 reduce_menu_opacity = "4"
