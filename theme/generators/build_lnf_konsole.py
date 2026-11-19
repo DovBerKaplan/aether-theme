@@ -9,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[1] / "generated"
 
 _META = {
     "glass": dict(id="org.aether.glass.desktop", name="Aether Glass", scheme="AetherGlass",
-                  icons="Papirus-Dark", cursor="breeze_cursors", kvantum="AetherGlass"),
+                  icons="Colloid-Dark", cursor="breeze_cursors", kvantum="AetherGlass"),
     "serenity": dict(id="org.aether.serenity.desktop", name="Aether Serenity", scheme="AetherSerenity",
-                     icons="Papirus-Light", cursor="breeze_cursors", kvantum="AetherSerenity"),
+                     icons="Colloid-Light", cursor="breeze_cursors", kvantum="AetherSerenity"),
 }
 VARIANTS = {
     key: dict(meta, konsole={a.replace("-", "_"): b for a, b in load()["terminal"][key].items()})
