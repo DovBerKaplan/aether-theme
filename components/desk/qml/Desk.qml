@@ -54,7 +54,7 @@ Item {
     property real swish: 0                      // the broom's stroke, degrees
     property real jolt: 0                       // the stand-ins' shiver under a stroke, -1 .. 1
     property real pressScale: 1
-    readonly property real glyphOpacity: 0.72  // the folder and the broom are a little see-through, like the glass
+    readonly property real glyphOpacity: 0.3   // the folder and the broom are mostly see-through, like the glass
     property real hoverScale: hover.containsMouse && phase === "idle" ? 1.06 : 1
     readonly property int count: ghosts.count
     readonly property int stagger: 18
@@ -208,15 +208,13 @@ Item {
             NumberAnimation { target: root; property: "pressScale"; to: 1; duration: Tokens.motion.duration.slow; easing.type: Tokens.motion.easing.spring }
         }
 
-        // The island's glass, uncoloured: its dark body over KWin's blur, the hairline rim, grain.
+        // Frosted glass: no body at all, only KWin's blur of what lies behind (setButtonRect), a
+        // rough grain over it and the hairline rim.
         Rectangle {
             id: glass
             anchors.fill: parent
             radius: width / 2
-            gradient: Gradient {
-                GradientStop { position: 0; color: Theme.bodyTop }
-                GradientStop { position: 1; color: Theme.bodyBottom }
-            }
+            color: "transparent"
             border.width: 1
             border.color: Theme.rim
             Image {
@@ -238,7 +236,7 @@ Item {
                 source: grain
                 maskEnabled: true
                 maskSource: mask
-                opacity: 0.022                       // the notch's grain
+                opacity: 0.07                        // rougher than the notch's 0.022: frost
             }
             Rectangle {                              // hover / press veil
                 anchors.fill: parent
