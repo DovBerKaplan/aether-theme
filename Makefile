@@ -70,7 +70,7 @@ check: ## Syntax-check scripts, run the split-model test and build all six compo
 	node --check system/zcode-rtl/zcode-rtl-inject.mjs
 	node components/console/tests/split-model.test.js
 	python3 $(GEN)/build_tokens_qml.py --check
-	qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12 -o /dev/null plasmoids/org.aether.ribbons/contents/shaders/ribbons.frag
+	@for s in ribbons mist aurora ink dune; do qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12 -o /dev/null plasmoids/org.aether.$$s/contents/shaders/$$s.frag || exit 1; done
 	node -e "new Function(require('fs').readFileSync('system/layout.js','utf8'))"
 	$(MAKE) components
 

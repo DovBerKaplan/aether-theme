@@ -28,7 +28,7 @@ sudo apt install cmake ninja-build extra-cmake-modules \
 (Package names are for KDE neon / Ubuntu 24.04; other distributions use
 equivalent `-devel` packages. `kf6-krunner-dev` is the island's search engine;
 `libatspi2.0-dev` is lens's element picking; `qt6-shadertools` (`qsb6`) compiles
-the wallpaper's shader.)
+the wallpapers' shaders — see docs/WALLPAPERS.md.)
 
 ## Install
 
