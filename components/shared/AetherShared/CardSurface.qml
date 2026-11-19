@@ -36,6 +36,6 @@ Item {
         maskEnabled: true
         maskSource: mask
         // rougher grain on dark glass, almost none on the light veil (dock's calibration)
-        opacity: Theme.dark ? Tokens.material.grainOpacity : Tokens.material.dockGrainLight
+        opacity: Tokens.material.grainOpacity
     }
 }

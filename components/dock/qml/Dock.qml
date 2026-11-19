@@ -37,7 +37,7 @@ Item {
     readonly property real radius: Tokens.dock.radius
 
     // Material: the island's glass (gradient body, hairline rim, grain), tuned per scheme - a touch
-    // denser and rougher in dark mode, lighter, smoother and clearer in light mode.
+    // denser in dark mode, lighter and clearer in light mode; the grain is the global one.
     readonly property bool dark: dock.dark
     readonly property color ink: dark || Theme.tinted ? Theme.text : Tokens.palette.graphite950
     // Light mode is a white veil over the blur, nothing darker: clear, frosted, with a light rim.
@@ -48,7 +48,7 @@ Item {
     readonly property color bodyBottom: Theme.tinted ? Theme.bodyBottom : dark ? Qt.alpha(Tokens.palette.ink850, Tokens.material.dockAlphaDark)
                                              : Qt.rgba(Theme.bodyBottom.r, Theme.bodyBottom.g, Theme.bodyBottom.b, Tokens.material.dockAlphaLight * 0.8)
     readonly property color rim: Theme.rim   // cool grey hairline on the light veil; white hairline on dark glass
-    readonly property real grainOpacity: dark ? Tokens.material.dockGrainDark : Tokens.material.dockGrainLight
+    readonly property real grainOpacity: Tokens.material.grainOpacity   // the global frost grain
 
     property bool shown: false
     property bool pointerIn: false
