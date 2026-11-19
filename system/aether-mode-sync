@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keep Kvantum, Konsole and the GTK/browser apps in step with the active KDE color scheme.
+# Keep Kvantum, the Aurorae titlebar, Konsole and the GTK/browser apps in step with the active KDE color scheme.
 # Triggered by aether-mode-sync.path whenever ~/.config/kdeglobals changes.
 set -euo pipefail
 # A look-and-feel apply leaks its package defaults (ColorScheme=...) into kdedefaults; there the
@@ -8,21 +8,34 @@ set -euo pipefail
 # explicit name after a real apply - keep the defaults layer clean so re-applies always land.
 sed -i '/^ColorScheme=/d' "$HOME/.config/kdedefaults/kdeglobals" 2>/dev/null || true
 scheme="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme)"
+# The name is not always written (a LnF apply can leave it out): then judge by the window colour,
+# as the island does, and only if the look-and-feel is one of ours.
+if [[ -z $scheme ]] && [[ "$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage)" == org.aether.* ]]; then
+  IFS=, read -r r g b <<< "$(kreadconfig6 --file kdeglobals --group Colors:Window --key BackgroundNormal)"
+  (( (${r:-0} + ${g:-0} + ${b:-0}) / 3 < 128 )) && scheme=AetherGlass || scheme=AetherSerenity
+fi
 case "$scheme" in
   AetherGlass) kv=AetherGlass ;;
   AetherSerenity) kv=AetherSerenity ;;
   *) exit 0 ;;  # not one of ours: leave the user's choice alone
 esac
 # GTK, libadwaita, Firefox, Chromium and Electron do not read KDE colors: they follow the freedesktop
-# color-scheme (gsettings) and the GTK settings. Move them together with the KDE scheme.
+# color-scheme (gsettings) and the GTK settings. Move them together with the KDE scheme. Breeze-GTK
+# draws from the colors.css KDE writes from the active scheme, so GTK apps wear our palette and the
+# island's accent too.
 if [[ $scheme == AetherGlass ]]; then
-  prefer=prefer-dark gtkdark=true gtktheme=WhiteSur-dark
+  prefer=prefer-dark gtkdark=true gtktheme=Breeze-Dark
 else
-  prefer=prefer-light gtkdark=false gtktheme=Adwaita
+  prefer=prefer-light gtkdark=false gtktheme=Breeze
 fi
 if command -v gsettings >/dev/null; then
   [[ "$(gsettings get org.gnome.desktop.interface color-scheme)" == "'$prefer'" ]] || { gsettings set org.gnome.desktop.interface color-scheme "$prefer"; echo "gsettings color-scheme -> $prefer"; }
-  [[ "$(gsettings get org.gnome.desktop.interface gtk-theme)" == "'$gtktheme'" ]] || gsettings set org.gnome.desktop.interface gtk-theme "$gtktheme"
+fi
+# KDE's GTK module owns the GTK theme (settings.ini, gsettings, xsettingsd): ask it, else write it by hand.
+if [[ "$(qdbus6 org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.gtkTheme 2>/dev/null)" != "$gtktheme" ]]; then
+  qdbus6 org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "$gtktheme" >/dev/null 2>&1 \
+    || { command -v gsettings >/dev/null && gsettings set org.gnome.desktop.interface gtk-theme "$gtktheme"; }
+  echo "gtk -> $gtktheme"
 fi
 for v in 3.0 4.0; do
   ini="$HOME/.config/gtk-$v/settings.ini"
@@ -33,6 +46,14 @@ current="$(kreadconfig6 --file "$HOME/.config/Kvantum/kvantum.kvconfig" --group 
 if [[ "$current" != "$kv" ]]; then
   kwriteconfig6 --file "$HOME/.config/Kvantum/kvantum.kvconfig" --group General --key theme "$kv"
   echo "kvantum -> $kv"
+fi
+# The titlebar (Aurorae) follows too: a LnF apply sets it, a colour-only switch (by hours) does not.
+deco="__aurorae__svg__$scheme"
+if [[ -d "$HOME/.local/share/aurorae/themes/$scheme" ]] && [[ "$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme)" != "$deco" ]]; then
+  kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key library org.kde.kwin.aurorae
+  kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme "$deco"
+  qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+  echo "titlebar -> $scheme"
 fi
 profile="$HOME/.local/share/konsole/Aether.profile"
 if [[ -f $profile ]] && [[ "$(kreadconfig6 --file "$profile" --group Appearance --key ColorScheme)" != "$scheme" ]]; then

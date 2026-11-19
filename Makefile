@@ -4,7 +4,7 @@ GEN   := theme/generators
 APPS  := island toasts dock console lens desk
 
 .DEFAULT_GOAL := help
-.PHONY: help all tokens theme fonts components install install-island install-login install-gestures direction-install zcode-rtl-install uninstall restore check clean
+.PHONY: help all tokens theme fonts components install install-island install-apps install-login install-gestures direction-install zcode-rtl-install uninstall restore check clean
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-18s %s\n", $$1, $$2}'
@@ -38,6 +38,9 @@ install: ## Full install for the current user: theme, island, toasts, shortcuts,
 install-island: ## Build and (re)start the six aether services (quick rebuild path)
 	install/install-island.sh
 
+install-apps: ## Dress the apps (Kvantum, Aurorae titlebar, Konsole, GTK, KDE Flatpaks) and keep them on the island's accent
+	install/install-apps.sh
+
 install-login: ## Install the login screen (asks for sudo)
 	sudo install/install-sddm.sh
 
@@ -57,8 +60,8 @@ restore: ## Restore the KDE settings from the latest backup
 	install/restore.sh
 
 check: ## Syntax-check scripts, run the split-model test and build all six components
-	@for f in install/*.sh system/*.sh system/gestures/*.sh system/direction/*.sh system/zcode-rtl/*.sh; do bash -n $$f || exit 1; done
-	python3 -m py_compile $(GEN)/*.py system/shortcuts/*.py tools/*.py system/direction/aether-direction system/direction/aether-direction-run system/vibe/aether-vibe system/agents/aether-agent-run
+	@for f in install/*.sh system/*.sh system/aether-mode-sync system/gestures/*.sh system/direction/*.sh system/zcode-rtl/*.sh; do bash -n $$f || exit 1; done
+	python3 -m py_compile $(GEN)/*.py system/shortcuts/*.py tools/*.py system/aether-accent-sync system/direction/aether-direction system/direction/aether-direction-run system/vibe/aether-vibe system/agents/aether-agent-run
 	node --check system/zcode-rtl/zcode-rtl-inspect.mjs
 	node --check system/zcode-rtl/zcode-rtl-apply.mjs
 	node --check system/zcode-rtl/zcode-rtl-inject.mjs

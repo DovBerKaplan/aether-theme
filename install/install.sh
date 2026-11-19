@@ -41,7 +41,6 @@ for p in "$GEN"/look-and-feel/*; do rm -rf "$D/plasma/look-and-feel/$(basename "
 rm -rf "$D/wallpapers/AetherOS"; cp -r "$GEN/wallpaper/AetherOS" "$D/wallpapers/"
 cp "$GEN"/konsole/*.colorscheme "$D/konsole/"
 [[ -f "$D/konsole/Aether.profile" ]] || cp "$GEN/konsole/Aether.profile" "$D/konsole/"
-for k in "$GEN"/kvantum/*; do rm -rf "$HOME/.config/Kvantum/$(basename "$k")"; cp -r "$k" "$HOME/.config/Kvantum/"; done
 install -m 755 "$ROOT/system/aether-mode-sync" "$HOME/.local/bin/aether-mode-sync"
 install -m 755 "$ROOT/system/vibe/aether-vibe" "$HOME/.local/bin/aether-vibe"
 install -m 755 "$ROOT/system/agents/aether-agent-run" "$HOME/.local/bin/aether-agent-run"
@@ -117,6 +116,9 @@ plasma-apply-lookandfeel -a org.aether.glass.desktop
 plasma-apply-desktoptheme AetherGlass >/dev/null
 "$HOME/.local/bin/aether-mode-sync" || true
 qdbus6 org.kde.KWin /KWin reconfigure 2>/dev/null || true  # absent on some X11 builds
+
+echo "== apps: Kvantum, titlebar, Konsole, GTK, Flatpaks, accent sync"
+"$ROOT/install/install-apps.sh"
 
 echo "== island, toasts, global menu"
 "$ROOT/install/install-island.sh"
