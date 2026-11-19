@@ -68,13 +68,10 @@ if [[ -f $profile ]] && [[ "$(kreadconfig6 --file "$profile" --group Appearance 
   echo "konsole -> $scheme"
 fi
 # The Flatpak Konsole reads only its own data folder (the host's ~/.local/share is not in its
-# sandbox): mirror the profile, the schemes and their marks there, the mark path rewritten to it.
+# sandbox): mirror the profile and the schemes there.
 fk="$HOME/.var/app/org.kde.konsole"
 if [[ -d $fk && -f $profile ]]; then
   mkdir -p "$fk/data/konsole"
-  cp "$profile" "$HOME"/.local/share/konsole/Aether*-mark.png "$fk/data/konsole/" 2>/dev/null || true
-  for f in "$HOME"/.local/share/konsole/Aether*.colorscheme; do
-    sed "s|^Wallpaper=$HOME/.local/share/konsole/|Wallpaper=$fk/data/konsole/|" "$f" > "$fk/data/konsole/$(basename "$f")"
-  done
+  cp "$profile" "$HOME"/.local/share/konsole/Aether*.colorscheme "$fk/data/konsole/"
   kwriteconfig6 --file "$fk/config/konsolerc" --group "Desktop Entry" --key DefaultProfile Aether.profile
 fi
