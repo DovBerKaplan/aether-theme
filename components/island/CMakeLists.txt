@@ -26,3 +26,18 @@ target_compile_definitions(aether-island PRIVATE
     AETHER_KWIN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/kwin")
 install(DIRECTORY qml kwin DESTINATION share/aether-island)
 install(DIRECTORY ../shared/AetherShared DESTINATION share/aether/shared)
+
+# The wallpaper panel's previews run the wallpapers' own shaders: bake each one next to the QML.
+find_program(QSB6_EXE qsb6 REQUIRED)
+set(WALLPAPER_QSB "")
+foreach(s ribbons mist aurora ink dune)
+    set(frag ${CMAKE_CURRENT_SOURCE_DIR}/../../plasmoids/org.aether.${s}/contents/shaders/${s}.frag)
+    set(qsb ${CMAKE_CURRENT_BINARY_DIR}/wallpapers/${s}.frag.qsb)
+    add_custom_command(OUTPUT ${qsb}
+        COMMAND ${QSB6_EXE} --glsl "100 es,120,150" --hlsl 50 --msl 12 -o ${qsb} ${frag}
+        DEPENDS ${frag}
+        COMMENT "aether-island: baking ${s}.frag")
+    list(APPEND WALLPAPER_QSB ${qsb})
+endforeach()
+add_custom_target(aether-island-wallpapers ALL DEPENDS ${WALLPAPER_QSB})
+install(FILES ${WALLPAPER_QSB} DESTINATION share/aether-island/qml/assets/wallpapers)

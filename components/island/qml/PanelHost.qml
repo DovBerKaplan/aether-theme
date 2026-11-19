@@ -46,7 +46,7 @@ Item {
     // The page for the current panel. Real panels are loaded on demand and torn down shortly
     // after the island closes (their destructor stops scanning/polling).
     readonly property var realPanels: ({ wifi: "WifiPanel.qml", bluetooth: "BluetoothPanel.qml", sound: "SoundPanel.qml",
-        power: "PowerBar.qml", battery: "BatteryPanel.qml", display: "DisplayPanel.qml", color: "ColorPanel.qml", calendar: "CalendarPanel.qml", connect: "ConnectPanel.qml" })
+        power: "PowerBar.qml", battery: "BatteryPanel.qml", display: "DisplayPanel.qml", color: "ColorPanel.qml", wallpaper: "WallpaperPanel.qml", calendar: "CalendarPanel.qml", connect: "ConnectPanel.qml" })
     property bool open: false
     signal closeRequested()
     onOpenChanged: if (open) closeDelay.stop(); else closeDelay.restart()

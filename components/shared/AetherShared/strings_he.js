@@ -98,6 +98,8 @@ var dict = {
     // Display
     "Display": "תצוגה", "Display settings ↗": "הגדרות תצוגה ↗", "Warmer colors in the evening": "צבעים חמים יותר בערב",
     "Warmth": "חום", "Theme": "ערכת נושא", "Light": "בהיר", "Picture from %1 - copied, paste it anywhere": "תמונה מ-%1 - הועתקה, אפשר להדביק בכל מקום", "Color": "צבע", "Accent": "הדגשה", "Hue": "גוון", "Brightness": "בהירות", "Lightness": "כהות", "Vividness": "עוצמה", "Your color": "הצבע שלך", "Theme color": "צבע הערכה", "Tap for light": "הקש לבהיר", "Tap for dark": "הקש לכהה", "By hours": "לפי השעות", "Auto": "אוטומטי",
+    // Wallpaper
+    "Wallpaper": "רקע", "Let it live": "להחיות את הרקע", "Ribbons": "סרטים", "Mist": "ערפל", "Aurora": "זוהר", "Ink": "דיו", "Dune": "דיונות",
     // Calendar
     "Hebrew dates: %1": "תאריך עברי: %1",
     // Power
