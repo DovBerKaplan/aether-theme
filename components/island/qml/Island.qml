@@ -25,7 +25,7 @@ Item {
     Binding { target: Theme; property: "accentTint"; value: 0.07 }
     // The bar dresses for what it sits on: Theme's light material over a bright desktop, its ink glass otherwise.
     Binding { target: Theme; property: "dark"; value: !island.backdropLight }
-    Binding { target: Theme; property: "bodyAlpha"; value: island.backdropLight ? 0.62 : Tokens.material.islandBodyAlpha }
+    Binding { target: Theme; property: "bodyAlpha"; value: island.backdropLight ? 0.32 : Tokens.material.islandBodyAlpha }
     // The system follows the bar: the accent is baked into the color scheme, so the selections,
     // focus rings and sliders outside the island change with it. A short settle, because a
     // slider drag changes the accent dozens of times and the push should run once it rests.

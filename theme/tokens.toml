@@ -103,15 +103,15 @@ selection       = "#4285f4"   # text selection and the word-highlight base
 
 # ---------- tier 3: calibrated numbers ----------
 [material]
-island-body-alpha = 0.75
+island-body-alpha = 0.32   # clear glass: the blurred desktop tints the bar, the dock, toasts and cards
 rim-alpha         = 0.09   # white hairline on dark glass
 bevel-alpha       = 0.35
 grain-opacity     = 0.04    # the one frost grain: island, dock, cards, console, desk button
 dock-scrim        = 0.28   # live-calibrated, see DOCK-SPEC.md
 dock-frost        = 0.10   # white veil; the value build_frames.py ships
-# aether-dock glass: the island's material, a touch denser in dark mode, clearer in light mode
-dock-alpha-dark   = 0.82
-dock-alpha-light  = 0.50   # cool white veil over the blur: frosted glass that still reads over white content
+# aether-dock glass: the island's material, clearer still in light mode
+dock-alpha-dark   = 0.32
+dock-alpha-light  = 0.28   # cool white veil over the blur: frosted glass that still reads over white content
 tint-hover        = 0.08
 tint-focus        = 0.10
 tint-attention    = 0.14
@@ -232,11 +232,10 @@ wm-inactive = "paper-50"
 
 # Konsole + global themes -> build_lnf_konsole.py (ansi/bright: 8 colors each, black..white)
 [terminal.glass]
-bg = "ink-950"
+bg = "ink-750"    # the island's body colour: the terminal is the same glass as the top bar and the apps
 fg = "fog-100"
 fg-intense = "paper-0"
-opacity = 0.75   # glass: the desktop shows through, blurred
-mark = 0.18       # the faded Aether mark in the middle of the terminal
+opacity = 0.32   # = apps.chrome-alpha: clear glass like the top bar, the desktop tints it
 ansi = ["ink-800", "#ff6b81", "green-200", "amber-200", "#4fa8ff", "#a98bff", "cyan-400", "#c8ccd6"]
 bright = ["#3a494b", "#ff8fa0", "#a3ffd9", "#ffe3a8", "#7cc0ff", "violet-200", "#6ff6ff", "paper-0"]
 
@@ -244,8 +243,7 @@ bright = ["#3a494b", "#ff8fa0", "#a3ffd9", "#ffe3a8", "#7cc0ff", "violet-200", "
 bg = "paper-50"
 fg = "graphite-950"
 fg-intense = "#000000"
-opacity = 0.84
-mark = 0.12
+opacity = 0.45
 ansi = ["graphite-800", "red-700", "green-700", "amber-700", "#2a5d9f", "#6a4bb3", "#00696f", "#c5c6ca"]
 bright = ["graphite-500", "#d63b3b", "#2a9d63", "#a87700", "#3b78c4", "#8566d1", "#00838a", "#e1e3e4"]
 
@@ -343,8 +341,8 @@ base = "WhiteSur"
 # chosen colour, filled in by system/aether-accent-sync; the generated themes carry the cyan
 # below as its placeholder.
 [apps]
-chrome-alpha = 0.72   # the whole window's glass (Konsole's terminal.glass.opacity sits beside it)
-view-alpha   = 0.72   # content = frame: one glass
+chrome-alpha = 0.32   # the whole window's glass (Konsole's terminal.glass.opacity sits beside it)
+view-alpha   = 0.32   # content = frame: one glass
 view-tint    = 0.08   # the colour scheme's view background (file lists, text) over that glass: a faint veil
 radius       = 12     # window corners (Aurorae top, Kvantum frame bottom)
 button-size  = 22     # titlebar buttons (Aurorae): grey circles on the left - close, restore, minimise

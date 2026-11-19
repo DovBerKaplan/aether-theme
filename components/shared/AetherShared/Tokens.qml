@@ -108,14 +108,14 @@ QtObject {
         readonly property RoleLensTokens lens: RoleLensTokens {}
     }
     component MaterialTokens: QtObject {
-        readonly property real islandBodyAlpha: 0.75
+        readonly property real islandBodyAlpha: 0.32
         readonly property real rimAlpha: 0.09
         readonly property real bevelAlpha: 0.35
         readonly property real grainOpacity: 0.04
         readonly property real dockScrim: 0.28
         readonly property real dockFrost: 0.1
-        readonly property real dockAlphaDark: 0.82
-        readonly property real dockAlphaLight: 0.5
+        readonly property real dockAlphaDark: 0.32
+        readonly property real dockAlphaLight: 0.28
         readonly property real tintHover: 0.08
         readonly property real tintFocus: 0.1
         readonly property real tintAttention: 0.14

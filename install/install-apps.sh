@@ -27,8 +27,7 @@ mkdir -p "$T" "$D/color-schemes" "$D/konsole" "$D/plasma/look-and-feel" "$D/auro
 for kind in kvantum aurorae color-schemes; do
   rm -rf "${T:?}/$kind"; cp -r "$GEN/$kind" "$T/$kind"
 done
-cp "$GEN"/konsole/*-mark.png "$D/konsole/"
-for f in "$GEN"/konsole/*.colorscheme; do sed "s|@MARK_DIR@|$D/konsole|" "$f" > "$D/konsole/$(basename "$f")"; done
+cp "$GEN"/konsole/*.colorscheme "$D/konsole/"
 [[ -f "$D/konsole/Aether.profile" ]] || cp "$GEN/konsole/Aether.profile" "$D/konsole/"
 for p in "$GEN"/look-and-feel/*; do rm -rf "$D/plasma/look-and-feel/$(basename "$p")"; cp -r "$p" "$D/plasma/look-and-feel/"; done
 install -m 755 "$ROOT/system/aether-mode-sync" "$HOME/.local/bin/aether-mode-sync"
@@ -61,14 +60,23 @@ systemctl --user enable --now aether-accent-sync.path >/dev/null 2>&1
 echo "== Konsole: the terminal is content - near-opaque, blurred behind"
 kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile Aether.profile
 kwriteconfig6 --file "$D/konsole/Aether.profile" --group General --key TerminalMargin 18
+# no toolbars, like a Mac terminal: the titlebar and the text, nothing between. Konsole keeps
+# toolbar visibility only in its binary window state, so the launcher passes --hide-toolbars:
+# a user-level copy of whichever org.kde.konsole.desktop is in effect (the Flatpak's or the host's).
+src=$(for d in "$HOME/.local/share/flatpak/exports/share" /var/lib/flatpak/exports/share /usr/share; do
+  [[ -f $d/applications/org.kde.konsole.desktop ]] && { echo "$d/applications/org.kde.konsole.desktop"; break; }; done)
+if [[ -n $src ]]; then
+  mkdir -p "$D/applications"
+  sed -E '/^Exec=/{/--hide-toolbars/!s/(org\.kde\.konsole|^Exec=konsole)/\1 --hide-toolbars/}' "$src" > "$D/applications/org.kde.konsole.desktop"
+fi
 
 echo "== prompt: the two-line Aether prompt in bash"
 install -Dm 644 "$ROOT/system/aether-prompt.sh" "$D/aether/prompt.sh"
 grep -qs 'aether/prompt.sh' "$HOME/.bashrc" \
   || printf '\n# Aether prompt (install/install-apps.sh)\n[ -f "$HOME/.local/share/aether/prompt.sh" ] && . "$HOME/.local/share/aether/prompt.sh"\n' >> "$HOME/.bashrc"
 
-echo "== titlebar: round buttons on the left, macOS order (close, minimize, maximize)"
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft XIA
+echo "== titlebar: round buttons on the left, the reference order (close, maximize, minimize)"
+kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft XAI
 kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnRight ""
 
 echo "== KDE Flatpaks (Dolphin, Konsole, Gwenview ...)"

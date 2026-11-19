@@ -136,7 +136,7 @@ public:
     int screenWidth() const { return m_view->screen() ? m_view->screen()->size().width() : 1920; }
     int screenHeight() const { return m_view->screen() ? m_view->screen()->size().height() : 1080; }
     // AETHER_BODY_ALPHA lets us compare opacity levels while tuning the look.
-    qreal bodyAlpha() const { return qEnvironmentVariableIsSet("AETHER_BODY_ALPHA") ? qEnvironmentVariable("AETHER_BODY_ALPHA").toDouble() : 0.75; }
+    qreal bodyAlpha() const { return qEnvironmentVariableIsSet("AETHER_BODY_ALPHA") ? qEnvironmentVariable("AETHER_BODY_ALPHA").toDouble() : 0.32; }
 
     // Called from QML: resize the layer-shell surface.
     Q_INVOKABLE void setWindowSize(int w, int h)

@@ -357,9 +357,9 @@ public:
     qreal bodyAlpha() const
     {
         if (!dark()) {
-            return 0.50;
+            return 0.28;
         }
-        return qEnvironmentVariableIsSet("AETHER_BODY_ALPHA") ? qEnvironmentVariable("AETHER_BODY_ALPHA").toDouble() : 0.75;
+        return qEnvironmentVariableIsSet("AETHER_BODY_ALPHA") ? qEnvironmentVariable("AETHER_BODY_ALPHA").toDouble() : 0.32;
     }
 
     Q_INVOKABLE void setWindowHeight(int h)
