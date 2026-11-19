@@ -103,6 +103,17 @@ def sync_tree(src: Path, dst: Path, fix) -> bool:
     return changed
 
 
+def wallpaper_set(key: str, value: str) -> bool:
+    """Write key=value into the Aether Ribbons wallpaper of every desktop that wears it (plasmashell
+    repaints it at once); desktops on other wallpapers are left alone. True if any value changed."""
+    js = ("var n = 0; desktops().forEach(function (d) { if (d.wallpaperPlugin != 'org.aether.ribbons') return;"
+          " d.currentConfigGroup = ['Wallpaper', 'org.aether.ribbons', 'General'];"
+          f" if (d.readConfig('{key}') != '{value}') {{ d.writeConfig('{key}', '{value}'); n++; }} }}); print(n);")
+    out = subprocess.run(["qdbus6", "org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", js],
+                         capture_output=True, text=True).stdout.strip()
+    return out not in ("", "0")
+
+
 def main() -> int:
     hls = accent()
     colors = roles(hls) if hls else None
@@ -188,6 +199,17 @@ def main() -> int:
     if stale:
         subprocess.run(["systemctl", "--user", "restart", "plasma-xdg-desktop-portal-kde.service"], check=False)
         changed.append("portal (was stale)")
+
+    # The desktop wallpaper (org.aether.ribbons) is drawn in the accent: hand it over, live.
+    # ...and the centre shows this distribution's logo: its os-release ID, then ID_LIKE.
+    osr = {}
+    for line in Path("/etc/os-release").read_text().splitlines() if Path("/etc/os-release").exists() else []:
+        if "=" in line:
+            k, v = line.split("=", 1)
+            osr[k] = v.strip().strip('"')
+    distro = " ".join(filter(None, (osr.get("ID", ""), osr.get("ID_LIKE", ""))))
+    if wallpaper_set("AccentColor", colors["accent"] if colors else "") | wallpaper_set("Distro", distro):
+        changed.append("wallpaper")
 
     if any(c.startswith("aurorae") for c in changed):
         subprocess.run(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"], check=False, capture_output=True)

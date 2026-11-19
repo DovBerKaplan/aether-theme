@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <!-- Written by aether-accent-sync from the island's Color panel; empty follows the system accent. -->
+    <entry name="AccentColor" type="String">
+      <default></default>
+    </entry>
+    <!-- auto | dark | light. aether-mode-sync writes dark/light with the colour scheme. -->
+    <entry name="Mode" type="String">
+      <default>auto</default>
+    </entry>
+    <!-- The os-release ID and ID_LIKE ("neon ubuntu debian"), written by aether-accent-sync: the centre
+         shows that distribution's logo, or the Aether mark when none is known. -->
+    <entry name="Distro" type="String">
+      <default></default>
+    </entry>
+  </group>
+</kcfg>

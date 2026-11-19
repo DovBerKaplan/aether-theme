@@ -8,6 +8,8 @@ Third-party material
   (LGPL-2.0-or-later); only its SVG fills are changed and the frames are redrawn.
 - system/gestures/install-gestures.sh downloads libinput-gestures by Mark Blakeney (GPL-3.0) at install time;
   it is not part of this repository.
+- plasmoids/org.aether.ribbons/contents/ui/logos.js: distribution logos from Simple Icons
+  (CC0-1.0, https://simpleicons.org); each logo is its project's trademark.
 - Fonts (Inter by Rasmus Andersson, SIL OFL-1.1, https://github.com/rsms/inter;
   JetBrainsMono Nerd Font — JetBrains Mono by JetBrains, SIL OFL-1.1,
   https://www.jetbrains.com/lp/mono/, with the Nerd Fonts patches,
