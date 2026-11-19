@@ -22,12 +22,13 @@ sudo apt install cmake ninja-build extra-cmake-modules \
   qt6-base-dev qt6-declarative-dev qt6-wayland-dev \
   kf6-kwindowsystem-dev kf6-krunner-dev \
   liblayershellqtinterface-dev \
-  libatspi2.0-dev libglib2.0-dev
+  libatspi2.0-dev libglib2.0-dev qt6-shadertools
 ```
 
 (Package names are for KDE neon / Ubuntu 24.04; other distributions use
 equivalent `-devel` packages. `kf6-krunner-dev` is the island's search engine;
-`libatspi2.0-dev` is lens's element picking.)
+`libatspi2.0-dev` is lens's element picking; `qt6-shadertools` (`qsb6`) compiles
+the wallpaper's shader.)
 
 ## Install
 

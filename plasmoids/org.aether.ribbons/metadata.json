@@ -1,0 +1,13 @@
+{
+    "KPackageStructure": "Plasma/Wallpaper",
+    "KPlugin": {
+        "Authors": [{ "Name": "DovBerKaplan" }],
+        "Description": "Two bands of light crossing over a deep field, the Aether mark glowing between them - drawn at the screen's own resolution in the island's accent",
+        "Icon": "preferences-desktop-wallpaper",
+        "Id": "org.aether.ribbons",
+        "License": "CC-BY-SA-4.0",
+        "Name": "Aether Ribbons",
+        "Version": "1.0"
+    },
+    "X-KDE-ParentApp": "org.kde.plasmashell"
+}

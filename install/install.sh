@@ -46,6 +46,10 @@ install -m 755 "$ROOT/system/vibe/aether-vibe" "$HOME/.local/bin/aether-vibe"
 install -m 755 "$ROOT/system/agents/aether-agent-run" "$HOME/.local/bin/aether-agent-run"
 mkdir -p "$D/plasma/plasmoids" "$D/icons/hicolor/scalable/apps"
 for p in org.aether.appname; do rm -rf "$D/plasma/plasmoids/$p"; cp -r "$ROOT/plasmoids/$p" "$D/plasma/plasmoids/"; done
+# The desktop wallpaper is a wallpaper plugin drawn at the screen's size; its shader is compiled here.
+W="$D/plasma/wallpapers/org.aether.ribbons"
+rm -rf "$W"; mkdir -p "$D/plasma/wallpapers"; cp -r "$ROOT/plasmoids/org.aether.ribbons" "$W"
+qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12 -o "$W/contents/shaders/ribbons.frag.qsb" "$W/contents/shaders/ribbons.frag"
 cp "$ROOT"/theme/icons/*.svg "$D/icons/hicolor/scalable/apps/"
 
 echo "== mode sync service"
@@ -132,7 +136,9 @@ if [[ $LAYOUT == 1 ]]; then
   qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$(cat "$ROOT/system/layout.js")"
   # Wallpaper on every desktop
   qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
-    "desktops().forEach(function(d){d.wallpaperPlugin='org.kde.image';d.currentConfigGroup=['Wallpaper','org.kde.image','General'];d.writeConfig('Image','file://$D/wallpapers/AetherOS');});"
+    "desktops().forEach(function(d){d.wallpaperPlugin='org.aether.ribbons';});"
+  "$HOME/.local/bin/aether-accent-sync" >/dev/null 2>&1 || true   # hand the wallpaper the island's accent and the mode right away
+  "$HOME/.local/bin/aether-mode-sync" >/dev/null 2>&1 || true
 fi
 
 echo "Done. Log out and back in so every running app picks up Kvantum and the fonts."
