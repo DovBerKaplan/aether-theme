@@ -105,10 +105,10 @@ def sync_tree(src: Path, dst: Path, fix) -> bool:
 
 
 def wallpaper_set(key: str, value: str) -> bool:
-    """Write key=value into the Aether Ribbons wallpaper of every desktop that wears it (plasmashell
-    repaints it at once); desktops on other wallpapers are left alone. True if any value changed."""
-    js = ("var n = 0; desktops().forEach(function (d) { if (d.wallpaperPlugin != 'org.aether.ribbons') return;"
-          " d.currentConfigGroup = ['Wallpaper', 'org.aether.ribbons', 'General'];"
+    """Write key=value into whichever aether wallpaper the desktop wears (plasmashell repaints it
+    at once); desktops on other wallpapers are left alone. True if any value changed."""
+    js = ("var n = 0; desktops().forEach(function (d) { if (d.wallpaperPlugin.indexOf('org.aether.') != 0) return;"
+          " d.currentConfigGroup = ['Wallpaper', d.wallpaperPlugin, 'General'];"
           f" if (d.readConfig('{key}') != '{value}') {{ d.writeConfig('{key}', '{value}'); n++; }} }}); print(n);")
     out = subprocess.run(["qdbus6", "org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", js],
                          capture_output=True, text=True).stdout.strip()
@@ -201,7 +201,7 @@ def main() -> int:
         subprocess.run(["systemctl", "--user", "restart", "plasma-xdg-desktop-portal-kde.service"], check=False)
         changed.append("portal (was stale)")
 
-    # The desktop wallpaper (org.aether.ribbons) is drawn in the accent: hand it over, live.
+    # Whichever aether wallpaper the desktop wears is drawn in the accent: hand it over, live.
     # ...and the centre shows this distribution's logo: its os-release ID, then ID_LIKE.
     osr = {}
     for line in Path("/etc/os-release").read_text().splitlines() if Path("/etc/os-release").exists() else []:
