@@ -3,10 +3,11 @@ import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import AetherShared
 
-// The clean-desktop toggle. A round glass button in the bottom-right corner: a folder while the desktop
-// is clean, a broom while the files are out. Spreading throws a stand-in of every desktop entry
-// out of the folder to the cell Folder View will draw it in, then hands over to the real icons;
-// sweeping takes the real icons away under their stand-ins and draws those back into the button.
+// The clean-desktop toggle. A round glass button at the bottom centre, above the dock: a folder
+// while the desktop is clean, a broom while the files are out. Spreading throws a stand-in of
+// every desktop entry out of the folder to the cell Folder View will draw it in, then hands over
+// to the real icons; sweeping takes the real icons away under their stand-ins and draws those
+// back into the button.
 Item {
     id: root
     // The island's glass without its colour: Theme stays untinted (no accentOverride) and dark,
@@ -185,11 +186,13 @@ Item {
     Item {
         id: button
         readonly property int size: 60
-        readonly property int margin: 24
+        // Bottom centre, clear of the dock: its pill rests 14px off the bottom edge and is
+        // icon + 2 cell insets + 2 pads tall (Dock.qml restD / thickness); keep one more 14 above it.
+        readonly property int dockClear: 14 + Tokens.dock.icon + 2 * Tokens.dock.cellInset + 2 * Tokens.dock.pad + 14
         width: size
         height: size
-        x: root.width - size - margin
-        y: root.height - size - margin
+        x: Math.round((root.width - size) / 2)
+        y: root.height - size - dockClear
         onXChanged: report()
         onYChanged: report()
         Component.onCompleted: report()
