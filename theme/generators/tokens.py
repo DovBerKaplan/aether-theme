@@ -61,12 +61,16 @@ def load(path: Path = PATH) -> dict:
             else:
                 raise TokenError(f"{where}: {ref!r} is neither a palette name nor #rrggbb")
 
-    for section in ("material", "tint", "space", "radius", "type"):
+    for section in ("material", "tint", "space", "radius", "type", "apps"):
         _numbers(section, t.get(section) or {})
     for key, alpha in (t.get("material") or {}).items():
         if key.endswith(("alpha", "opacity", "scrim", "frost")) or key.startswith("tint-"):
             if not 0 <= alpha <= 1:
                 raise TokenError(f"material.{key}: {alpha} is outside 0..1")
+
+    for key, alpha in (t.get("apps") or {}).items():
+        if key.endswith("alpha") and not 0 <= alpha <= 1:
+            raise TokenError(f"apps.{key}: {alpha} is outside 0..1")
 
     for key, alpha in (t.get("tint") or {}).items():
         if not 0 <= alpha <= 1:
