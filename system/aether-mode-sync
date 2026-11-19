@@ -47,6 +47,32 @@ if [[ "$current" != "$kv" ]]; then
   kwriteconfig6 --file "$HOME/.config/Kvantum/kvantum.kvconfig" --group General --key theme "$kv"
   echo "kvantum -> $kv"
 fi
+# The Flatpak sandboxes mount kdeglobals but never kdedefaults: without the style key in the live
+# file their Qt apps fall back to Breeze, and Breeze blends the scheme's translucent glass over an
+# opaque white base - Dolphin and Konsole turn milky, half stuck in light mode. The key in
+# kdedefaults reaches only native apps; re-assert the live one every time the file is rewritten.
+if ! grep -q '^widgetStyle=kvantum$' "$HOME/.config/kdeglobals" 2>/dev/null; then
+  # kreadconfig6 would lie here: it falls back to kdedefaults, where the key always exists.
+  # kwriteconfig6's QSaveFile rename keeps losing this file to a stale KConfig clobber (the
+  # write exits 0, the mtime moves, the key vanishes): write in place, and verify it stuck.
+  for i in 1 2 3; do
+    python3 - "$HOME/.config/kdeglobals" <<'PYEOF'
+import sys
+p = sys.argv[1]
+lines = open(p).readlines()
+if not any(l.rstrip("\n") == "widgetStyle=kvantum" for l in lines):
+    for i, l in enumerate(lines):
+        if l.strip() == "[KDE]":
+            lines.insert(i + 1, "widgetStyle=kvantum\n")
+            break
+    else:
+        lines.append("\n[KDE]\nwidgetStyle=kvantum\n")
+    open(p, "w").writelines(lines)
+PYEOF
+    sleep 1
+    grep -q '^widgetStyle=kvantum$' "$HOME/.config/kdeglobals" 2>/dev/null && { echo "widgetStyle -> kvantum (sandboxed apps)"; break; }
+  done
+fi
 # The titlebar (Aurorae) follows too: a LnF apply sets it, a colour-only switch (by hours) does not.
 deco="__aurorae__svg__$scheme"
 if [[ -d "$HOME/.local/share/aurorae/themes/$scheme" ]] && [[ "$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme)" != "$deco" ]]; then
