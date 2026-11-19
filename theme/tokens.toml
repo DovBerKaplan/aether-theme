@@ -269,8 +269,8 @@ base = "WhiteSurDark"
 "#1a1a1a" = "ink-750"   # the inactive window: same glass
 
 [kvantum.AetherGlass.colors]
-"window.color" = "#1c1e2452"         # ink-750 at the island's body alpha: what paints the palette (Dolphin's small statusbar note) becomes glass on the glass, not an opaque patch
-"inactive.window.color" = "#1c1e2452"
+"window.color" = "#1c1e24"           # ink-750, opaque on purpose: the glass is reduce_window_opacity (Kvantum fades the whole window over KWin's blur) - an alpha byte inside this hex is honoured by no one
+"inactive.window.color" = "#1c1e24"
 "base.color" = "#1c1e2412"           # a breath over the window glass: views and fields read as one sheet
 "inactive.base.color" = "#1c1e2412"
 "alt.base.color" = "#ffffff0a"       # alternating rows: a faint veil
@@ -278,8 +278,9 @@ base = "WhiteSurDark"
 "button.color" = "#272a31"
 "light.color" = "#363940"
 "mid.light.color" = "#32353c"
-"dark.color" = "ink-950"
+"dark.color" = "#0b0e1440"           # ink-950 at a whisper
 "mid.color" = "ink-700"
+"shadow.color" = "#0b0e1440"         # black by default: plain frame lines (the seam around Dolphin's file view) paint with it - ink at a whisper keeps the seam, soft
 "highlight.color" = "#00f2fe55"
 "inactive.highlight.color" = "#00f2fe33"
 "text.color" = "fog-100"
@@ -308,8 +309,8 @@ base = "WhiteSur"
 "#424242" = "graphite-800"
 
 [kvantum.AetherSerenity.colors]
-"window.color" = "#f8f9fa52"         # paper-50 at the body alpha, as the dark glass above
-"inactive.window.color" = "#f8f9fa52"
+"window.color" = "#f8f9fa"           # paper-50, opaque on purpose, as the dark glass above
+"inactive.window.color" = "#f8f9fa"
 "base.color" = "#ffffff1a"           # a breath over the window glass
 "inactive.base.color" = "#ffffff1a"
 "alt.base.color" = "#1a1d200a"       # alternating rows: a faint shade
@@ -317,8 +318,9 @@ base = "WhiteSur"
 "button.color" = "paper-0"
 "light.color" = "paper-0"
 "mid.light.color" = "#edeeef"
-"dark.color" = "#c5c6ca"
+"dark.color" = "#c5c6ca40"           # the same whisper for the light glass
 "mid.color" = "#e1e3e4"
+"shadow.color" = "#2e313240"         # plain frame lines: graphite at a whisper
 "highlight.color" = "#1a1d2026"
 "inactive.highlight.color" = "#1a1d201a"
 "text.color" = "graphite-950"
