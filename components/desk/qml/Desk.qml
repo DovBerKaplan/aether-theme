@@ -54,6 +54,7 @@ Item {
     property real swish: 0                      // the broom's stroke, degrees
     property real jolt: 0                       // the stand-ins' shiver under a stroke, -1 .. 1
     property real pressScale: 1
+    readonly property real glyphOpacity: 0.72  // the folder and the broom are a little see-through, like the glass
     property real hoverScale: hover.containsMouse && phase === "idle" ? 1.06 : 1
     readonly property int count: ghosts.count
     readonly property int stagger: 18
@@ -250,12 +251,12 @@ Item {
 
         Face {
             on: !root.broom
-            FolderGlyph { part: "back"; open: root.open }
+            FolderGlyph { part: "back"; open: root.open; opacity: root.glyphOpacity }
         }
         Face {
             on: root.broom
             tilt: 40
-            BroomGlyph { id: broomGlyph; swish: root.swish }
+            BroomGlyph { id: broomGlyph; swish: root.swish; opacity: root.glyphOpacity }
         }
 
         MouseArea {
@@ -353,7 +354,7 @@ Item {
         transform: ButtonScale {}
         Face {
             on: !root.broom
-            FolderGlyph { part: "front"; open: root.open }
+            FolderGlyph { part: "front"; open: root.open; opacity: root.glyphOpacity }
         }
     }
 
