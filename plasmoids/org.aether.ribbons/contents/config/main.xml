@@ -17,5 +17,9 @@
     <entry name="Distro" type="String">
       <default></default>
     </entry>
+    <!-- The ribbons sway slowly and the light drifts along them; off holds the picture still. -->
+    <entry name="Animate" type="Bool">
+      <default>true</default>
+    </entry>
   </group>
 </kcfg>

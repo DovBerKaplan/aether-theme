@@ -1,7 +1,8 @@
 #version 440
 // Aether Ribbons: two swooping bands of light crossing over a deep field - the top-left one and the
 // bottom-right one - drawn analytically at the screen's own resolution (no image anywhere), so the
-// seams stay one pixel sharp at any size. The accent and the mode come in as uniforms.
+// seams stay one pixel sharp at any size. The accent and the mode come in as uniforms; `time` lets
+// the ribbons sway slowly and the light drift along them.
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
 layout(std140, binding = 0) uniform buf {
@@ -11,6 +12,7 @@ layout(std140, binding = 0) uniform buf {
     float dark;      // 1 = the dark field, 0 = the light one; in between while switching
     float aspect;    // width / height
     float px;        // one pixel in height units
+    float time;      // seconds; 0 holds the composition still
 };
 
 // Each seam is a cubic Bezier in screen fractions (x of the width, y of the height, y down),
@@ -30,27 +32,56 @@ const vec3 S[8] = vec3[](
     vec3(1.00, 0.42, 0.28), vec3(1.00, 0.30, 0.30), vec3(0.16, 0.25, 0.35), vec3(1.00, 0.74, 0.26),
     vec3(1.00, 0.36, 0.28), vec3(0.22, 0.60, 0.50), vec3(0.18, 0.30, 0.60), vec3(0.30, 0.30, 0.50)
 );
-const int STEPS = 64;
+const int COARSE = 16, FINE = 12;
 
-vec2 bez(int i, float t) {
+// Seam k's four control points in screen space, its inner two swaying a little: each on its own
+// slow circle (40-60 s a turn), so the ribbons breathe without ever repeating in step.
+void controls(int k, out vec2 c0, out vec2 c1, out vec2 c2, out vec2 c3) {
+    vec2 ar = vec2(aspect, 1.0);
+    float f = float(k);
+    vec2 w1 = 0.016 * vec2(sin(time * 0.150 + f * 1.7), cos(time * 0.110 + f * 2.3));
+    vec2 w2 = 0.016 * vec2(sin(time * 0.125 + f * 2.9 + 1.0), cos(time * 0.140 + f * 1.1 + 2.0));
+    c0 = P[k * 4] * ar;
+    c1 = (P[k * 4 + 1] + w1) * ar;
+    c2 = (P[k * 4 + 2] + w2) * ar;
+    c3 = P[k * 4 + 3] * ar;
+}
+
+vec2 bez(vec2 c0, vec2 c1, vec2 c2, vec2 c3, float t) {
     float u = 1.0 - t;
-    return (u * u * u * P[i] + 3.0 * u * u * t * P[i + 1] + 3.0 * u * t * t * P[i + 2] + t * t * t * P[i + 3]) * vec2(aspect, 1.0);
+    return u * u * u * c0 + 3.0 * u * u * t * c1 + 3.0 * u * t * t * c2 + t * t * t * c3;
 }
 
 // Signed distance to seam k in height units (positive on the right hand of its direction, which is
-// below for the left-to-right ones) and where along it the nearest point lies.
+// below for the left-to-right ones) and where along it the nearest point lies. A coarse pass finds
+// the nearest stretch, a fine one measures it.
 vec2 seam(int k, vec2 p) {
-    float best = 1e9, side = 1.0, at = 0.0;
-    vec2 a = bez(k * 4, 0.0);
-    for (int s = 1; s <= STEPS; ++s) {
-        vec2 b = bez(k * 4, float(s) / float(STEPS));
+    vec2 c0, c1, c2, c3;
+    controls(k, c0, c1, c2, c3);
+    float best = 1e9;
+    int near = 0;
+    vec2 a = c0;
+    for (int s = 1; s <= COARSE; ++s) {
+        vec2 b = bez(c0, c1, c2, c3, float(s) / float(COARSE));
+        vec2 ab = b - a, ap = p - a;
+        float d = length(ap - ab * clamp(dot(ap, ab) / dot(ab, ab), 0.0, 1.0));
+        if (d < best) { best = d; near = s - 1; }
+        a = b;
+    }
+    float t0 = max(float(near) - 0.5, 0.0) / float(COARSE), t1 = min(float(near) + 1.5, float(COARSE)) / float(COARSE);
+    float side = 1.0, at = 0.0;
+    best = 1e9;
+    a = bez(c0, c1, c2, c3, t0);
+    for (int s = 1; s <= FINE; ++s) {
+        float tb = mix(t0, t1, float(s) / float(FINE));
+        vec2 b = bez(c0, c1, c2, c3, tb);
         vec2 ab = b - a, ap = p - a;
         float h = clamp(dot(ap, ab) / dot(ab, ab), 0.0, 1.0);
         float d = length(ap - ab * h);
         if (d < best) {
             best = d;
             side = ab.x * ap.y - ab.y * ap.x < 0.0 ? -1.0 : 1.0;
-            at = (float(s - 1) + h) / float(STEPS);
+            at = mix(t0, t1, (float(s - 1) + h) / float(FINE));
         }
         a = b;
     }
@@ -80,7 +111,9 @@ void main() {
     for (int k = 0; k < 8; ++k) {
         q[k] = seam(k, p);
         vec3 s = S[k];
-        peak[k] = s.x * (0.15 + 0.85 * exp(-pow((q[k].y - s.y) / s.z, 2.0)));
+        // The light drifts slowly back and forth along each seam.
+        float centre = s.y + 0.08 * sin(time * 0.13 + float(k) * 1.3);
+        peak[k] = s.x * (0.15 + 0.85 * exp(-pow((q[k].y - centre) / s.z, 2.0)));
         // Seams 2, 5 and 6 begin or end in view: let them come out of, and go back into, the dark.
         if (k == 2) peak[k] *= smoothstep(1.0, 0.6, q[k].y);
         if (k == 5) peak[k] *= smoothstep(0.0, 0.35, q[k].y);

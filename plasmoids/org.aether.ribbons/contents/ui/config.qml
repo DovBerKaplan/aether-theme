@@ -7,6 +7,7 @@ import org.kde.kirigami as Kirigami
 Kirigami.FormLayout {
     property string cfg_Mode: "auto"
     property string cfg_AccentColor
+    property bool cfg_Animate: true
 
     QQC2.ComboBox {
         Kirigami.FormData.label: i18nd("plasma_wallpaper_org.kde.color", "Mode:")
@@ -19,5 +20,12 @@ Kirigami.FormLayout {
         ]
         Component.onCompleted: currentIndex = Math.max(0, indexOfValue(cfg_Mode))
         onActivated: cfg_Mode = currentValue
+    }
+
+    QQC2.CheckBox {
+        Kirigami.FormData.label: "Motion:"
+        text: "Let the ribbons sway slowly"
+        checked: cfg_Animate
+        onToggled: cfg_Animate = checked
     }
 }
