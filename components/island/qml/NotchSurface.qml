@@ -143,7 +143,7 @@ Item {
         source: grain
         maskEnabled: true
         maskSource: maskShape
-        opacity: 0.022
+        opacity: Tokens.material.grainOpacity
     }
 
     // Rim

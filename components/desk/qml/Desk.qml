@@ -236,7 +236,7 @@ Item {
                 source: grain
                 maskEnabled: true
                 maskSource: mask
-                opacity: 0.04                        // a touch rougher than the notch's 0.022: frost
+                opacity: Tokens.material.grainOpacity   // the global frost grain
             }
             Rectangle {                              // hover / press veil
                 anchors.fill: parent

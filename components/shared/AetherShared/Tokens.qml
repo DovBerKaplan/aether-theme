@@ -111,13 +111,11 @@ QtObject {
         readonly property real islandBodyAlpha: 0.75
         readonly property real rimAlpha: 0.09
         readonly property real bevelAlpha: 0.35
-        readonly property real grainOpacity: 0.022
+        readonly property real grainOpacity: 0.04
         readonly property real dockScrim: 0.28
         readonly property real dockFrost: 0.1
         readonly property real dockAlphaDark: 0.82
         readonly property real dockAlphaLight: 0.5
-        readonly property real dockGrainDark: 0.032
-        readonly property real dockGrainLight: 0.01
         readonly property real tintHover: 0.08
         readonly property real tintFocus: 0.1
         readonly property real tintAttention: 0.14

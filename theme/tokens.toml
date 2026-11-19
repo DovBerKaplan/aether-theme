@@ -106,14 +106,12 @@ selection       = "#4285f4"   # text selection and the word-highlight base
 island-body-alpha = 0.75
 rim-alpha         = 0.09   # white hairline on dark glass
 bevel-alpha       = 0.35
-grain-opacity     = 0.022
+grain-opacity     = 0.04    # the one frost grain: island, dock, cards, console, desk button
 dock-scrim        = 0.28   # live-calibrated, see DOCK-SPEC.md
 dock-frost        = 0.10   # white veil; the value build_frames.py ships
-# aether-dock glass: the island's material, a touch denser and rougher in dark mode, smoother and clearer in light mode
+# aether-dock glass: the island's material, a touch denser in dark mode, clearer in light mode
 dock-alpha-dark   = 0.82
 dock-alpha-light  = 0.50   # cool white veil over the blur: frosted glass that still reads over white content
-dock-grain-dark   = 0.032
-dock-grain-light  = 0.010
 tint-hover        = 0.08
 tint-focus        = 0.10
 tint-attention    = 0.14
