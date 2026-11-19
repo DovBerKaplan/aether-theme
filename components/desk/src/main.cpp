@@ -1,7 +1,7 @@
 // aether-desk: the clean-desktop toggle. A transparent layer-shell surface over the desktop (layer
-// Bottom: above the wallpaper and its icons, below every window) holds a small glass button in the
-// bottom-right corner. Folder: the desktop is clean; a click spreads the files out of it to their
-// places and the folder turns into a broom. Broom: a click sweeps them all back in.
+// Bottom: above the wallpaper and its icons, below every window) holds a small glass button at the
+// bottom centre, above the dock. Folder: the desktop is clean; a click spreads the files out of
+// it to their places and the folder turns into a broom. Broom: a click sweeps them all back in.
 //
 // The real icons stay Plasma's Folder View; this program only switches its filter (hide "*") and
 // draws stand-ins for the flight. The files themselves are never touched. Only the button's rect
