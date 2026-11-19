@@ -13,6 +13,9 @@ VIEW_ALPHA = round(load()["apps"]["view-tint"] * 255)
 # Selection pills (Dolphin's places panel, list selections) ride the same glass: the accent at a
 # quarter opacity instead of a solid sticker. KFilePlacesView blends it into the glass itself.
 SEL_ALPHA = 64
+# The window palette too: Dolphin's floating status label paints QPalette(Window) verbatim, and an
+# opaque value is the black pill on the glass. A heavy veil keeps the pill readable and translucent.
+WINDOW_ALPHA = 140
 
 
 def rgb(h: str) -> str:
@@ -51,7 +54,7 @@ def build(key: str, p: dict) -> str:
         "[Colors:Selection]\n" + section(p, p["selection"], p["accent_hover"], p["selection_fg"], p["selection_fg"], alpha=SEL_ALPHA),
         "[Colors:Tooltip]\n" + section(p, p["tooltip"], p["alt"]),
         "[Colors:View]\n" + section(p, p["view"], p["alt"], alpha=VIEW_ALPHA),
-        "[Colors:Window]\n" + section(p, p["window"], p["alt"]),
+        "[Colors:Window]\n" + section(p, p["window"], p["alt"], alpha=WINDOW_ALPHA),
         f"[General]\nColorScheme={key}\nName={p['name']}\nshadeSortColumn=true",
         "[KDE]\ncontrast=4",
         f"[WM]\nactiveBackground={rgb(p['wm_active'])}\nactiveBlend={rgb(p['fg'])}\n"
