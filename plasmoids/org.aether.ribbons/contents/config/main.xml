@@ -17,7 +17,7 @@
     <entry name="Distro" type="String">
       <default></default>
     </entry>
-    <!-- The ribbons sway slowly and the light drifts along them; off holds the picture still. -->
+    <!-- The ribbons live: a slow sway, light drifting along the seams, a gentle breath; off holds the picture still. -->
     <entry name="Animate" type="Bool">
       <default>true</default>
     </entry>

@@ -34,17 +34,21 @@ const vec3 S[8] = vec3[](
 );
 const int COARSE = 16, FINE = 12;
 
-// Seam k's four control points in screen space, its inner two swaying a little: each on its own
-// slow circle (40-60 s a turn), so the ribbons breathe without ever repeating in step.
+// Seam k's four control points in screen space, all four wandering: the inner two on wide slow
+// circles (~65 px of travel at 1080p), the off-screen ends on smaller ones (~24 px) so the seams
+// also slide along the screen's edges. The pace never changes, only the length of the walk, and
+// nothing repeats in step — under ~1 px a tick at 10 Hz.
 void controls(int k, out vec2 c0, out vec2 c1, out vec2 c2, out vec2 c3) {
     vec2 ar = vec2(aspect, 1.0);
     float f = float(k);
-    vec2 w1 = 0.016 * vec2(sin(time * 0.150 + f * 1.7), cos(time * 0.110 + f * 2.3));
-    vec2 w2 = 0.016 * vec2(sin(time * 0.125 + f * 2.9 + 1.0), cos(time * 0.140 + f * 1.1 + 2.0));
-    c0 = P[k * 4] * ar;
+    vec2 w0 = 0.022 * vec2(sin(time * 0.090 + f * 3.1 + 0.6), cos(time * 0.115 + f * 2.2 + 1.4));
+    vec2 w1 = 0.060 * vec2(sin(time * 0.170 + f * 1.7), cos(time * 0.130 + f * 2.3));
+    vec2 w2 = 0.060 * vec2(sin(time * 0.150 + f * 2.9 + 1.0), cos(time * 0.115 + f * 1.1 + 2.0));
+    vec2 w3 = 0.022 * vec2(sin(time * 0.105 + f * 1.3 + 2.8), cos(time * 0.087 + f * 3.4 + 0.2));
+    c0 = (P[k * 4] + w0) * ar;
     c1 = (P[k * 4 + 1] + w1) * ar;
     c2 = (P[k * 4 + 2] + w2) * ar;
-    c3 = P[k * 4 + 3] * ar;
+    c3 = (P[k * 4 + 3] + w3) * ar;
 }
 
 vec2 bez(vec2 c0, vec2 c1, vec2 c2, vec2 c3, float t) {
@@ -111,15 +115,27 @@ void main() {
     for (int k = 0; k < 8; ++k) {
         q[k] = seam(k, p);
         vec3 s = S[k];
-        // The light drifts slowly back and forth along each seam.
-        float centre = s.y + 0.08 * sin(time * 0.13 + float(k) * 1.3);
-        peak[k] = s.x * (0.15 + 0.85 * exp(-pow((q[k].y - centre) / s.z, 2.0)));
-        // Seams 2, 5 and 6 begin or end in view: let them come out of, and go back into, the dark.
-        if (k == 2) peak[k] *= smoothstep(1.0, 0.6, q[k].y);
-        if (k == 5) peak[k] *= smoothstep(0.0, 0.35, q[k].y);
-        if (k == 6) peak[k] *= smoothstep(1.0, 0.6, q[k].y);
+        // The light wanders wide along each seam — over half its length; every seam carries a
+        // tighter spark counter-drifting against it, and the two long ones a third, slower light
+        // besides: three lights passing each other under the silk.
+        float centre = s.y + 0.28 * sin(time * 0.18 + float(k) * 1.3);
+        float glow = exp(-pow((q[k].y - centre) / s.z, 2.0));
+        float far = s.y - 0.24 * sin(time * 0.11 + float(k) * 0.9 + 2.2);
+        float spark = (k == 0 || k == 1 || k == 3 || k == 4 ? 0.35 : 0.22)
+                    * exp(-pow((q[k].y - far) / (s.z * 0.6), 2.0));
+        float third = 0.0;
+        if (k == 0 || k == 3) {
+            float away = s.y + 0.18 * sin(time * 0.09 + float(k) * 2.6 + 4.0);
+            third = 0.30 * exp(-pow((q[k].y - away) / (s.z * 0.8), 2.0));
+        }
+        peak[k] = s.x * (0.15 + 0.70 * glow + spark + third);
+        // Seams 2, 5 and 6 begin or end in view: their tips reach far out of, and back into, the dark.
+        if (k == 2) peak[k] *= smoothstep(1.0 + 0.12 * sin(time * 0.20 + 1.1), 0.6, q[k].y);
+        if (k == 5) peak[k] *= smoothstep(0.0 - 0.12 * sin(time * 0.16 + 2.4), 0.35, q[k].y);
+        if (k == 6) peak[k] *= smoothstep(1.0 + 0.12 * sin(time * 0.22 + 0.4), 0.6, q[k].y);
         float d = abs(q[k].x), w = 1.1 * px;
-        core += peak[k] * exp(-(d * d) / (w * w));
+        float shim = 1.0 + 0.10 * sin(time * 0.9 + float(k) * 2.1);   // silk catching the light
+        core += peak[k] * shim * exp(-(d * d) / (w * w));
         halo += peak[k] * (0.35 * exp(-d / (2.5 * px)) + 0.06 * exp(-d / 0.02));   // a fine edge, not a glow
     }
     // The fabric: translucent sheets trailing the seams, brightest along them, each clipped by the
@@ -135,8 +151,18 @@ void main() {
     sheet += side(d6) * 1.4 * peak[6] * exp(-d6 / 0.30);                                          // under the swell
     sheet += side(d7) * 0.55 * exp(-d7 / 0.10);                                          // bottom-left fold
 
-    // Where two seams cross, a faint brightening.
-    float bloom = exp(-(abs(d0) + abs(d1)) / 0.045) + exp(-(abs(d3) + abs(d4)) / 0.045);
+    // Where two seams cross, a faint brightening; the crossings pulse in turns, handing light over.
+    float bloom = exp(-(abs(d0) + abs(d1)) / 0.045) * (1.0 + 0.50 * sin(time * 0.50))
+                + exp(-(abs(d3) + abs(d4)) / 0.045) * (1.0 + 0.50 * sin(time * 0.50 + 3.14159));
+
+    // Everything lit breathes together, about the span of a breath, a few percent at most.
+    float breath = 1.0 + 0.060 * sin(time * 0.42);
+    sheet *= breath;
+    core *= breath;
+    halo *= breath;
+
+    // And a broad sheen crosses the whole field once a minute: light through water.
+    float sheen = 0.10 * pow(max(sin(dot(uv, vec2(0.9, 0.5)) * 1.8 - time * 0.10 + 1.0), 0.0), 2.5);
 
     // The centre is a touch lighter, under the logo.
     float r = length(p - vec2(0.5 * aspect, 0.5));
@@ -144,7 +170,8 @@ void main() {
 
     // Both fields are drawn and mixed by `dark`, so a mode switch can fade from one to the other.
     vec3 night = mix(hue(acc, 0.03, 0.0), hue(acc, 0.06, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
-    vec3 light = acc * (sheet * 0.6 + bloom * 0.15 + pool * 0.3 + halo * 0.6) + mix(acc, vec3(1.0), 0.25) * core * 0.55;
+    vec3 light = acc * (sheet * 0.6 + bloom * 0.15 + pool * 0.3 + halo * 0.6 + sheen)
+               + mix(acc, vec3(1.0), 0.25) * core * 0.55;
     night += vec3(1.0) - exp(-light * 1.4);
     night *= 1.0 - 0.30 * pow(length(uv - 0.5) * 1.25, 2.4);   // vignette
 
@@ -154,6 +181,7 @@ void main() {
     day = mix(day, hue(acc, 0.48, 0.0), clamp(bloom * 0.15, 0.0, 0.2));
     day = mix(day, hue(acc, 0.42, 0.0), clamp(halo * 0.5, 0.0, 0.6));
     day = mix(day, hue(acc, 0.30, 0.0), clamp(core * 0.6, 0.0, 0.7));
+    day = mix(day, hue(acc, 0.90, 0.0), clamp(sheen * 3.0, 0.0, 0.12));
 
     day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 0.5);   // daylight is softer: half the colour
     vec3 col = mix(day, night, clamp(dark, 0.0, 1.0));
