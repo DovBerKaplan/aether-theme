@@ -24,6 +24,20 @@ WallpaperItem {
     Behavior on shownDark { NumberAnimation { duration: Kirigami.Units.veryLongDuration; easing.type: Easing.InOutQuad } }
     onAccentChanged: root.accentColorChanged()
 
+    // The slow sway: a few pixels a second at most, so 10 ticks a second already move it in sub-pixel
+    // steps and keep the GPU mostly idle; the layer below means nothing else repaints, and while windows
+    // cover the desktop the compositor stops asking for frames at all. Wrapped every ~28 h so the
+    // shader's floats stay precise.
+    readonly property bool animate: root.configuration.Animate !== false
+    property real time: 0
+    property real startedAt: Date.now()
+    Timer {
+        interval: 100
+        repeat: true
+        running: root.animate && root.visible
+        onTriggered: root.time = ((Date.now() - root.startedAt) / 1000) % 100000
+    }
+
     // Cached in a layer: plasmashell redraws the desktop window often, the wallpaper only when it changes.
     Item {
         anchors.fill: parent
@@ -36,6 +50,7 @@ WallpaperItem {
             property real dark: root.shownDark
             property real aspect: width / Math.max(1, height)
             property real px: 1 / Math.max(1, height)
+            property real time: root.time
         }
 
         // The mark: the distribution's logo (24 units), or the crescent and spark of
