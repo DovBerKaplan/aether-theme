@@ -178,7 +178,7 @@ def button(kind: str, v: dict) -> str:
 
 
 def rc(v: dict) -> str:
-    title_h = 24                 # a header bar: 8 + 24 + 8
+    title_h = 24                 # a header bar: 8 + 24 + 8 (the TitleEdge* sit inside the shadow's Padding*)
     return f"""[General]
 ActiveTextColor={rgb(v["text"])}
 InactiveTextColor={rgb(v["text_inactive"])}
@@ -193,10 +193,10 @@ BorderTop=0
 BorderLeft=0
 BorderRight=0
 BorderBottom=0
-TitleEdgeTop={P + 8}
+TitleEdgeTop=8
 TitleEdgeBottom=8
-TitleEdgeLeft={P + 12}
-TitleEdgeRight={P + 12}
+TitleEdgeLeft=12
+TitleEdgeRight=12
 TitleEdgeTopMaximized=8
 TitleEdgeBottomMaximized=8
 TitleEdgeLeftMaximized=12
