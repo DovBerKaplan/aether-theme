@@ -30,7 +30,7 @@ BTN = int(A["button-size"])
 VARIANTS = {
     "AetherGlass": dict(name="Aether Glass", body=PAL["ink-750"], rim=("#ffffff", M["rim-alpha"]),
                         text=PAL["fog-100"], text_inactive=PAL["fog-500"], shadow=0.38,
-                        dot=("#ffffff", 0.16), glyph=PAL["fog-100"], negative="#ff6b6b"),
+                        dot=("#ffffff", 0.14), glyph=PAL["fog-100"], negative="#ff6b6b"),
     "AetherSerenity": dict(name="Aether Serenity", body=PAL["paper-50"], rim=("#1a1d20", 0.10),
                            text=PAL["graphite-950"], text_inactive=PAL["graphite-500"], shadow=0.20,
                            dot=("#1a1d20", 0.10), glyph=PAL["graphite-900"], negative=PAL["red-700"]),
@@ -94,20 +94,24 @@ def decoration(f: Frame, prefix: str, v: dict, alpha: float, active: bool):
         inner += f'<path d="{corner_path(kind, bx, y + P, R)}" {body}/>'
         inner += f'<path d="{corner_ring(kind, bx, y + P, R)}" {rim}/>'
         g(kind, inner, x, y)
-    # Bottom corners: the window's corner is square (no bottom border) and lies R into the tile;
-    # the shadow wraps it: a side strip, a bottom strip and a radial quarter.
-    x, y = xs["l"], ys["b"]
-    g("bottomleft", rect(x, y, P, R, f'fill="{sh.lin["l"]}"') + rect(x + P, y + R, R, P, f'fill="{sh.lin["b"]}"')
-      + rect(x, y + R, P, P, f'fill="{sh.radial(x + P, y + R, P, 0)}"'), x, y)
-    x, y = xs["r"], ys["b"]
-    g("bottomright", rect(x + R, y, P, R, f'fill="{sh.lin["r"]}"') + rect(x, y + R, R, P, f'fill="{sh.lin["b"]}"')
-      + rect(x + R, y + R, P, P, f'fill="{sh.radial(x + R, y + R, P, 0)}"'), x, y)
+    # Bottom corners: the Kvantum frame rounds the window's bottom (apps.radius) and the client ends
+    # R into the tile. The shadow wraps that rounded corner: radial around its circle, everywhere in
+    # the tile outside the client's rect (the decoration is not drawn inside it).
+    for kind, cx in (("bottomleft", "l"), ("bottomright", "r")):
+        x, y = xs[cx], ys["b"]
+        client = (x + P, y) if kind == "bottomleft" else (x, y)
+        ccx = x + S if kind == "bottomleft" else x
+        tile = f"M{x},{y} H{x + S} V{y + S} H{x} Z "
+        hole = f"M{client[0]},{client[1]} h{R} v{R} h{-R} Z"
+        g(kind, f'<path d="{tile}{hole}" fill-rule="evenodd" fill="{sh.radial(ccx, y, S, R / S)}"/>', x, y)
     # Edges: shadow outside, body inside (the inside part only shows in the title row).
     g("top", rect(xs["c"], ys["t"], E, P, f'fill="{sh.lin["t"]}"') + rect(xs["c"], ys["t"] + P, E, R, body)
       + rect(xs["c"], ys["t"] + P, E, 1, rim), xs["c"], ys["t"])
     g("bottom", rect(xs["c"], ys["b"] + R, E, P, f'fill="{sh.lin["b"]}"'), xs["c"], ys["b"])
-    g("left", rect(xs["l"], ys["c"], P, E, f'fill="{sh.lin["l"]}"') + rect(xs["l"] + P, ys["c"], R, E, body), xs["l"], ys["c"])
-    g("right", rect(xs["r"] + R, ys["c"], P, E, f'fill="{sh.lin["r"]}"') + rect(xs["r"], ys["c"], R, E, body), xs["r"], ys["c"])
+    g("left", rect(xs["l"], ys["c"], P, E, f'fill="{sh.lin["l"]}"') + rect(xs["l"] + P, ys["c"], R, E, body)
+      + rect(xs["l"] + P, ys["c"], 1, E, rim), xs["l"], ys["c"])
+    g("right", rect(xs["r"] + R, ys["c"], P, E, f'fill="{sh.lin["r"]}"') + rect(xs["r"], ys["c"], R, E, body)
+      + rect(xs["r"] + R - 1, ys["c"], 1, E, rim), xs["r"], ys["c"])
     g("center", rect(xs["c"], ys["c"], E, E, body), xs["c"], ys["c"])
 
     if active:  # the blur region: the body only, never the shadow
@@ -134,32 +138,36 @@ def decoration(f: Frame, prefix: str, v: dict, alpha: float, active: bool):
 CORNERS = ("topleft", "topright", "bottomleft", "bottomright")
 
 
-GLYPHS = {   # 16-unit glyphs, stroked, centred on (8, 8)
-    "close": "M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5",
-    "minimize": "M5 8H11",
-    "maximize": "M5.5 9.8L8 6.2L10.5 9.8",
-    "restore": "M5.5 6.2L8 9.8L10.5 6.2",
-    "alldesktops": "M8 5.5V10.5M5.5 8H10.5",
-    "keepabove": "M5.5 9.5L8 7L10.5 9.5",
-    "keepbelow": "M5.5 6.5L8 9L10.5 6.5",
+GLYPHS = {   # 24-unit glyphs, stroked, centred on (12, 12)
+    "close": "M9 9L15 15M15 9L9 15",
+    "minimize": "M8.5 12H15.5",
+    # maximise and restore alike: two overlapping squares, like the reference
+    "maximize": "M10.5 9.5V9.2Q10.5 8.5 11.2 8.5H14.8Q15.5 8.5 15.5 9.2V12.8Q15.5 13.5 14.8 13.5H14.5"
+                "M9.2 10.5H12.8Q13.5 10.5 13.5 11.2V14.8Q13.5 15.5 12.8 15.5H9.2Q8.5 15.5 8.5 14.8V11.2Q8.5 10.5 9.2 10.5Z",
+    "alldesktops": "M12 8.5V15.5M8.5 12H15.5",
+    "keepabove": "M8.5 13.5L12 10L15.5 13.5",
+    "keepbelow": "M8.5 10.5L12 14L15.5 10.5",
 }
+GLYPHS["restore"] = GLYPHS["maximize"]
 
 
 def button(kind: str, v: dict) -> str:
-    """One button file: a soft dot, the glyph shows on hover (calm at rest, like the island)."""
-    s = 16
+    """One button file: a grey glass circle with its glyph, always shown (the reference's header
+    bar). Hover: close turns red, the others take the accent."""
+    s = 24
     hover_fill = v["negative"] if kind == "close" else ACCENT
     dot_c, dot_a = v["dot"]
     glyph = lambda color, a: (f'<path d="{GLYPHS[kind]}" stroke="{color}" stroke-opacity="{a}" stroke-width="1.5" '
                               f'stroke-linecap="round" stroke-linejoin="round" fill="none"/>')
+    circle = lambda fill, a, r=11: f'<circle cx="12" cy="12" r="{r}" fill="{fill}" fill-opacity="{a}"/>'
     states = {
-        "active-center": f'<circle cx="8" cy="8" r="6" fill="{dot_c}" fill-opacity="{dot_a}"/>' + glyph(v["glyph"], 0.85),
-        "hover-center": f'<circle cx="8" cy="8" r="6.5" fill="{hover_fill}"/>' + glyph("#0b0e14", 0.9),
-        "pressed-center": f'<circle cx="8" cy="8" r="6" fill="{hover_fill}" fill-opacity="0.75"/>' + glyph("#0b0e14", 0.9),
-        "inactive-center": f'<circle cx="8" cy="8" r="6" fill="{dot_c}" fill-opacity="{dot_a * 0.7}"/>' + glyph(v["glyph"], 0.45),
-        "hover-inactive-center": f'<circle cx="8" cy="8" r="6.5" fill="{hover_fill}"/>' + glyph("#0b0e14", 0.9),
-        "deactivated-center": f'<circle cx="8" cy="8" r="6" fill="{dot_c}" fill-opacity="{dot_a * 0.5}"/>',
-        "deactivated-inactive-center": f'<circle cx="8" cy="8" r="6" fill="{dot_c}" fill-opacity="{dot_a * 0.4}"/>',
+        "active-center": circle(dot_c, dot_a) + glyph(v["glyph"], 0.9),
+        "hover-center": circle(hover_fill, 1) + glyph("#0b0e14", 0.9),
+        "pressed-center": circle(hover_fill, 0.75) + glyph("#0b0e14", 0.9),
+        "inactive-center": circle(dot_c, dot_a * 0.6) + glyph(v["glyph"], 0.5),
+        "hover-inactive-center": circle(hover_fill, 1) + glyph("#0b0e14", 0.9),
+        "deactivated-center": circle(dot_c, dot_a * 0.5) + glyph(v["glyph"], 0.3),
+        "deactivated-inactive-center": circle(dot_c, dot_a * 0.4) + glyph(v["glyph"], 0.25),
     }
     parts = []
     for i, (sid, body) in enumerate(states.items()):
@@ -170,7 +178,7 @@ def button(kind: str, v: dict) -> str:
 
 
 def rc(v: dict) -> str:
-    title_h = 20
+    title_h = 24                 # a header bar: 8 + 24 + 8
     return f"""[General]
 ActiveTextColor={rgb(v["text"])}
 InactiveTextColor={rgb(v["text_inactive"])}
@@ -185,21 +193,21 @@ BorderTop=0
 BorderLeft=0
 BorderRight=0
 BorderBottom=0
-TitleEdgeTop={P + 7}
-TitleEdgeBottom=7
-TitleEdgeLeft={P + 10}
-TitleEdgeRight={P + 10}
-TitleEdgeTopMaximized=7
-TitleEdgeBottomMaximized=7
-TitleEdgeLeftMaximized=10
-TitleEdgeRightMaximized=10
+TitleEdgeTop={P + 8}
+TitleEdgeBottom=8
+TitleEdgeLeft={P + 12}
+TitleEdgeRight={P + 12}
+TitleEdgeTopMaximized=8
+TitleEdgeBottomMaximized=8
+TitleEdgeLeftMaximized=12
+TitleEdgeRightMaximized=12
 TitleBorderLeft=8
 TitleBorderRight=8
 TitleHeight={title_h}
-ButtonWidth={BTN + 2}
-ButtonHeight={BTN + 2}
-ButtonSpacing=6
-ButtonMarginTop={(title_h - BTN - 2) // 2}
+ButtonWidth={BTN}
+ButtonHeight={BTN}
+ButtonSpacing=8
+ButtonMarginTop={(title_h - BTN) // 2}
 ExplicitButtonSpacer=8
 PaddingTop={P}
 PaddingBottom={P}

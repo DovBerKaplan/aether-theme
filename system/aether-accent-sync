@@ -172,13 +172,20 @@ def main() -> int:
     # Sandboxed apps (Flatpak KDE apps, GTK, Chrome) take the palette from the desktop portal, which
     # has been seen holding on to old colours after a scheme apply. If it disagrees with kdeglobals,
     # restart it so it reads them again.
-    portal = subprocess.run(["gdbus", "call", "--session", "--dest", "org.freedesktop.portal.Desktop",
-                             "--object-path", "/org/freedesktop/portal/desktop", "--method",
-                             "org.freedesktop.portal.Settings.ReadOne", "org.kde.kdeglobals.Colors:Selection",
-                             "BackgroundNormal"], capture_output=True, text=True).stdout
-    local = subprocess.run(["kreadconfig6", "--file", "kdeglobals", "--group", "Colors:Selection", "--key",
-                            "BackgroundNormal"], capture_output=True, text=True).stdout.strip()
-    if portal and local and f"'{local}'" not in portal:
+    def portal_says(group: str, key: str) -> str:
+        return subprocess.run(["gdbus", "call", "--session", "--dest", "org.freedesktop.portal.Desktop",
+                               "--object-path", "/org/freedesktop/portal/desktop", "--method",
+                               "org.freedesktop.portal.Settings.ReadOne", f"org.kde.kdeglobals.{group}", key],
+                              capture_output=True, text=True).stdout
+
+    def local(group: str, key: str) -> str:
+        return subprocess.run(["kreadconfig6", "--file", "kdeglobals", "--group", group, "--key", key],
+                              capture_output=True, text=True).stdout.strip()
+    stale = False
+    for group, key in (("Colors:Selection", "BackgroundNormal"), ("Colors:View", "BackgroundNormal")):
+        said, have = portal_says(group, key), local(group, key)
+        stale |= bool(said and have and f"'{have}'" not in said)
+    if stale:
         subprocess.run(["systemctl", "--user", "restart", "plasma-xdg-desktop-portal-kde.service"], check=False)
         changed.append("portal (was stale)")
 

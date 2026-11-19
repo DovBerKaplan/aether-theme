@@ -268,14 +268,15 @@ base = "WhiteSurDark"
 "#9d9d9d" = "#849495"
 "#242424" = "ink-750"   # the window: the island's body colour (glass via apps.chrome-alpha)
 "#383838" = "ink-750"   # the menubar melts into it
+"#1a1a1a" = "ink-750"   # the inactive window: same glass
 
 [kvantum.AetherGlass.colors]
 "window.color" = "ink-750"
 "inactive.window.color" = "ink-750"
-"base.color" = "#0b0e14f0"           # ink-950 at apps.view-alpha: content stays crisp
-"inactive.base.color" = "#0b0e14f0"
-"alt.base.color" = "#191c22f0"       # ink-800, same alpha
-"inactive.alt.base.color" = "#191c22f0"
+"base.color" = "#1c1e2412"           # a breath over the window glass: views and fields read as one sheet
+"inactive.base.color" = "#1c1e2412"
+"alt.base.color" = "#ffffff0a"       # alternating rows: a faint veil
+"inactive.alt.base.color" = "#ffffff0a"
 "button.color" = "#272a31"
 "light.color" = "#363940"
 "mid.light.color" = "#32353c"
@@ -311,10 +312,10 @@ base = "WhiteSur"
 [kvantum.AetherSerenity.colors]
 "window.color" = "paper-50"
 "inactive.window.color" = "paper-50"
-"base.color" = "#fffffff0"           # paper-0 at apps.view-alpha
-"inactive.base.color" = "#fffffff0"
-"alt.base.color" = "#f3f4f5f0"       # paper-100, same alpha
-"inactive.alt.base.color" = "#f3f4f5f0"
+"base.color" = "#ffffff1a"           # a breath over the window glass
+"inactive.base.color" = "#ffffff1a"
+"alt.base.color" = "#1a1d200a"       # alternating rows: a faint shade
+"inactive.alt.base.color" = "#1a1d200a"
 "button.color" = "paper-0"
 "light.color" = "paper-0"
 "mid.light.color" = "#edeeef"
@@ -336,15 +337,17 @@ base = "WhiteSur"
 "link.visited.color" = "graphite-500"
 "progress.indicator.text.color" = "paper-0"
 
-# App windows (Kvantum, the Aurorae titlebar, Konsole): hybrid glass - the frame (titlebar,
-# toolbar, sidebar, menus) is frosted like the island, the content (file lists, terminal, text)
-# near-opaque so it stays crisp. The accent is the island's chosen colour, filled in by
-# system/aether-accent-sync; the generated themes carry the cyan below as its placeholder.
+# App windows (Kvantum, the Aurorae titlebar, Konsole): one sheet of frosted glass - titlebar,
+# toolbars and content in the same tone, the blurred desktop showing through, all corners round,
+# a hairline rim all around (the owner's reference: a glass terminal). The accent is the island's
+# chosen colour, filled in by system/aether-accent-sync; the generated themes carry the cyan
+# below as its placeholder.
 [apps]
-chrome-alpha = 0.82   # the dock's dark glass (dock-alpha-dark): denser than the island, apps sit over busy content
-view-alpha   = 0.94
-radius       = 12     # window corners (Aurorae)
-button-size  = 16     # titlebar buttons (Aurorae): round, on the left in macOS order
+chrome-alpha = 0.72   # the whole window's glass (Konsole's terminal.glass.opacity sits beside it)
+view-alpha   = 0.72   # content = frame: one glass
+view-tint    = 0.08   # the colour scheme's view background (file lists, text) over that glass: a faint veil
+radius       = 12     # window corners (Aurorae top, Kvantum frame bottom)
+button-size  = 22     # titlebar buttons (Aurorae): grey circles on the left - close, restore, minimise
 
 # Kvantum [%General]: translucency and blur (reduce_window_opacity comes from apps.chrome-alpha)
 [kvantum.general]
@@ -356,5 +359,5 @@ reduce_menu_opacity = "4"
 menu_blur_radius = "12"
 
 [kvantum.hacks]
-transparent_dolphin_view = "false"   # Dolphin's file list is content: the near-opaque view colour
+transparent_dolphin_view = "true"    # Dolphin's file list is part of the one glass
 blur_translucent = "true"

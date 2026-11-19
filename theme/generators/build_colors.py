@@ -7,6 +7,9 @@ from tokens import load
 OUT = Path(__file__).resolve().parents[1] / "generated/color-schemes"
 
 PALETTES = {k: {a.replace("-", "_"): b for a, b in v.items()} for k, v in load()["scheme"].items()}
+# Views (file lists, text, item views) are a faint veil over the window's glass, not a solid sheet:
+# KDE takes r,g,b,a here, and Kvantum's translucent windows show what lies under it.
+VIEW_ALPHA = round(load()["apps"]["view-tint"] * 255)
 
 
 def rgb(h: str) -> str:
@@ -14,7 +17,7 @@ def rgb(h: str) -> str:
     return ",".join(str(int(h[i:i + 2], 16)) for i in (0, 2, 4))
 
 
-def section(p: dict, bg: str, alt: str, fg: str | None = None, fg_inactive: str | None = None) -> str:
+def section(p: dict, bg: str, alt: str, fg: str | None = None, fg_inactive: str | None = None, alpha: int | None = None) -> str:
     fg = fg or p["fg"]
     fg_inactive = fg_inactive or p["fg_inactive"]
     rows = {
@@ -25,7 +28,8 @@ def section(p: dict, bg: str, alt: str, fg: str | None = None, fg_inactive: str 
         "ForegroundNeutral": p["neutral"], "ForegroundNormal": fg,
         "ForegroundPositive": p["positive"], "ForegroundVisited": p["visited"],
     }
-    return "\n".join(f"{k}={rgb(v)}" for k, v in rows.items())
+    veil = {"BackgroundNormal", "BackgroundAlternate"} if alpha is not None else set()
+    return "\n".join(f"{k}={rgb(v)}" + (f",{alpha}" if k in veil else "") for k, v in rows.items())
 
 
 def build(key: str, p: dict) -> str:
@@ -43,7 +47,7 @@ def build(key: str, p: dict) -> str:
         "[Colors:Header][Inactive]\n" + section(p, p["window"], p["alt"]),
         "[Colors:Selection]\n" + section(p, p["selection"], p["accent_hover"], p["selection_fg"], p["selection_fg"]),
         "[Colors:Tooltip]\n" + section(p, p["tooltip"], p["alt"]),
-        "[Colors:View]\n" + section(p, p["view"], p["alt"]),
+        "[Colors:View]\n" + section(p, p["view"], p["alt"], alpha=VIEW_ALPHA),
         "[Colors:Window]\n" + section(p, p["window"], p["alt"]),
         f"[General]\nColorScheme={key}\nName={p['name']}\nshadeSortColumn=true",
         "[KDE]\ncontrast=4",
