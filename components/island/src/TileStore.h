@@ -195,9 +195,20 @@ public:
         }
         m_systemAccent = hex;
         QSettings kde(QDir::homePath() + QStringLiteral("/.config/kdeglobals"), QSettings::IniFormat);
-        const QString scheme = kde.value(QStringLiteral("ColorScheme")).toString();     // INI [General] keys sit at the root
-        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"),
-                                {scheme.isEmpty() ? QStringLiteral("AetherGlass") : scheme, QStringLiteral("--accent-color"), hex});
+        QString scheme = kde.value(QStringLiteral("ColorScheme")).toString();     // INI [General] keys sit at the root
+        // With --accent-color, plasma-apply-colorscheme ignores the name it is given and recolours
+        // the *current* scheme - and with no name written (a look-and-feel apply leaves it out) that
+        // is KDE's default, BreezeLight: the desktop turned Breeze Light a moment after a Dark tap.
+        // So name the scheme first (ours, judged by the window colour when the name is missing),
+        // then lay the accent on it.
+        if (scheme.isEmpty()) {
+            const QStringList c = kde.value(QStringLiteral("Colors:Window/BackgroundNormal")).toStringList();
+            const bool dark = c.size() < 3 || (0.299 * c[0].toInt() + 0.587 * c[1].toInt() + 0.114 * c[2].toInt()) < 128;
+            scheme = dark ? QStringLiteral("AetherGlass") : QStringLiteral("AetherSerenity");
+        }
+        QProcess::startDetached(QStringLiteral("sh"), {QStringLiteral("-c"),
+                                QStringLiteral("plasma-apply-colorscheme \"$1\"; plasma-apply-colorscheme \"$1\" --accent-color \"$2\""),
+                                QStringLiteral("aether-accent"), scheme, hex});
     }
 
     // The wallpaper family and the pick. Everything lives in ~/.config/aetherislandrc ([Wallpaper]);

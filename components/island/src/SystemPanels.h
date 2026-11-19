@@ -281,7 +281,9 @@ private:
             m_dark = true;
         } else {
             const QStringList rgb = kr({QStringLiteral("--file"), QStringLiteral("kdeglobals"), QStringLiteral("--group"), QStringLiteral("Colors:Window"), QStringLiteral("--key"), QStringLiteral("BackgroundNormal")}).split(QLatin1Char(','));
-            m_dark = rgb.size() == 3 && (rgb[0].toInt() + rgb[1].toInt() + rgb[2].toInt()) / 3 < 128;
+            // r,g,b - or r,g,b,a: the glass schemes carry an alpha, and a strict "three" read every
+            // one of them as light (the tile said Light while the desktop was dark).
+            m_dark = rgb.size() >= 3 && (0.299 * rgb[0].toInt() + 0.587 * rgb[1].toInt() + 0.114 * rgb[2].toInt()) < 128;
         }
         m_auto = kr({QStringLiteral("--file"), QStringLiteral("kdeglobals"), QStringLiteral("--group"), QStringLiteral("KDE"), QStringLiteral("--key"), QStringLiteral("AutomaticLookAndFeel")}) == QLatin1String("true");
     }
