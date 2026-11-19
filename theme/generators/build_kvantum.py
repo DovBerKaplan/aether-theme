@@ -98,6 +98,7 @@ def main() -> None:
         # The view is the same sheet of glass as everything else: no panel, no bordered box
         # around Dolphin's file area (Dov's arrow) - its veil comes from [Colors:View] alone.
         cfg = set_keys(cfg, "ItemView", {"frame": "false"})
+        cfg = set_keys(cfg, "GenericFrame", {"frame": "false", "interior": "false"})
         cfg = set_keys(cfg, "GeneralColors", t["colors"])
         cfg = set_keys(cfg, "Hacks", HACKS)
         (dest / f"{name}.kvconfig").write_text(cfg)
