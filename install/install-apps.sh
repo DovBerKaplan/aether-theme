@@ -27,7 +27,8 @@ mkdir -p "$T" "$D/color-schemes" "$D/konsole" "$D/plasma/look-and-feel" "$D/auro
 for kind in kvantum aurorae color-schemes; do
   rm -rf "${T:?}/$kind"; cp -r "$GEN/$kind" "$T/$kind"
 done
-cp "$GEN"/konsole/*.colorscheme "$D/konsole/"
+cp "$GEN"/konsole/*-mark.png "$D/konsole/"
+for f in "$GEN"/konsole/*.colorscheme; do sed "s|@MARK_DIR@|$D/konsole|" "$f" > "$D/konsole/$(basename "$f")"; done
 [[ -f "$D/konsole/Aether.profile" ]] || cp "$GEN/konsole/Aether.profile" "$D/konsole/"
 for p in "$GEN"/look-and-feel/*; do rm -rf "$D/plasma/look-and-feel/$(basename "$p")"; cp -r "$p" "$D/plasma/look-and-feel/"; done
 install -m 755 "$ROOT/system/aether-mode-sync" "$HOME/.local/bin/aether-mode-sync"
@@ -59,6 +60,16 @@ systemctl --user enable --now aether-accent-sync.path >/dev/null 2>&1
 
 echo "== Konsole: the terminal is content - near-opaque, blurred behind"
 kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile Aether.profile
+kwriteconfig6 --file "$D/konsole/Aether.profile" --group General --key TerminalMargin 18
+
+echo "== prompt: the two-line Aether prompt in bash"
+install -Dm 644 "$ROOT/system/aether-prompt.sh" "$D/aether/prompt.sh"
+grep -qs 'aether/prompt.sh' "$HOME/.bashrc" \
+  || printf '\n# Aether prompt (install/install-apps.sh)\n[ -f "$HOME/.local/share/aether/prompt.sh" ] && . "$HOME/.local/share/aether/prompt.sh"\n' >> "$HOME/.bashrc"
+
+echo "== titlebar: round buttons on the left, macOS order (close, minimize, maximize)"
+kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft XIA
+kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnRight ""
 
 echo "== KDE Flatpaks (Dolphin, Konsole, Gwenview ...)"
 # A sandboxed Qt app sees neither the host's Kvantum style nor its themes: the style comes from the
