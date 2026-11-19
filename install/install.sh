@@ -41,6 +41,17 @@ for p in "$GEN"/look-and-feel/*; do rm -rf "$D/plasma/look-and-feel/$(basename "
 rm -rf "$D/wallpapers/AetherOS"; cp -r "$GEN/wallpaper/AetherOS" "$D/wallpapers/"
 cp "$GEN"/konsole/*.colorscheme "$D/konsole/"
 [[ -f "$D/konsole/Aether.profile" ]] || cp "$GEN/konsole/Aether.profile" "$D/konsole/"
+
+echo "== cursor"
+# The pointer speaks the island's language too: rounded jelly glass, vendored
+# Bibata Ice v2.0.7 (ful1e5, GPL-3.0 - see NOTICE). Writing kcminputrc is enough:
+# KWin applies the theme live, and X apps inherit it at the next login.
+if command -v xz >/dev/null 2>&1; then
+  [[ -d "$D/icons/Bibata-Modern-Ice" ]] || tar -xJf "$ROOT/install/cursors/Bibata-Modern-Ice.tar.xz" -C "$D/icons/"
+  kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme Bibata-Modern-Ice
+else
+  echo "warning: xz missing; the pointer stays Breeze (install xz-utils)" >&2
+fi
 install -m 755 "$ROOT/system/aether-mode-sync" "$HOME/.local/bin/aether-mode-sync"
 install -m 755 "$ROOT/system/vibe/aether-vibe" "$HOME/.local/bin/aether-vibe"
 install -m 755 "$ROOT/system/agents/aether-agent-run" "$HOME/.local/bin/aether-agent-run"
