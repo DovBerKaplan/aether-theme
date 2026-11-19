@@ -6,8 +6,12 @@
 #include <QColor>
 #include <QCoreApplication>
 #include <QDebug>
+#include <QDBusArgument>
 #include <QDBusConnection>
+#include <QDBusInterface>
 #include <QDBusMessage>
+#include <QDBusReply>
+#include <QDBusUnixFileDescriptor>
 #include <QDir>
 #include <QDateTime>
 #include <QFile>
@@ -22,12 +26,19 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickImageProvider>
+#include <QQuickItem>
 #include <QQuickView>
 #include <QRegion>
 #include <QRegularExpression>
 #include <QScreen>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QUrl>
+#include <QMutex>
+
+#include <unistd.h>
+#include <poll.h>
+#include <utility>
 
 #include <BackdropSampler.h>
 #include <KWindowEffects>
@@ -256,6 +267,14 @@ public:
     // Opening one edge closes the other.
     Q_INVOKABLE void notifyShown() { Q_EMIT shownOnEdge(m_edge); }
 
+    // Test hook for qdbus / sandbox runs: QML picks the app with the most windows and opens its
+    // chooser - the same path a click on a grouped icon takes, minus the pointer.
+    void PreviewWindows()
+    {
+        if (QQuickItem *rootItem = m_view->rootObject())
+            rootItem->metaObject()->invokeMethod(rootItem, "previewWindows", Qt::DirectConnection);
+    }
+
 public Q_SLOTS:
     void Show() { Q_EMIT stateRequested(QStringLiteral("shown")); }
     void Hide() { Q_EMIT stateRequested(QStringLiteral("hidden")); }
@@ -359,6 +378,10 @@ public Q_SLOTS:
     void Show(const QString &edge) { (edge == QLatin1String("left") ? m_left : m_bottom)->Show(); }
     void Hide() { m_bottom->Hide(); m_left->Hide(); }
     void Toggle() { m_bottom->Show(); }
+    // Sandbox shots and qdbus testing: the chooser opens on the app that owns the most windows,
+    // the same path a click on a grouped icon takes. No pointer needed.
+    void PreviewWindows() { m_bottom->PreviewWindows(); }
+    void PreviewWindowsOn(const QString &edge) { (edge == QLatin1String("left") ? m_left : m_bottom)->PreviewWindows(); }
 private:
     DockController *m_bottom;
     DockController *m_left;
