@@ -1,9 +1,9 @@
 #version 440
-// Aether Ink: ink in still water - drawn analytically at the screen's own resolution (no image
-// anywhere). Two dark masses billow around off-centre pivots, their edges torn by a slow domain
-// warp so the boundary diffuses like pigment finding its way; a breathing pool of light keeps the
-// centre clear under the mark. The accent and the mode come in as uniforms; `time` billows the ink,
-// a few pixels a second, sub-pixel a tick.
+// Aether Ink: pigment let into still water - drawn analytically at the screen's own resolution (no
+// image anywhere). A nested domain warp gives the billows their folded, smoke-like body; where the
+// pigment's front crosses itself a fine vein of light runs along it. Two pours, from the upper left
+// and the lower right, leave the centre clear under the mark. At night the pigment glows in the
+// accent; by day it is dark ink on pale paper. `time` lets the water creep, a few pixels a second.
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
 layout(std140, binding = 0) uniform buf {
@@ -27,66 +27,78 @@ vec3 hue(vec3 c, float l, float vivid) {
     return clamp(vec3(l) + sat * (l < 0.5 ? l : 1.0 - l), 0.0, 1.0);
 }
 
-// Lattice value noise, two octaves - the water the ink spreads in.
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float vnoise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+// Gradient noise (no lattice blocks) and five rotated octaves of it.
+vec2 grad(vec2 i) {   // a trig-free hash (Hoskins) to a direction in the unit square
+    vec3 h = fract(vec3(i.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    h += dot(h, h.yzx + 33.33);
+    return fract((h.xx + h.yz) * h.zy) * 2.0 - 1.0;
 }
-float water(vec2 p) { return 0.65 * vnoise(p) + 0.35 * vnoise(p * 2.13 + 7.7); }
-
-// The pivot one mass hangs about, drifting on a slow circle - the two against each other.
-vec2 pivot(int k) {
-    float f = float(k);
-    return vec2(k == 0 ? 0.38 : 0.66, k == 0 ? 0.40 : 0.66)
-         + 0.06 * vec2(sin(time * 0.047 + f * 2.9), cos(time * 0.039 + f * 1.7 + 0.8));
+float gnoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    return mix(mix(dot(grad(i), f), dot(grad(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0)), u.x),
+               mix(dot(grad(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0)), dot(grad(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0)), u.x), u.y);
+}
+const mat2 ROT = mat2(0.80, 0.60, -0.60, 0.80);
+float fbm(vec2 p) {
+    float s = 0.0, a = 0.5;
+    for (int i = 0; i < 5; ++i) {
+        s += a * gnoise(p);
+        p = ROT * p * 2.03 + vec2(1.7, 9.2);
+        a *= 0.5;
+    }
+    return s;
 }
 
 void main() {
     vec2 uv = qt_TexCoord0;
     vec3 acc = hue(accent.rgb, clamp(0.5 * (max(accent.r, max(accent.g, accent.b)) + min(accent.r, min(accent.g, accent.b))), 0.45, 0.6), 0.8);
+    vec2 p = uv * vec2(aspect, 1.0);
 
-    // The water itself creeps: a domain warp drifting with time tears every edge it touches.
-    vec2 warp = vec2(water(uv * 3.0 + vec2(time * 0.010, -time * 0.007)),
-                     water(uv * 3.0 + vec2(-time * 0.008, time * 0.012) + 4.2)) - 0.5;
-    vec2 q = uv + 0.11 * warp;
+    // The water folds over itself: a warp of a warp (q, then r), each layer creeping on its own
+    // slow current, so the billows turn instead of sliding.
+    float t = time * 0.012;
+    vec2 b = p * 0.85;
+    vec2 q = vec2(fbm(b + vec2(0.0, t)), fbm(b + vec2(5.2, 1.3) - 0.7 * t));
+    vec2 r = vec2(fbm(b + 2.6 * q + vec2(1.7, 9.2) + 0.15 * t), fbm(b + 2.6 * q + vec2(8.3, 2.8) - 0.12 * t));
+    float f = fbm(b + 2.4 * r);
 
-    // Two masses: a noisy radius around a drifting pivot, dense at the heart and fraying at the
-    // rim, where a faint band marks the front the pigment is finding its way through.
-    float ink = 0.0, front = 0.0;
-    for (int k = 0; k < 2; ++k) {
-        vec2 p = pivot(k);
-        float d = length(q - p);
-        float field = d + 0.26 * (water(q * 2.4 + float(k) * 3.1 + time * 0.006) - 0.5);
-        float m = 1.0 - smoothstep(0.10, 0.42, field);
-        ink = max(ink, m * (k == 0 ? 0.90 : 0.65));
-        front = max(front, m * (1.0 - m) * 4.0 * (k == 0 ? 0.90 : 0.50));
-    }
+    // Two pours, the upper left and the lower right, their reach torn by the warp; the centre
+    // stays clear.
+    vec2 c = vec2(0.5 * aspect, 0.5);
+    float a1 = length((p - vec2(0.05 * aspect, 0.05)) * vec2(0.85, 1.0));
+    float a2 = length((p - vec2(0.97 * aspect, 0.98)) * vec2(0.85, 1.0));
+    float reach = max(1.0 - smoothstep(0.25, 0.95, a1 + 0.45 * r.x),
+                      1.0 - smoothstep(0.25, 0.90, a2 + 0.45 * r.y));
+    reach *= smoothstep(0.16, 0.42, length(p - c) + 0.18 * q.x);
+
+    // The pigment: dense where the folded field is high, its body shaded by how far it has been
+    // carried (|r|), so every billow has a lit side and a shadowed one.
+    float e = f + 0.40 * reach - 0.15;
+    float ink = smoothstep(-0.25, 0.35, e) * reach;
+    float body = clamp(0.35 + 1.6 * length(r) - 0.6 * q.y, 0.0, 1.4);
+    // The front: a hairline of light where the pigment meets clear water - the field's own level
+    // line, so it curls and frays with every billow.
+    float vein = pow(clamp(1.0 - abs(e + 0.02) / 0.010, 0.0, 1.0), 2.0) * smoothstep(0.25, 0.7, reach);
 
     // Everything breathes together, about the span of a breath, a few percent at most.
-    ink *= 1.0 + 0.05 * sin(time * 0.42);
+    float breath = 1.0 + 0.05 * sin(time * 0.42);
+    ink *= breath;
 
-    // The centre stays clear: a breathing pool of light under the mark.
-    float r = length(uv * vec2(aspect, 1.0) - vec2(0.5 * aspect, 0.5));
-    float pool = 0.16 * exp(-r / 0.34);
-
-    // A broad sheen crosses the whole field once a minute: light through the water.
-    float sheen = 0.05 * pow(max(sin(dot(uv, vec2(0.85, 0.45)) * 1.7 - time * 0.09 + 0.7), 0.0), 2.5);
+    // The centre lifts a touch, under the mark.
+    float pool = 0.12 * exp(-length(p - c) / 0.34);
 
     // Both fields are drawn and mixed by `dark`, so a mode switch can fade from one to the other.
-    vec3 night = mix(hue(acc, 0.03, 0.0), hue(acc, 0.06, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
-    night = mix(night, hue(acc, 0.015, 0.0), clamp(ink * 0.75, 0.0, 0.8));   // the ink, a shade darker than the field
-    vec3 light = acc * (front * 0.05 + pool * 0.55 + sheen);
+    vec3 night = mix(hue(acc, 0.025, 0.0), hue(acc, 0.05, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
+    vec3 light = acc * (ink * body * 0.55 + pool * 0.45)
+               + mix(acc, vec3(1.0), 0.35) * (vein * 0.45 + ink * ink * body * 0.12);
     night += vec3(1.0) - exp(-light * 1.4);
     night *= 1.0 - 0.30 * pow(length(uv - vec2(0.5, 0.5)) * 1.25, 2.4);   // vignette
 
-    vec3 day = mix(hue(acc, 0.66, 0.0), hue(acc, 0.80, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
-    day = mix(day, hue(acc, 0.28, 0.0), clamp(ink * 0.55, 0.0, 0.7));
-    day = mix(day, hue(acc, 0.45, 0.0), clamp(front * 0.12, 0.0, 0.2));
-    day = mix(day, hue(acc, 0.88, 0.0), clamp(pool * 0.8, 0.0, 0.5));
-    day = mix(day, hue(acc, 0.92, 0.0), clamp(sheen * 3.0, 0.0, 0.12));
+    vec3 day = mix(hue(acc, 0.80, 0.0), hue(acc, 0.90, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
+    day = mix(day, hue(acc, 0.94, 0.0), clamp(pool * 1.5, 0.0, 0.4));
+    day = mix(day, hue(acc, mix(0.62, 0.30, clamp(body * 0.7, 0.0, 1.0)), 0.0), clamp(ink * 0.85, 0.0, 0.85));
+    day = mix(day, hue(acc, 0.22, 0.0), clamp(vein * 0.5, 0.0, 0.5));
     day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 0.5);   // daylight is softer: half the colour
 
     vec3 col = mix(day, night, clamp(dark, 0.0, 1.0));

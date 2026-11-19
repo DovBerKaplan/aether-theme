@@ -1,9 +1,9 @@
 #version 440
-// Aether Mist: slow banks of fog drifting over a deep field - drawn analytically at the screen's own
-// resolution (no image anywhere), so the fog stays seamless at any size. Five banks on different
-// depths, each a breathing centre line with a soft falloff and a density that patches and clears
-// along it. The accent and the mode come in as uniforms; `time` drifts the banks, a few pixels a
-// second, sub-pixel a tick.
+// Aether Mist: fog lying over low ground, lit from behind - drawn analytically at the screen's own
+// resolution (no image anywhere). Three banks, far to near, of warped noise stretched along the
+// ground; a low light right of the mark glows through them, so the fog brightens as it nears the
+// light, and where a bank thins the light catches a fine wisp. The accent and the mode come in as
+// uniforms; `time` drifts the banks at their own paces, a few pixels a second.
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
 layout(std140, binding = 0) uniform buf {
@@ -27,61 +27,85 @@ vec3 hue(vec3 c, float l, float vivid) {
     return clamp(vec3(l) + sat * (l < 0.5 ? l : 1.0 - l), 0.0, 1.0);
 }
 
-// Per bank: centre height, half-thickness, pace, brightness - the high veil, the broad middle bank,
-// the low bank, the ground mist, and a thin counter-bank drifting against them.
-const vec4 B[5] = vec4[](
-    vec4(0.22, 0.16, 1.00, 0.34),
-    vec4(0.42, 0.22, 0.60, 0.50),
-    vec4(0.61, 0.17, 0.80, 0.40),
-    vec4(0.84, 0.26, 0.45, 0.55),
-    vec4(0.32, 0.09, 1.20, 0.22)
+// Gradient noise (no lattice blocks) and five rotated octaves of it.
+vec2 grad(vec2 i) {   // a trig-free hash (Hoskins) to a direction in the unit square
+    vec3 h = fract(vec3(i.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    h += dot(h, h.yzx + 33.33);
+    return fract((h.xx + h.yz) * h.zy) * 2.0 - 1.0;
+}
+float gnoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    return mix(mix(dot(grad(i), f), dot(grad(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0)), u.x),
+               mix(dot(grad(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0)), dot(grad(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0)), u.x), u.y);
+}
+const mat2 ROT = mat2(0.80, 0.60, -0.60, 0.80);
+float fbm(vec2 p) {
+    float s = 0.0, a = 0.5;
+    for (int i = 0; i < 5; ++i) {
+        s += a * gnoise(p);
+        p = ROT * p * 2.03 + vec2(1.7, 9.2);
+        a *= 0.5;
+    }
+    return s;
+}
+
+// Per layer, far to near: scale (the far fog finer), the height its bank lies at, how deep the bank
+// is, how fast it drifts.
+const vec4 L[3] = vec4[](
+    vec4(2.6, 0.47, 0.11, 0.016),
+    vec4(1.6, 0.63, 0.13, 0.026),
+    vec4(0.9, 0.82, 0.16, 0.040)
 );
 
 void main() {
     vec2 uv = qt_TexCoord0;
     vec3 acc = hue(accent.rgb, clamp(0.5 * (max(accent.r, max(accent.g, accent.b)) + min(accent.r, min(accent.g, accent.b))), 0.45, 0.6), 0.8);
+    vec2 p = uv * vec2(aspect, 1.0);
 
-    // Each bank: a centre line that rolls like a slow wave and rises and sinks as a whole, a
-    // Gaussian falloff around it, and a density that patches and clears as two slow waves scroll
-    // against each other along it. Nothing moves faster than a few pixels a second.
-    float fog = 0.0, fine = 0.0;
-    for (int k = 0; k < 5; ++k) {
-        vec4 b = B[k];
+    // The light: low behind the fog, right of the mark - a tight core and a wide bloom.
+    vec2 sun = vec2(0.66 * aspect, 0.60);
+    float dsun = length((p - sun) * vec2(0.7, 1.0));
+    float core = exp(-dsun / 0.07), bloom = exp(-dsun / 0.45);
+
+    vec3 night = mix(hue(acc, 0.015, 0.0), hue(acc, 0.035, 0.0), smoothstep(0.0, 0.7, uv.y));
+    night += vec3(1.0) - exp(-(acc * (bloom * 0.35) + mix(acc, vec3(1.0), 0.5) * core * 0.45) * 1.4);
+    vec3 day = mix(hue(acc, 0.60, 0.0), hue(acc, 0.76, 0.0), smoothstep(0.0, 0.7, uv.y));
+    day = mix(day, hue(acc, 0.96, 0.0), clamp(bloom * 0.5 + core * 0.6, 0.0, 0.85));
+
+    // The fog, far to near: each layer a bank of warped noise stretched along the ground, drifting
+    // at its own pace (nearer is faster - the parallax), lit by how close it lies to the light.
+    // Where a layer thins, its rim catches a little more of the light.
+    float wisps = 0.0;
+    for (int k = 0; k < 3; ++k) {
+        vec4 l = L[k];
         float f = float(k);
-        float y = b.x
-                + 0.045 * b.z * sin(uv.x * (1.7 + 0.3 * f) + time * 0.050 + f * 2.1)
-                + 0.028 * b.z * sin(uv.x * (3.1 - 0.2 * f) - time * 0.037 + f * 1.3 + 1.0)
-                + 0.016 * sin(time * 0.11 + f * 2.6);
-        float band = exp(-pow((uv.y - y) / b.y, 2.0));
-        float patchy = 0.55 + 0.45 * sin(uv.x * (2.3 + 0.7 * f) + time * 0.055 * b.z + f * 1.9)
-                               * cos(uv.x * 0.9 - time * 0.021 * b.z + f * 0.7);
-        float g = band * patchy;
-        fog += b.w * g;
-        if (k == 4) fine = g;
+        vec2 b = vec2(p.x * l.x * 0.55, p.y * l.x * 1.6);
+        b.x += time * l.w + f * 17.3;
+        vec2 w = vec2(fbm(b * 0.7 + vec2(0.0, time * 0.012) + f * 3.1), fbm(b * 0.7 + vec2(5.2, -time * 0.010) + f * 1.7));
+        float dens = fbm(b + 1.6 * w);
+        float bank = exp(-pow((uv.y - l.y - 0.06 * w.y) / l.z, 2.0));
+        float fog = smoothstep(-0.12, 0.38, 1.4 * dens + 0.30 * bank - 0.12) * bank;
+        float lit = 0.15 + 1.1 * bloom + 1.6 * core;
+        float edge = exp(-pow((1.4 * dens + 0.30 * bank - 0.02) / 0.05, 2.0)) * bank;
+
+        vec3 fogN = hue(acc, 0.07 + 0.03 * f, 0.0) + mix(acc, vec3(1.0), 0.25 + 0.10 * f) * lit * (0.22 + 0.08 * f);
+        night = mix(night, fogN, clamp(fog * (0.65 + 0.15 * f), 0.0, 0.92));
+        wisps += edge * lit * (0.3 + 0.25 * f);
+
+        vec3 fogD = mix(hue(acc, 0.86 - 0.02 * f, 0.0), vec3(1.0), clamp(lit * 0.45, 0.0, 0.85));
+        day = mix(day, fogD, clamp(fog * (0.70 + 0.15 * f), 0.0, 0.92));
     }
-    fog = clamp(fog, 0.0, 1.2);
-
     // Everything breathes together, about the span of a breath, a few percent at most.
-    fog *= 1.0 + 0.05 * sin(time * 0.40);
+    wisps *= 1.0 + 0.06 * sin(time * 0.42);
+    night += mix(acc, vec3(1.0), 0.4) * wisps * 0.10;
+    day = mix(day, hue(acc, 0.52, 0.0), clamp(wisps * 0.04, 0.0, 0.15));
 
-    // A broad sheen crosses the whole field once a minute: light through the fog.
-    float sheen = 0.06 * pow(max(sin(dot(uv, vec2(0.8, 0.4)) * 1.6 - time * 0.08 + 1.3), 0.0), 2.5);
+    // The centre lifts a touch, under the mark.
+    float pool = 0.08 * exp(-length(p - vec2(0.5 * aspect, 0.5)) / 0.34);
+    night += acc * pool * 0.4;
 
-    // The centre is a touch lighter, under the mark.
-    float r = length(uv * vec2(aspect, 1.0) - vec2(0.5 * aspect, 0.5));
-    float pool = 0.14 * exp(-r / 0.38);
-
-    // Both fields are drawn and mixed by `dark`, so a mode switch can fade from one to the other.
-    vec3 night = mix(hue(acc, 0.03, 0.0), hue(acc, 0.06, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
-    vec3 light = acc * (fog * 0.14 + pool * 0.30 + sheen)
-               + mix(acc, vec3(1.0), 0.30) * (fog * 0.12 + fine * 0.06);
-    night += vec3(1.0) - exp(-light * 1.4);
     night *= 1.0 - 0.30 * pow(length(uv - vec2(0.5, 0.5)) * 1.25, 2.4);   // vignette
-
-    vec3 day = mix(hue(acc, 0.66, 0.0), hue(acc, 0.80, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
-    day = mix(day, hue(acc, 0.82, 0.0), clamp(fog * 0.8, 0.0, 0.7));
-    day = mix(day, hue(acc, 0.90, 0.0), clamp(pool * 0.8, 0.0, 0.5));
-    day = mix(day, hue(acc, 0.92, 0.0), clamp(sheen * 3.0, 0.0, 0.12));
     day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 0.5);   // daylight is softer: half the colour
 
     vec3 col = mix(day, night, clamp(dark, 0.0, 1.0));
