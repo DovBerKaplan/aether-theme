@@ -39,7 +39,7 @@ def lnf(v: dict) -> None:
         f"[plasmarc][Theme]\nname=AetherGlass\n\n"
         f"[Wallpaper]\nImage=AetherOS\n\n"
         f"[kcminputrc][Mouse]\ncursorTheme={v['cursor']}\n\n"
-        f"[kwinrc][org.kde.kdecoration2]\nlibrary=org.kde.breeze\ntheme=Breeze\n\n"
+        f"[kwinrc][org.kde.kdecoration2]\nlibrary=org.kde.kwin.aurorae\ntheme=__aurorae__svg__{v['scheme']}\n\n"
         f"[KSplash]\nTheme=org.kde.Breeze\n"
     )
 

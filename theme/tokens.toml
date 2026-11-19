@@ -235,7 +235,8 @@ wm-inactive = "paper-50"
 bg = "ink-950"
 fg = "fog-100"
 fg-intense = "paper-0"
-opacity = 0.94
+opacity = 0.75   # glass: the desktop shows through, blurred
+mark = 0.07       # the faded Aether mark in the middle of the terminal
 ansi = ["ink-800", "#ff6b81", "green-200", "amber-200", "#4fa8ff", "#a98bff", "cyan-400", "#c8ccd6"]
 bright = ["#3a494b", "#ff8fa0", "#a3ffd9", "#ffe3a8", "#7cc0ff", "violet-200", "#6ff6ff", "paper-0"]
 
@@ -243,7 +244,8 @@ bright = ["#3a494b", "#ff8fa0", "#a3ffd9", "#ffe3a8", "#7cc0ff", "violet-200", "
 bg = "paper-50"
 fg = "graphite-950"
 fg-intense = "#000000"
-opacity = 0.96
+opacity = 0.84
+mark = 0.06
 ansi = ["graphite-800", "red-700", "green-700", "amber-700", "#2a5d9f", "#6a4bb3", "#00696f", "#c5c6ca"]
 bright = ["graphite-500", "#d63b3b", "#2a9d63", "#a87700", "#3b78c4", "#8566d1", "#00838a", "#e1e3e4"]
 
@@ -264,14 +266,16 @@ base = "WhiteSurDark"
 "#696969" = "#3a494b"
 "#dfdfdf" = "fog-100"
 "#9d9d9d" = "#849495"
+"#242424" = "ink-750"   # the window: the island's body colour (glass via apps.chrome-alpha)
+"#383838" = "ink-750"   # the menubar melts into it
 
 [kvantum.AetherGlass.colors]
-"window.color" = "ink-900"
-"inactive.window.color" = "ink-900"
-"base.color" = "ink-950"
-"inactive.base.color" = "ink-950"
-"alt.base.color" = "ink-800"
-"inactive.alt.base.color" = "ink-800"
+"window.color" = "ink-750"
+"inactive.window.color" = "ink-750"
+"base.color" = "#0b0e14f0"           # ink-950 at apps.view-alpha: content stays crisp
+"inactive.base.color" = "#0b0e14f0"
+"alt.base.color" = "#191c22f0"       # ink-800, same alpha
+"inactive.alt.base.color" = "#191c22f0"
 "button.color" = "#272a31"
 "light.color" = "#363940"
 "mid.light.color" = "#32353c"
@@ -287,7 +291,7 @@ base = "WhiteSurDark"
 "disabled.text.color" = "#849495"
 "tooltip.base.color" = "ink-700"
 "tooltip.text.color" = "fog-100"
-"highlight.text.color" = "#e0fdff"
+"highlight.text.color" = "fog-50"
 "inactive.highlight.text.color" = "fog-100"
 "link.color" = "cyan-500"
 "link.visited.color" = "violet-200"
@@ -307,10 +311,10 @@ base = "WhiteSur"
 [kvantum.AetherSerenity.colors]
 "window.color" = "paper-50"
 "inactive.window.color" = "paper-50"
-"base.color" = "paper-0"
-"inactive.base.color" = "paper-0"
-"alt.base.color" = "paper-100"
-"inactive.alt.base.color" = "paper-100"
+"base.color" = "#fffffff0"           # paper-0 at apps.view-alpha
+"inactive.base.color" = "#fffffff0"
+"alt.base.color" = "#f3f4f5f0"       # paper-100, same alpha
+"inactive.alt.base.color" = "#f3f4f5f0"
 "button.color" = "paper-0"
 "light.color" = "paper-0"
 "mid.light.color" = "#edeeef"
@@ -332,11 +336,25 @@ base = "WhiteSur"
 "link.visited.color" = "graphite-500"
 "progress.indicator.text.color" = "paper-0"
 
-[kvantum.hacks]
+# App windows (Kvantum, the Aurorae titlebar, Konsole): hybrid glass - the frame (titlebar,
+# toolbar, sidebar, menus) is frosted like the island, the content (file lists, terminal, text)
+# near-opaque so it stays crisp. The accent is the island's chosen colour, filled in by
+# system/aether-accent-sync; the generated themes carry the cyan below as its placeholder.
+[apps]
+chrome-alpha = 0.82   # the dock's dark glass (dock-alpha-dark): denser than the island, apps sit over busy content
+view-alpha   = 0.94
+radius       = 12     # window corners (Aurorae)
+button-size  = 16     # titlebar buttons (Aurorae): round, on the left in macOS order
+
+# Kvantum [%General]: translucency and blur (reduce_window_opacity comes from apps.chrome-alpha)
+[kvantum.general]
 composite = "true"
 translucent_windows = "true"
 blurring = "true"
 popup_blurring = "true"
-reduce_window_opacity = "6"
 reduce_menu_opacity = "4"
 menu_blur_radius = "12"
+
+[kvantum.hacks]
+transparent_dolphin_view = "false"   # Dolphin's file list is content: the near-opaque view colour
+blur_translucent = "true"

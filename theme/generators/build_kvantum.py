@@ -13,8 +13,12 @@ from tokens import load
 SRC = Path(__file__).resolve().parents[1] / "vendor/whitesur-kvantum"
 OUT = Path(__file__).resolve().parents[1] / "generated/kvantum"
 
-_K = load()["kvantum"]
+T = load()
+_K = T["kvantum"]
 HACKS = _K.pop("hacks")
+GENERAL = _K.pop("general")
+# The frame's glass: Kvantum takes "how much to fade the window", the apps tokens "how opaque".
+GENERAL["reduce_window_opacity"] = str(round((1 - T["apps"]["chrome-alpha"]) * 100))
 THEMES = _K
 
 
@@ -39,6 +43,7 @@ def main() -> None:
             svg = re.sub(re.escape(old), new, svg, flags=re.I)
         (dest / f"{name}.svg").write_text(svg)
         cfg = (SRC / f"{t['base']}.kvconfig").read_text()
+        cfg = set_keys(cfg, "%General", GENERAL)
         cfg = set_keys(cfg, "GeneralColors", t["colors"])
         cfg = set_keys(cfg, "Hacks", HACKS)
         (dest / f"{name}.kvconfig").write_text(cfg)
