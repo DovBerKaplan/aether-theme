@@ -55,11 +55,11 @@ if [[ -d "$HOME/.local/share/aurorae/themes/$scheme" ]] && [[ "$(kreadconfig6 --
   qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
   echo "titlebar -> $scheme"
 fi
-# The desktop wallpaper (org.aether.ribbons) has a dark and a light field: switch it on every desktop that wears it.
+# Every aether wallpaper carries a dark and a light field: switch it on every desktop that wears one.
 [[ $scheme == AetherGlass ]] && mode=dark || mode=light
 n="$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "var n = 0; desktops().forEach(function (d) {
-  if (d.wallpaperPlugin != 'org.aether.ribbons') return;
-  d.currentConfigGroup = ['Wallpaper', 'org.aether.ribbons', 'General'];
+  if (d.wallpaperPlugin.indexOf('org.aether.') != 0) return;
+  d.currentConfigGroup = ['Wallpaper', d.wallpaperPlugin, 'General'];
   if (d.readConfig('Mode') != '$mode') { d.writeConfig('Mode', '$mode'); n++; } }); print(n);" 2>/dev/null || true)"
 [[ -n $n && $n != 0 ]] && echo "wallpaper -> $mode"
 profile="$HOME/.local/share/konsole/Aether.profile"
