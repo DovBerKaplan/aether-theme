@@ -21,6 +21,8 @@ The generators are deterministic: running them twice gives the same bytes (gzip 
 
 **Frames and blur:** KSvg builds panel and popup backgrounds from 9-slice SVGs. `build_frames.py` draws them with Bézier curves only (KSvg sizes arcs wrongly), uses filled shapes instead of strokes, and gives every frame zero insets so blur covers the whole shape.
 
+**The wallpapers** (`plasmoids/org.aether.*`, see docs/WALLPAPERS.md): five shader-drawn fields on one design line — accent-derived palette, a dark and a light field, a 100 ms timer as the only clock, `layer.enabled` caching, constant loop trip counts. `install.sh` compiles each shader with `qsb6` and sets the saved style on every desktop; `system/aether-accent-sync` and `system/aether-mode-sync` push accent and mode into whichever `org.aether.*` wallpaper is active. The island's Wallpaper tile previews all five through their own shaders and switches live over plasmashell's scripting API.
+
 **The dock** (`components/dock/`, service `aether-dock`): two layer-shell surfaces (bottom, left), hidden at rest and revealed by touching their edge, in the island's material. Tasks come from `org.kde.taskmanager` (KWin grants the window list through `org.aether.dock.desktop`); the row is ordered in QML (pinned, hairline, free windows). Pins: `~/.config/aetherdockrc`. No Plasma panel exists; `system/layout.js` only clears them.
 
 ## Island (`components/island`)

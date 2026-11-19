@@ -57,10 +57,14 @@ install -m 755 "$ROOT/system/vibe/aether-vibe" "$HOME/.local/bin/aether-vibe"
 install -m 755 "$ROOT/system/agents/aether-agent-run" "$HOME/.local/bin/aether-agent-run"
 mkdir -p "$D/plasma/plasmoids" "$D/icons/hicolor/scalable/apps"
 for p in org.aether.appname; do rm -rf "$D/plasma/plasmoids/$p"; cp -r "$ROOT/plasmoids/$p" "$D/plasma/plasmoids/"; done
-# The desktop wallpaper is a wallpaper plugin drawn at the screen's size; its shader is compiled here.
-W="$D/plasma/wallpapers/org.aether.ribbons"
-rm -rf "$W"; mkdir -p "$D/plasma/wallpapers"; cp -r "$ROOT/plasmoids/org.aether.ribbons" "$W"
-qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12 -o "$W/contents/shaders/ribbons.frag.qsb" "$W/contents/shaders/ribbons.frag"
+# The aether wallpapers are wallpaper plugins drawn at the screen's size; each shader is compiled here.
+mkdir -p "$D/plasma/wallpapers"
+for p in org.aether.ribbons org.aether.mist org.aether.aurora org.aether.ink org.aether.dune; do
+  W="$D/plasma/wallpapers/$p"
+  rm -rf "$W"; cp -r "$ROOT/plasmoids/$p" "$W"
+  s="${p#org.aether.}"
+  qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12 -o "$W/contents/shaders/$s.frag.qsb" "$W/contents/shaders/$s.frag"
+done
 cp "$ROOT"/theme/icons/*.svg "$D/icons/hicolor/scalable/apps/"
 # Aether Sink: our own open/close animation, a scripted KWin effect.
 mkdir -p "$D/kwin/effects"
@@ -160,9 +164,11 @@ python3 "$ROOT/system/shortcuts/windows-shortcuts.py" 2>&1 | grep -v 'ERROR:dbus
 if [[ $LAYOUT == 1 ]]; then
   echo "== panels + widgets"
   qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$(cat "$ROOT/system/layout.js")"
-  # Wallpaper on every desktop
+  # Wallpaper on every desktop: the style the island saved, else the ribbons
+  wp="$(kreadconfig6 --file aetherislandrc --group Wallpaper --key Style 2>/dev/null)"
+  [[ $wp == org.aether.* ]] || wp=org.aether.ribbons
   qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
-    "desktops().forEach(function(d){d.wallpaperPlugin='org.aether.ribbons';});"
+    "desktops().forEach(function(d){d.wallpaperPlugin='$wp';});"
   "$HOME/.local/bin/aether-accent-sync" >/dev/null 2>&1 || true   # hand the wallpaper the island's accent and the mode right away
   "$HOME/.local/bin/aether-mode-sync" >/dev/null 2>&1 || true
 fi

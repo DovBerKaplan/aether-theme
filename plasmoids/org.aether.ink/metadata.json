@@ -1,0 +1,13 @@
+{
+    "KPackageStructure": "Plasma/Wallpaper",
+    "KPlugin": {
+        "Authors": [{ "Name": "DovBerKaplan" }],
+        "Description": "Ink billowing in still water around a breathing mark - drawn at the screen's own resolution in the island's accent",
+        "Icon": "preferences-desktop-wallpaper",
+        "Id": "org.aether.ink",
+        "License": "CC-BY-SA-4.0",
+        "Name": "Aether Ink",
+        "Version": "1.0"
+    },
+    "X-KDE-ParentApp": "org.kde.plasmashell"
+}
