@@ -321,9 +321,17 @@ private:
         QSettings kde(m_kdeglobals, QSettings::IniFormat);
         // The key sits at the top level: QSettings maps an INI [General] section to the root.
         const QString scheme = kde.value(QStringLiteral("ColorScheme")).toString();
-        // AetherSerenity is our light scheme; everything else counts as dark.
-        const bool dark = !scheme.contains(QLatin1String("Serenity"), Qt::CaseInsensitive)
+        // AetherSerenity is our light scheme. A look-and-feel apply can leave the name out: then
+        // judge by the window colour the scheme installed (r,g,b or r,g,b,a), as the dock does -
+        // an unnamed scheme is not necessarily dark.
+        bool dark = !scheme.contains(QLatin1String("Serenity"), Qt::CaseInsensitive)
             && !scheme.contains(QLatin1String("Light"), Qt::CaseInsensitive);
+        if (scheme.isEmpty()) {
+            const QStringList c = kde.value(QStringLiteral("Colors:Window/BackgroundNormal")).toStringList();
+            if (c.size() >= 3) {
+                dark = (0.299 * c[0].toInt() + 0.587 * c[1].toInt() + 0.114 * c[2].toInt()) < 128;
+            }
+        }
         if (dark != m_dark) {
             m_dark = dark;
             Q_EMIT darkChanged();

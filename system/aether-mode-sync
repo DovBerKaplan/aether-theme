@@ -7,18 +7,55 @@ set -euo pipefail
 # active, so nothing is written and no app is notified. The live kdeglobals always carries the
 # explicit name after a real apply - keep the defaults layer clean so re-applies always land.
 sed -i '/^ColorScheme=/d' "$HOME/.config/kdedefaults/kdeglobals" 2>/dev/null || true
-scheme="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme)"
-# The name is not always written (a LnF apply can leave it out): then judge by the window colour,
-# as the island does, and only if the look-and-feel is one of ours.
-if [[ -z $scheme ]] && [[ "$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage)" == org.aether.* ]]; then
-  IFS=, read -r r g b <<< "$(kreadconfig6 --file kdeglobals --group Colors:Window --key BackgroundNormal)"
-  (( (${r:-0} + ${g:-0} + ${b:-0}) / 3 < 128 )) && scheme=AetherGlass || scheme=AetherSerenity
-fi
+# A switch writes kdeglobals several times over a second or two (the island's colour apply, the
+# look-and-feel apply, its keys): a sync that reads half-way follows the mode being left, and writes
+# that land while it runs do not start it again - the icons, titlebar and Kvantum stayed one tap
+# behind. So wait for the file to rest first, and at the end run again if the mode moved meanwhile.
+globals="$HOME/.config/kdeglobals"
+for _ in $(seq 16); do
+  before="$(stat -c %y "$globals" 2>/dev/null || true)"; sleep 0.5
+  [[ "$(stat -c %y "$globals" 2>/dev/null || true)" == "$before" ]] && break
+done
+judge() {
+  local s r g b _
+  s="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme)"
+  # The name is not always written (a LnF apply can leave it out): then judge by the window colour,
+  # as the island does, and only if the look-and-feel is one of ours.
+  if [[ -z $s ]] && [[ "$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage)" == org.aether.* ]]; then
+    IFS=, read -r r g b _ <<< "$(kreadconfig6 --file kdeglobals --group Colors:Window --key BackgroundNormal)"   # r,g,b or r,g,b,a
+    (( (${r:-0} + ${g:-0} + ${b:-0}) / 3 < 128 )) && s=AetherGlass || s=AetherSerenity
+  fi
+  echo "$s"
+}
+scheme="$(judge)"
 case "$scheme" in
   AetherGlass) kv=AetherGlass ;;
   AetherSerenity) kv=AetherSerenity ;;
   *) exit 0 ;;  # not one of ours: leave the user's choice alone
 esac
+# ...and put the name back. With no ColorScheme anywhere (the LnF apply leaves it out, and the
+# kdedefaults copy is cleared above), KDE's idea of the current scheme falls back to BreezeLight -
+# and `plasma-apply-colorscheme --accent-color`, which the island runs on every start and accent
+# change, recolours the *current* scheme whatever name it is given: the desktop turned Breeze Light
+# a moment after a Dark tap. Written in place, as widgetStyle below, and verified.
+if ! grep -q "^ColorScheme=$scheme\$" "$HOME/.config/kdeglobals" 2>/dev/null; then
+  for i in 1 2 3; do
+    python3 - "$HOME/.config/kdeglobals" "$scheme" <<'PYEOF'
+import sys
+p, name = sys.argv[1], sys.argv[2]
+lines = [l for l in open(p).readlines() if not l.startswith("ColorScheme=")]
+for i, l in enumerate(lines):
+    if l.strip() == "[General]":
+        lines.insert(i + 1, "ColorScheme=%s\n" % name)
+        break
+else:
+    lines.insert(0, "[General]\nColorScheme=%s\n\n" % name)
+open(p, "w").writelines(lines)
+PYEOF
+    sleep 1
+    grep -q "^ColorScheme=$scheme\$" "$HOME/.config/kdeglobals" 2>/dev/null && { echo "scheme name -> $scheme"; break; }
+  done
+fi
 # GTK, libadwaita, Firefox, Chromium and Electron do not read KDE colors: they follow the freedesktop
 # color-scheme (gsettings) and the GTK settings. Move them together with the KDE scheme. Breeze-GTK
 # draws from the colors.css KDE writes from the active scheme, so GTK apps wear our palette and the
@@ -121,4 +158,8 @@ if [[ -d $fk && -f $profile ]]; then
   mkdir -p "$fk/data/konsole"
   cp "$profile" "$HOME"/.local/share/konsole/Aether*.colorscheme "$fk/data/konsole/"
   kwriteconfig6 --file "$fk/config/konsolerc" --group "Desktop Entry" --key DefaultProfile Aether.profile
+fi
+# The mode moved while this ran (the writes behind it did not start a new run): follow it.
+if [[ "$(judge)" != "$scheme" ]] && (( ${AETHER_MODE_SYNC_PASS:-0} < 3 )); then
+  AETHER_MODE_SYNC_PASS=$(( ${AETHER_MODE_SYNC_PASS:-0} + 1 )) exec "$0"
 fi
