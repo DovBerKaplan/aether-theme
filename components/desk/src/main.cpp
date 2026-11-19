@@ -32,7 +32,6 @@
 #include <QStandardPaths>
 #include <QTimer>
 
-#include <BackdropSampler.h>
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
 
@@ -98,7 +97,6 @@ class DeskController : public QObject
     Q_PROPERTY(QVariantMap grid READ grid NOTIFY itemsChanged)
     Q_PROPERTY(bool clean READ clean NOTIFY cleanChanged)
     Q_PROPERTY(QString language READ language CONSTANT)   // the island's interface language (aetherislandrc)
-    Q_PROPERTY(bool backdropLight READ backdropLight NOTIFY backdropLightChanged)   // the wallpaper behind the panel is bright
 
 public:
     explicit DeskController(QQuickView *view)
@@ -134,12 +132,6 @@ public:
         m_retry.setInterval(2000);
         connect(&m_retry, &QTimer::timeout, this, [this] { applyFilter(); });
 
-        // The panel's material reads the wallpaper at the moment it matters: OpenArrange samples
-        // the clicked point - the user just right-clicked the desktop, so that spot shows the
-        // wallpaper - and the glass dresses light (milk) or dark (ink) for it. A fixed strip
-        // would read whatever window happens to sit there.
-        connect(&m_sampler, &BackdropSampler::lightChanged, this, &DeskController::backdropLightChanged);
-
         readItems();
         applyFilter();   // bring Folder View in line with the remembered state (plasmashell may still be starting)
     }
@@ -152,9 +144,6 @@ public:
         return QSettings(QDir::homePath() + QStringLiteral("/.config/aetherislandrc"), QSettings::IniFormat)
             .value(QStringLiteral("Interface/Language"), QStringLiteral("en")).toString();
     }
-    // The island's recipe: measure the wallpaper, dress the glass for it. No valid sample
-    // (grant missing) reads as dark - the ink glass.
-    bool backdropLight() const { return m_sampler.valid() && m_sampler.light(); }
 
     // Clean hides Folder View's icons, not clean shows them; remembered across logins.
     Q_INVOKABLE void setClean(bool clean)
@@ -238,25 +227,13 @@ public Q_SLOTS:
     void Toggle() { Q_EMIT toggleRequested(); }
     // From AetherBridge (plasmashell's Folder View): the empty-desktop right click, in
     // Folder View's coordinates - the desk's surface spans the same screen.
-    void OpenArrange(int x, int y)
-    {
-        QScreen *sc = m_view->screen();
-        if (sc) {
-            const QRect g = sc->geometry();
-            // a 240x10 strip centred on the click, clamped inside the screen: the point the
-            // user right-clicked is guaranteed to show the wallpaper
-            m_sampler.sample(QRect(g.x() + qBound(0, x - 120, g.width() - 240),
-                                   g.y() + qBound(0, y - 5, g.height() - 10), 240, 10));
-        }
-        Q_EMIT arrangeRequested(x, y);
-    }
+    void OpenArrange(int x, int y) { Q_EMIT arrangeRequested(x, y); }
 
 Q_SIGNALS:
     void itemsChanged();
     void cleanChanged();
     void toggleRequested();
     void arrangeRequested(int x, int y);
-    void backdropLightChanged();
 
 private:
     static QString configPath()
@@ -462,7 +439,6 @@ private:
     QQuickView *m_view;
     QString m_desktopDir, m_appletsRc;
     QFileSystemWatcher m_watcher;
-    BackdropSampler m_sampler;
     QTimer m_debounce, m_retry;
     int m_attempts = 0;
     QVariantList m_items;
