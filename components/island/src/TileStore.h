@@ -8,7 +8,11 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusReply>
+#include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
+#include <QHash>
+#include <QRegularExpression>
 #include <QFile>
 #include <QObject>
 #include <QProcess>
@@ -44,6 +48,10 @@ class TileStore : public QObject
     Q_PROPERTY(QString wallpaperStyle READ wallpaperStyle NOTIFY wallpaperChanged)   // the active aether wallpaper ([Wallpaper] Style)
     Q_PROPERTY(bool wallpaperAnimate READ wallpaperAnimate NOTIFY wallpaperChanged)  // its Animate key ([Wallpaper] Animate)
     Q_PROPERTY(QVariantList wallpapers READ wallpapers CONSTANT)   // the family: id + English title for the picker
+    Q_PROPERTY(QString wallpaperMark READ wallpaperMark NOTIFY wallpaperChanged)   // what the centre wears ([Wallpaper] Mark; see Mark.qml)
+    Q_PROPERTY(QVariantList markLogos READ markLogos CONSTANT)      // every logo the wallpapers know: {slug, path} (logos.js)
+    Q_PROPERTY(QString distroLogo READ distroLogo CONSTANT)         // this distribution's logo path, "" if none is known
+    Q_PROPERTY(bool canImportMark READ canImportMark CONSTANT)      // kdialog is there to choose an image with
 
 public:
     explicit TileStore(QObject *parent = nullptr)
@@ -89,6 +97,8 @@ public:
             m_wallpaper = QStringLiteral("org.aether.ribbons");
         }
         m_wallpaperAnimate = m_settings.value(QStringLiteral("Wallpaper/Animate"), true).toBool();
+        m_wallpaperMark = m_settings.value(QStringLiteral("Wallpaper/Mark")).toString();
+        loadLogos();
         if (m_settings.value(QStringLiteral("Tiles/SizesSet")).toBool()) {
             for (const QString &e : m_settings.value(QStringLiteral("Tiles/Sizes")).toStringList()) {
                 if (validSize(e) && !m_sizes.contains(e)) {
@@ -214,8 +224,11 @@ public:
         const QString js = QStringLiteral("desktops().forEach(function(d){d.wallpaperPlugin='%1';});").arg(id);
         QProcess::startDetached(QStringLiteral("qdbus6"), {QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
                                                            QStringLiteral("org.kde.PlasmaShell.evaluateScript"), js});
-        // A moment later, once the switch has landed, the oneshots push accent and mode into it.
+        // A moment later, once the switch has landed, the oneshots push accent and mode into it, and
+        // the new field takes the mark and the motion the old one wore.
         QTimer::singleShot(800, this, [this] {
+            wallpaperConfig(QStringLiteral("Mark"), m_wallpaperMark);
+            wallpaperConfig(QStringLiteral("Animate"), m_wallpaperAnimate ? QStringLiteral("true") : QStringLiteral("false"));
             QProcess::startDetached(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("start"),
                                                                   QStringLiteral("aether-accent-sync.service"), QStringLiteral("aether-mode-sync.service")});
         });
@@ -231,6 +244,54 @@ public:
         m_settings.sync();
         wallpaperConfig(QStringLiteral("Animate"), on ? QStringLiteral("true") : QStringLiteral("false"));
         Q_EMIT wallpaperChanged();
+    }
+    // The mark at the wallpaper's centre: "" (the distribution's logo), "none", "aether", "logo:<slug>"
+    // or "file:<path>" - written into whichever aether wallpaper the desktops wear.
+    QString wallpaperMark() const { return m_wallpaperMark; }
+    QVariantList markLogos() const { return m_markLogos; }
+    QString distroLogo() const { return m_distroLogo; }
+    Q_INVOKABLE void setWallpaperMark(const QString &spec)
+    {
+        const bool ok = spec.isEmpty() || spec == QLatin1String("none") || spec == QLatin1String("aether")
+            || (spec.startsWith(QLatin1String("logo:")) && m_logoPaths.contains(spec.mid(5)))
+            || (spec.startsWith(QLatin1String("file:")) && QFileInfo::exists(spec.mid(5)));
+        if (!ok || spec == m_wallpaperMark) {
+            return;
+        }
+        m_wallpaperMark = spec;
+        m_settings.setValue(QStringLiteral("Wallpaper/Mark"), spec);
+        m_settings.sync();
+        wallpaperConfig(QStringLiteral("Mark"), spec);
+        Q_EMIT wallpaperChanged();
+    }
+    bool canImportMark() const { return !QStandardPaths::findExecutable(QStringLiteral("kdialog")).isEmpty(); }
+    // The system file chooser (kdialog) for an image of one's own. The pick is copied under
+    // ~/.local/share/aether/marks - the wallpaper keeps it if the original moves - under a fresh name,
+    // so the wallpaper's image cache never serves the previous one. Nothing happens if it is cancelled.
+    Q_INVOKABLE void importWallpaperMark()
+    {
+        auto *p = new QProcess(this);
+        connect(p, &QProcess::finished, this, [this, p] {
+            const QString src = QString::fromUtf8(p->readAllStandardOutput()).trimmed();
+            p->deleteLater();
+            if (src.isEmpty() || !QFileInfo(src).isFile()) {
+                return;
+            }
+            const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/aether/marks");
+            QDir().mkpath(dir);
+            const QString dest = QStringLiteral("%1/mark-%2.%3").arg(dir).arg(QDateTime::currentMSecsSinceEpoch()).arg(QFileInfo(src).suffix().toLower());
+            if (!QFile::copy(src, dest)) {
+                return;
+            }
+            for (const QFileInfo &old : QDir(dir).entryInfoList(QDir::Files)) {
+                if (old.absoluteFilePath() != dest) {
+                    QFile::remove(old.absoluteFilePath());
+                }
+            }
+            setWallpaperMark(QStringLiteral("file:") + dest);
+        });
+        p->start(QStringLiteral("kdialog"), {QStringLiteral("--getopenfilename"), QDir::homePath(),
+                                            QStringLiteral("*.svg *.png *.jpg *.jpeg *.webp|Images")});
     }
     QStringList order() const { return m_order; }
     QStringList sizes() const { return m_sizes; }
@@ -448,9 +509,58 @@ private:
         return {QStringLiteral("org.aether.ribbons"), QStringLiteral("org.aether.mist"), QStringLiteral("org.aether.aurora"),
                 QStringLiteral("org.aether.ink"), QStringLiteral("org.aether.dune")};
     }
-    // Write one key into whichever aether wallpaper each desktop wears; plasmashell repaints at once.
-    void wallpaperConfig(const QString &key, const QString &value)
+    // The wallpapers' logos, read from the one logos.js they all wear (the installed ribbons, else
+    // the development tree): `"slug": "path"` lines under `var paths`, `"os-release id": "slug"`
+    // under `var ids`. This distribution's logo is the first of its ID, then ID_LIKE, that has one.
+    void loadLogos()
     {
+        QString file = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("plasma/wallpapers/org.aether.ribbons/contents/ui/logos.js"));
+        if (file.isEmpty()) {
+            file = QStringLiteral(AETHER_QML_DIR "/../../../plasmoids/org.aether.ribbons/contents/ui/logos.js");
+        }
+        QFile f(file);
+        if (!f.open(QIODevice::ReadOnly)) {
+            return;
+        }
+        static const QRegularExpression entry(QStringLiteral("^\\s*\"([^\"]+)\"\\s*:\\s*\"([^\"]*)\""));
+        QHash<QString, QString> ids;
+        bool inIds = false;
+        for (const QString &line : QString::fromUtf8(f.readAll()).split(QLatin1Char('\n'))) {
+            if (line.startsWith(QLatin1String("var ids"))) {
+                inIds = true;
+            }
+            const auto m = entry.match(line);
+            if (!m.hasMatch()) {
+                continue;
+            }
+            if (inIds) {
+                ids.insert(m.captured(1), m.captured(2));
+            } else {
+                m_logoPaths.insert(m.captured(1), m.captured(2));
+                m_markLogos << QVariantMap{{QStringLiteral("slug"), m.captured(1)}, {QStringLiteral("path"), m.captured(2)}};
+            }
+        }
+        QFile osr(QStringLiteral("/etc/os-release"));
+        if (osr.open(QIODevice::ReadOnly)) {
+            QStringList list;
+            for (const QString &line : QString::fromUtf8(osr.readAll()).split(QLatin1Char('\n'))) {
+                if (line.startsWith(QLatin1String("ID=")) || line.startsWith(QLatin1String("ID_LIKE="))) {
+                    list << line.mid(line.indexOf(QLatin1Char('=')) + 1).remove(QLatin1Char('"')).split(QLatin1Char(' '), Qt::SkipEmptyParts);
+                }
+            }
+            for (const QString &id : std::as_const(list)) {
+                if (ids.contains(id.toLower())) {
+                    m_distroLogo = m_logoPaths.value(ids.value(id.toLower()));
+                    break;
+                }
+            }
+        }
+    }
+    // Write one key into whichever aether wallpaper each desktop wears; plasmashell repaints at once.
+    void wallpaperConfig(const QString &key, const QString &rawValue)
+    {
+        QString value = rawValue;   // the value rides inside a JS string: keep it one
+        value.replace(QLatin1Char('\\'), QStringLiteral("\\\\")).replace(QLatin1Char('\''), QStringLiteral("\\'"));
         const QString js = QStringLiteral("var n = 0; desktops().forEach(function (d) { if (d.wallpaperPlugin.indexOf('org.aether.') != 0) return;"
                                           " d.currentConfigGroup = ['Wallpaper', d.wallpaperPlugin, 'General'];"
                                           " if (d.readConfig('%1') != '%2') { d.writeConfig('%1', '%2'); n++; } }); print(n);")
@@ -469,6 +579,10 @@ private:
     QString m_systemAccent;                 // the accent last pushed into the color scheme, to skip identical pushes
     QString m_wallpaper;                    // the active aether wallpaper id
     bool m_wallpaperAnimate = true;
+    QString m_wallpaperMark;                // [Wallpaper] Mark
+    QHash<QString, QString> m_logoPaths;    // logos.js: slug -> SVG path
+    QVariantList m_markLogos;
+    QString m_distroLogo;
     bool m_accentCustom = false;
     int m_hue = 183;
     qreal m_light = 0.5, m_sat = 1.0;

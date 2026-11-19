@@ -12,6 +12,16 @@
     <entry name="Mode" type="String">
       <default>auto</default>
     </entry>
+    <!-- The os-release ID and ID_LIKE ("neon ubuntu debian"), written by aether-accent-sync: the centre
+         shows that distribution's logo, or the Aether mark when none is known. -->
+    <entry name="Distro" type="String">
+      <default></default>
+    </entry>
+    <!-- What the centre wears (Mark.qml), written by the island's wallpaper panel: empty for the
+         distribution's logo, "none", "aether", "logo:<slug>" (logos.js) or "file:<path>". -->
+    <entry name="Mark" type="String">
+      <default></default>
+    </entry>
     <!-- The dunes live: rolling a few pixels a second, a gentle breath; off holds the picture still. -->
     <entry name="Animate" type="Bool">
       <default>true</default>

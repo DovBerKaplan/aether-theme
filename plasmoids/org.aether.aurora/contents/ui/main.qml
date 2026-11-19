@@ -1,8 +1,7 @@
 // Aether Aurora: the desktop wallpaper. Everything is drawn at the screen's own size - the curtains
-// by a fragment shader, the mark from its SVG path - so it stays sharp at any resolution, and it
+// by a fragment shader, the mark from its SVG path (Mark.qml) - so it stays sharp at any resolution, and it
 // repaints in the island's accent and the current mode the moment either changes.
 import QtQuick
-import QtQuick.Shapes
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasmoid
 
@@ -49,28 +48,15 @@ WallpaperItem {
             property real time: root.time
         }
 
-        // The mark: the crescent and spark of components/island/qml/assets/glyphs/logo.svg. It
-        // breathes with the field, riding the same 10 Hz tick, so nothing repaints faster than the shader.
-        Item {
-            id: mark
-            readonly property real side: Math.round(root.height * 0.15)
-            width: side; height: side
+        // The mark: the distribution's logo, a chosen one, an imported image or nothing (Mark.qml).
+        Mark {
+            width: Math.round(root.height * 0.15); height: width
             anchors.centerIn: parent
-            opacity: (root.shownDark > 0.5 ? 1 : 0.85) * (0.92 + 0.08 * Math.sin(root.time * 0.5))
-            scale: 1 + 0.018 * Math.sin(root.time * 0.45 + 1.3)
-
-            Shape {
-                width: 16; height: 16
-                scale: mark.side / 16
-                transformOrigin: Item.TopLeft
-                preferredRendererType: Shape.CurveRenderer
-                ShapePath {
-                    strokeWidth: -1
-                    fillRule: ShapePath.WindingFill
-                    fillColor: root.shownDark > 0.5 ? root.shownAccent : Qt.darker(root.shownAccent, 1.3)
-                    PathSvg { path: "M7.2 1.5a6.5 6.5 0 1 0 7.3 7.9A5.2 5.2 0 0 1 7.2 1.5zM12 1.2l.55 1.65L14.2 3.4l-1.65.55L12 5.6l-.55-1.65L9.8 3.4l1.65-.55z" }
-                }
-            }
+            spec: root.configuration.Mark || ""
+            distro: root.configuration.Distro || ""
+            accent: root.shownAccent
+            dark: root.shownDark
+            time: root.time
         }
     }
 }

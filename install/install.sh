@@ -62,6 +62,8 @@ mkdir -p "$D/plasma/wallpapers"
 for p in org.aether.ribbons org.aether.mist org.aether.aurora org.aether.ink org.aether.dune; do
   W="$D/plasma/wallpapers/$p"
   rm -rf "$W"; cp -r "$ROOT/plasmoids/$p" "$W"
+  # The centre's mark is one source in the ribbons; every field wears the same component and logos.
+  cp "$ROOT/plasmoids/org.aether.ribbons/contents/ui/Mark.qml" "$ROOT/plasmoids/org.aether.ribbons/contents/ui/logos.js" "$W/contents/ui/"
   s="${p#org.aether.}"
   qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12 -o "$W/contents/shaders/$s.frag.qsb" "$W/contents/shaders/$s.frag"
 done

@@ -94,11 +94,13 @@ void main() {
     float breath = 1.0 + 0.05 * sin(time * 0.42);
     vec3 aur = (mix(acc, top, a0.y) * a0.x * 0.6 + mix(mix(acc, vec3(1.0), 0.25), top, a1.y) * a1.x) * breath;
 
-    // Stars: one cell in a grid of them carries a point, a few hundred over the screen, dimmed where
+    // Stars: one cell in forty of a grid carries a point, dimmed where
     // the curtain shines.
-    vec2 cell = floor(p * 90.0);
+    // The grid is laid in pixels (a cell every 12), so the sky keeps its density at any size.
+    float cs = 12.0 * px;
+    vec2 cell = floor(p / cs);
     float sh = fract(sin(dot(cell, vec2(41.3, 289.1))) * 43758.5453);
-    vec2 sp = (cell + 0.2 + 0.6 * vec2(fract(sh * 13.7), fract(sh * 71.3))) / 90.0;
+    vec2 sp = (cell + 0.2 + 0.6 * vec2(fract(sh * 13.7), fract(sh * 71.3))) * cs;
     float star = step(0.975, sh) * exp(-pow(length(p - sp) / (0.9 * px), 2.0)) * (0.3 + 0.7 * fract(sh * 7.1));
     star *= (1.0 - smoothstep(0.65, 1.0, uv.y)) * (1.0 - clamp(a1.x + a0.x, 0.0, 1.0));
 

@@ -37,9 +37,17 @@ Every wallpaper keeps the ribbons' engineering, in `plasmoids/org.aether.<style>
   gradient noise from a trig-free hash, never sine stripes or value-noise blocks.
 
 Config keys (KConfigXT, `contents/config/main.xml`, group `General`): `AccentColor`, `Mode`,
-`Animate` — and `Distro` on ribbons only (its centre wears the distribution's logo, see
-`NOTICE`). The shaders compile with `qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12` at install
+`Animate`, `Distro` and `Mark`. The shaders compile with `qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12` at install
 (`install/install.sh`) and as a `make check` gate.
+
+## The mark
+
+Every field wears the same mark at its centre, `Mark.qml` with the logos of `logos.js` (Simple
+Icons, see `NOTICE`). Both live once, in `plasmoids/org.aether.ribbons/contents/ui/`; `install.sh`
+copies them into every other field's package. `Mark` chooses what it shows: empty for the
+distribution's logo (`Distro`, the os-release ID and ID_LIKE that `aether-accent-sync` writes; the
+Aether crescent when no logo is known), `none`, `aether`, `logo:<slug>`, or `file:<path>` for an
+image of one's own.
 
 ## Choosing: the island's wallpaper panel
 
@@ -50,7 +58,11 @@ shader at card size (the compiled `.qsb` files ride the island install,
 desktop through plasmashell's scripting API — no restart — then lets the two sync oneshots hand the
 new field its accent and mode. The choice lives in `~/.config/aetherislandrc`
 (`[Wallpaper] Style`, `[Wallpaper] Animate`; `install.sh` restores it on reinstall). The footer's
-switch writes `Animate` into whichever aether wallpaper is active.
+switch writes `Animate` into whichever aether wallpaper is active. Under the cards the mark is
+chosen (Distribution / Logo / Image / None): TileStore keeps it in `[Wallpaper] Mark`, writes it into
+the active field, and carries it (and `Animate`) over when the field changes. An imported image is
+picked with kdialog and copied to `~/.local/share/aether/marks/`, so the wallpaper keeps it if the
+original moves; the logo grid is read from the installed `logos.js`.
 
 Both sync services match any `org.aether.*` wallpaper (not just the ribbons), so accent and mode
 follow whichever field the desktop wears. `install.sh` sets the saved style on every desktop.

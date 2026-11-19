@@ -17,6 +17,11 @@
     <entry name="Distro" type="String">
       <default></default>
     </entry>
+    <!-- What the centre wears (Mark.qml), written by the island's wallpaper panel: empty for the
+         distribution's logo, "none", "aether", "logo:<slug>" (logos.js) or "file:<path>". -->
+    <entry name="Mark" type="String">
+      <default></default>
+    </entry>
     <!-- The ribbons live: a slow sway, light drifting along the seams, a gentle breath; off holds the picture still. -->
     <entry name="Animate" type="Bool">
       <default>true</default>
