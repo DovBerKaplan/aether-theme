@@ -236,7 +236,7 @@ bg = "ink-950"
 fg = "fog-100"
 fg-intense = "paper-0"
 opacity = 0.75   # glass: the desktop shows through, blurred
-mark = 0.07       # the faded Aether mark in the middle of the terminal
+mark = 0.18       # the faded Aether mark in the middle of the terminal
 ansi = ["ink-800", "#ff6b81", "green-200", "amber-200", "#4fa8ff", "#a98bff", "cyan-400", "#c8ccd6"]
 bright = ["#3a494b", "#ff8fa0", "#a3ffd9", "#ffe3a8", "#7cc0ff", "violet-200", "#6ff6ff", "paper-0"]
 
@@ -245,7 +245,7 @@ bg = "paper-50"
 fg = "graphite-950"
 fg-intense = "#000000"
 opacity = 0.84
-mark = 0.06
+mark = 0.12
 ansi = ["graphite-800", "red-700", "green-700", "amber-700", "#2a5d9f", "#6a4bb3", "#00696f", "#c5c6ca"]
 bright = ["graphite-500", "#d63b3b", "#2a9d63", "#a87700", "#3b78c4", "#8566d1", "#00838a", "#e1e3e4"]
 
