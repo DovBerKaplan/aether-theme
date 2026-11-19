@@ -85,9 +85,9 @@ void main() {
         if (k == 2) peak[k] *= smoothstep(1.0, 0.6, q[k].y);
         if (k == 5) peak[k] *= smoothstep(0.0, 0.35, q[k].y);
         if (k == 6) peak[k] *= smoothstep(1.0, 0.6, q[k].y);
-        float d = abs(q[k].x), w = 2.2 * px;
+        float d = abs(q[k].x), w = 1.1 * px;
         core += peak[k] * exp(-(d * d) / (w * w));
-        halo += peak[k] * (0.55 * exp(-d / (7.0 * px)) + 0.28 * exp(-d / 0.04));
+        halo += peak[k] * (0.35 * exp(-d / (2.5 * px)) + 0.06 * exp(-d / 0.02));   // a fine edge, not a glow
     }
     // The fabric: translucent sheets trailing the seams, brightest along them, each clipped by the
     // seam that folds over it.
@@ -102,25 +102,25 @@ void main() {
     sheet += side(d6) * 1.4 * peak[6] * exp(-d6 / 0.30);                                          // under the swell
     sheet += side(d7) * 0.55 * exp(-d7 / 0.10);                                          // bottom-left fold
 
-    // Where two seams cross the light pools.
+    // Where two seams cross, a faint brightening.
     float bloom = exp(-(abs(d0) + abs(d1)) / 0.045) + exp(-(abs(d3) + abs(d4)) / 0.045);
 
-    // The mark at the centre gets a soft pool of light under it.
+    // The centre is a touch lighter, under the logo.
     float r = length(p - vec2(0.5 * aspect, 0.5));
-    float pool = 0.6 * exp(-r / 0.07) + 0.25 * exp(-r / 0.28);
+    float pool = 0.18 * exp(-r / 0.35);
 
     // Both fields are drawn and mixed by `dark`, so a mode switch can fade from one to the other.
     vec3 night = mix(hue(acc, 0.03, 0.0), hue(acc, 0.06, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
-    vec3 light = acc * (sheet * 0.55 + bloom * 0.9 + pool * 0.35 + halo * 0.9) + mix(acc, vec3(1.0), 0.35) * core * 0.9;
+    vec3 light = acc * (sheet * 0.6 + bloom * 0.15 + pool * 0.3 + halo * 0.6) + mix(acc, vec3(1.0), 0.25) * core * 0.55;
     night += vec3(1.0) - exp(-light * 1.4);
     night *= 1.0 - 0.30 * pow(length(uv - 0.5) * 1.25, 2.4);   // vignette
 
     vec3 day = mix(hue(acc, 0.66, 0.0), hue(acc, 0.80, 0.0), smoothstep(1.0, 0.0, length(uv - vec2(0.5, 0.5)) * 1.5));
     day = mix(day, hue(acc, 0.56, 0.0), clamp(sheet * 0.6, 0.0, 0.7));
     day = mix(day, hue(acc, 0.86, 0.0), clamp(pool * 0.8, 0.0, 0.6));
-    day = mix(day, hue(acc, 0.48, 0.0), clamp(bloom * 0.6, 0.0, 0.6));
-    day = mix(day, hue(acc, 0.42, 0.0), clamp(halo * 0.75, 0.0, 0.85));
-    day = mix(day, hue(acc, 0.30, 0.0), clamp(core * 0.85, 0.0, 0.9));
+    day = mix(day, hue(acc, 0.48, 0.0), clamp(bloom * 0.15, 0.0, 0.2));
+    day = mix(day, hue(acc, 0.42, 0.0), clamp(halo * 0.5, 0.0, 0.6));
+    day = mix(day, hue(acc, 0.30, 0.0), clamp(core * 0.6, 0.0, 0.7));
 
     day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 0.5);   // daylight is softer: half the colour
     vec3 col = mix(day, night, clamp(dark, 0.0, 1.0));

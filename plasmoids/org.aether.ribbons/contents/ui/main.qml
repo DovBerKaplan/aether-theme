@@ -3,7 +3,6 @@
 // in the island's accent and the current mode the moment either changes.
 import QtQuick
 import QtQuick.Shapes
-import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasmoid
 
@@ -43,11 +42,11 @@ WallpaperItem {
         // components/island/qml/assets/glyphs/logo.svg (16 units).
         Item {
             id: mark
-            readonly property real side: Math.round(root.height * 0.19)
+            readonly property real side: Math.round(root.height * 0.15)
             readonly property real units: root.logo ? 24 : 16
             width: side; height: side
             anchors.centerIn: parent
-            visible: false
+            opacity: root.shownDark > 0.5 ? 1 : 0.85
 
             Shape {
                 width: mark.units; height: mark.units
@@ -57,24 +56,10 @@ WallpaperItem {
                 ShapePath {
                     strokeWidth: -1
                     fillRule: ShapePath.WindingFill
-                    fillColor: root.shownDark > 0.5 ? Qt.lighter(root.shownAccent, 1.2) : Qt.darker(root.shownAccent, 1.3)
+                    fillColor: root.shownDark > 0.5 ? root.shownAccent : Qt.darker(root.shownAccent, 1.3)
                     PathSvg { path: root.logo || "M7.2 1.5a6.5 6.5 0 1 0 7.3 7.9A5.2 5.2 0 0 1 7.2 1.5zM12 1.2l.55 1.65L14.2 3.4l-1.65.55L12 5.6l-.55-1.65L9.8 3.4l1.65-.55z" }
                 }
             }
-        }
-
-        // The mark with its glow: a soft halo of the accent around it.
-        MultiEffect {
-            source: mark
-            anchors.fill: mark
-            blurMax: 64
-            shadowEnabled: true
-            shadowColor: root.shownDark > 0.5 ? Qt.lighter(root.shownAccent, 1.1) : root.shownAccent
-            shadowBlur: 1.0
-            shadowScale: 1.04
-            shadowOpacity: root.shownDark > 0.5 ? 1.0 : 0.55
-            shadowHorizontalOffset: 0
-            shadowVerticalOffset: 0
         }
     }
 }
