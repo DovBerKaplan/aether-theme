@@ -41,6 +41,9 @@ class TileStore : public QObject
     Q_PROPERTY(bool micMuted READ micMuted NOTIFY stateChanged)
     Q_PROPERTY(bool wifiBefore READ wifiBefore NOTIFY stateChanged)  // radios as they were before airplane mode
     Q_PROPERTY(bool bluetoothBefore READ bluetoothBefore NOTIFY stateChanged)
+    Q_PROPERTY(QString wallpaperStyle READ wallpaperStyle NOTIFY wallpaperChanged)   // the active aether wallpaper ([Wallpaper] Style)
+    Q_PROPERTY(bool wallpaperAnimate READ wallpaperAnimate NOTIFY wallpaperChanged)  // its Animate key ([Wallpaper] Animate)
+    Q_PROPERTY(QVariantList wallpapers READ wallpapers CONSTANT)   // the family: id + English title for the picker
 
 public:
     explicit TileStore(QObject *parent = nullptr)
@@ -73,6 +76,19 @@ public:
             }
             m_settings.sync();
         }
+        if (!m_settings.contains(QStringLiteral("Tiles/WallpaperAdded"))) {   // one-time: surface the wallpaper picker tile
+            m_settings.setValue(QStringLiteral("Tiles/WallpaperAdded"), true);
+            if (!m_order.contains(QLatin1String("wallpaper"))) {
+                m_order << QStringLiteral("wallpaper");
+                m_settings.setValue(QStringLiteral("Tiles/Order"), m_order);
+            }
+            m_settings.sync();
+        }
+        m_wallpaper = m_settings.value(QStringLiteral("Wallpaper/Style"), QStringLiteral("org.aether.ribbons")).toString();
+        if (!wallpaperIds().contains(m_wallpaper)) {
+            m_wallpaper = QStringLiteral("org.aether.ribbons");
+        }
+        m_wallpaperAnimate = m_settings.value(QStringLiteral("Wallpaper/Animate"), true).toBool();
         if (m_settings.value(QStringLiteral("Tiles/SizesSet")).toBool()) {
             for (const QString &e : m_settings.value(QStringLiteral("Tiles/Sizes")).toStringList()) {
                 if (validSize(e) && !m_sizes.contains(e)) {
@@ -172,6 +188,49 @@ public:
         const QString scheme = kde.value(QStringLiteral("ColorScheme")).toString();     // INI [General] keys sit at the root
         QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"),
                                 {scheme.isEmpty() ? QStringLiteral("AetherGlass") : scheme, QStringLiteral("--accent-color"), hex});
+    }
+
+    // The wallpaper family and the pick. Everything lives in ~/.config/aetherislandrc ([Wallpaper]);
+    // a style switch rides plasmashell's scripting API - the desktops repaint at once - and the two
+    // sync oneshots then hand the new wallpaper the accent, the mode and the distribution.
+    QVariantList wallpapers() const
+    {
+        return {QVariantMap{{QStringLiteral("id"), QStringLiteral("org.aether.ribbons")}, {QStringLiteral("title"), QStringLiteral("Ribbons")}, {QStringLiteral("shader"), QStringLiteral("ribbons")}},
+                QVariantMap{{QStringLiteral("id"), QStringLiteral("org.aether.mist")}, {QStringLiteral("title"), QStringLiteral("Mist")}, {QStringLiteral("shader"), QStringLiteral("mist")}},
+                QVariantMap{{QStringLiteral("id"), QStringLiteral("org.aether.aurora")}, {QStringLiteral("title"), QStringLiteral("Aurora")}, {QStringLiteral("shader"), QStringLiteral("aurora")}},
+                QVariantMap{{QStringLiteral("id"), QStringLiteral("org.aether.ink")}, {QStringLiteral("title"), QStringLiteral("Ink")}, {QStringLiteral("shader"), QStringLiteral("ink")}},
+                QVariantMap{{QStringLiteral("id"), QStringLiteral("org.aether.dune")}, {QStringLiteral("title"), QStringLiteral("Dune")}, {QStringLiteral("shader"), QStringLiteral("dune")}}};
+    }
+    QString wallpaperStyle() const { return m_wallpaper; }
+    bool wallpaperAnimate() const { return m_wallpaperAnimate; }
+    Q_INVOKABLE void setWallpaper(const QString &id)
+    {
+        if (!wallpaperIds().contains(id) || id == m_wallpaper) {
+            return;
+        }
+        m_wallpaper = id;
+        m_settings.setValue(QStringLiteral("Wallpaper/Style"), id);
+        m_settings.sync();
+        const QString js = QStringLiteral("desktops().forEach(function(d){d.wallpaperPlugin='%1';});").arg(id);
+        QProcess::startDetached(QStringLiteral("qdbus6"), {QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
+                                                           QStringLiteral("org.kde.PlasmaShell.evaluateScript"), js});
+        // A moment later, once the switch has landed, the oneshots push accent and mode into it.
+        QTimer::singleShot(800, this, [this] {
+            QProcess::startDetached(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("start"),
+                                                                  QStringLiteral("aether-accent-sync.service"), QStringLiteral("aether-mode-sync.service")});
+        });
+        Q_EMIT wallpaperChanged();
+    }
+    Q_INVOKABLE void setWallpaperAnimate(bool on)
+    {
+        if (on == m_wallpaperAnimate) {
+            return;
+        }
+        m_wallpaperAnimate = on;
+        m_settings.setValue(QStringLiteral("Wallpaper/Animate"), on);
+        m_settings.sync();
+        wallpaperConfig(QStringLiteral("Animate"), on ? QStringLiteral("true") : QStringLiteral("false"));
+        Q_EMIT wallpaperChanged();
     }
     QStringList order() const { return m_order; }
     QStringList sizes() const { return m_sizes; }
@@ -293,6 +352,7 @@ Q_SIGNALS:
     void hebrewDatesChanged();
     void accentChanged();
     void languageChanged();
+    void wallpaperChanged();
     void stateChanged();
 
 private:
@@ -383,15 +443,32 @@ private:
     static QVariantMap tile(const char *id, const char *label, const char *glyph) {
         return {{QStringLiteral("id"), QString::fromLatin1(id)}, {QStringLiteral("label"), QString::fromLatin1(label)}, {QStringLiteral("glyph"), QString::fromLatin1(glyph)}};
     }
+    QStringList wallpaperIds() const
+    {
+        return {QStringLiteral("org.aether.ribbons"), QStringLiteral("org.aether.mist"), QStringLiteral("org.aether.aurora"),
+                QStringLiteral("org.aether.ink"), QStringLiteral("org.aether.dune")};
+    }
+    // Write one key into whichever aether wallpaper each desktop wears; plasmashell repaints at once.
+    void wallpaperConfig(const QString &key, const QString &value)
+    {
+        const QString js = QStringLiteral("var n = 0; desktops().forEach(function (d) { if (d.wallpaperPlugin.indexOf('org.aether.') != 0) return;"
+                                          " d.currentConfigGroup = ['Wallpaper', d.wallpaperPlugin, 'General'];"
+                                          " if (d.readConfig('%1') != '%2') { d.writeConfig('%1', '%2'); n++; } }); print(n);")
+                               .arg(key, value);
+        QProcess::startDetached(QStringLiteral("qdbus6"), {QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
+                                                           QStringLiteral("org.kde.PlasmaShell.evaluateScript"), js});
+    }
     const QVariantList m_catalog = {
         tile("wifi", "Wi‑Fi", "wifi-3"), tile("bluetooth", "Bluetooth", "bluetooth"),
         tile("nightlight", "Night Light", "moon"), tile("darktheme", "Theme", "contrast"), tile("airplane", "Airplane mode", "plane"),
         tile("keepawake", "Keep awake", "coffee"), tile("vibe", "Vibe coding", "vibe"), tile("micmute", "Microphone", "mic"), tile("powersaver", "Power saver", "leaf"),
-        tile("lens", "Circle to Search", "lens"), tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record"), tile("accent", "Color", "palette"), tile("console", "Console", "terminal")};
+        tile("lens", "Circle to Search", "lens"), tile("screenshot", "Screenshot", "camera"), tile("record", "Screen record", "record"), tile("accent", "Color", "palette"), tile("wallpaper", "Wallpaper", "wallpaper"), tile("console", "Console", "terminal")};
     const QVariantList m_widgetCatalog = connectInstalled() ? QVariantList{tile("media", "YouTube Music", "logo"), tile("connect", "KDE Connect", "phone")} : QVariantList{tile("media", "YouTube Music", "logo")};
     QSettings m_settings;
     QTimer m_saveAccent;
     QString m_systemAccent;                 // the accent last pushed into the color scheme, to skip identical pushes
+    QString m_wallpaper;                    // the active aether wallpaper id
+    bool m_wallpaperAnimate = true;
     bool m_accentCustom = false;
     int m_hue = 183;
     qreal m_light = 0.5, m_sat = 1.0;

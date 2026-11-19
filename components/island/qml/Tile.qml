@@ -94,6 +94,12 @@ Item {
         case "accent": return {
             glyph: "palette", label: I18n.tr("Color"), sub: I18n.tr("Accent"), active: false, panel: "color",
             tap: () => host.panelRequested("color"), trail: { kind: "dot", color: Theme.accent } }
+        case "wallpaper": {      // the panel carries the live previews; the tile names the field in play
+            const cur = tiles.wallpapers.find(w => w.id === tiles.wallpaperStyle)
+            return {
+                glyph: "wallpaper", label: I18n.tr("Wallpaper"), sub: cur ? I18n.tr(cur.title) : "", active: false, panel: "wallpaper",
+                tap: () => host.panelRequested("wallpaper"), trail: { kind: "chevron" } }
+        }
         case "console": return {
             glyph: "terminal", label: I18n.tr("Console"), sub: tiles.consoleEarOn ? I18n.tr("Tab shown") : I18n.tr("Tab hidden"),
             active: tiles.consoleEarOn, panel: "", tap: () => tiles.toggleConsoleEar() }
