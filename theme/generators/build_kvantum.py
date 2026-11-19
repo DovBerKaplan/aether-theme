@@ -18,10 +18,10 @@ T = load()
 _K = T["kvantum"]
 HACKS = _K.pop("hacks")
 GENERAL = _K.pop("general")
-# The glass has one fade: window.color carries the apps tokens' own alpha (tokens.toml) and the
-# frame's SVG pieces repeat it (window_frame) - reduce_window_opacity stays off, or Kvantum fades
-# the body a second time (~10% glass) while the frame keeps its full alpha and reads as a band.
-GENERAL["reduce_window_opacity"] = "0"
+# The glass IS this fade: Kvantum lowers the whole window's opacity over KWin's blur, and the
+# frame's opaque SVG pieces fade with it. (The alpha byte inside window.color's hex is honoured
+# by neither Kvantum nor Qt SVG - keep that hex opaque and let this key be the one translucency.)
+GENERAL["reduce_window_opacity"] = str(round((1 - T["apps"]["chrome-alpha"]) * 100))
 THEMES = _K
 
 
@@ -49,11 +49,9 @@ def window_frame(body: str, rim: str, rim_alpha: float) -> str:
     x0, y0, e = 704, 0, 8
     xs = {"l": x0, "c": x0 + r, "r": x0 + r + e}
     ys = {"t": y0, "c": y0 + 1, "b": y0 + 1 + e}
-    # The frame's pieces repeat the window body's exact alpha, read out of window.color's hex -
-    # Qt SVG honours a fill-opacity, not an alpha byte inside the hex - so frame and body are one
-    # glass and no band shows between them.
-    op = int(body[7:9], 16) / 255.0 if len(body) == 9 else 1.0
-    fill = f'fill="{body[:7]}" fill-opacity="{op:.3f}"'
+    # The frame's pieces are drawn opaque: reduce_window_opacity fades the whole window - body
+    # and frame alike - onto the blur, and they stay one glass.
+    fill = f'fill="{body[:7]}"'
     line = f'fill="{rim}" fill-opacity="{rim_alpha}"'
     out = []
     for state in ("normal", "normal-inactive"):
@@ -97,6 +95,9 @@ def main() -> None:
         for section in ("ItemView", "MenuBarItem", "Menu", "StatusBar", "TitleBar"):
             cfg = set_keys(cfg, section, {"text.shadow": "true", "text.shadow.color": "#5e000000",
                                           "text.shadow.offset": "1"})
+        # The view is the same sheet of glass as everything else: no panel, no bordered box
+        # around Dolphin's file area (Dov's arrow) - its veil comes from [Colors:View] alone.
+        cfg = set_keys(cfg, "ItemView", {"frame": "false"})
         cfg = set_keys(cfg, "GeneralColors", t["colors"])
         cfg = set_keys(cfg, "Hacks", HACKS)
         (dest / f"{name}.kvconfig").write_text(cfg)
