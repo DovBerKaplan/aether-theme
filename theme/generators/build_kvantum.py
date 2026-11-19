@@ -49,9 +49,11 @@ def window_frame(body: str, rim: str, rim_alpha: float) -> str:
     x0, y0, e = 704, 0, 8
     xs = {"l": x0, "c": x0 + r, "r": x0 + r + e}
     ys = {"t": y0, "c": y0 + 1, "b": y0 + 1 + e}
-    # The frame's body rides the same glass as the window behind it: the explicit fill-opacity is
-    # what Qt SVG honours - an alpha byte inside the hex (window.color's #rrggbbaa) is not.
-    fill = f'fill="{body[:7]}" fill-opacity="{T["apps"]["chrome-alpha"]}"'
+    # The frame's pieces repeat the window body's exact alpha, read out of window.color's hex -
+    # Qt SVG honours a fill-opacity, not an alpha byte inside the hex - so frame and body are one
+    # glass and no band shows between them.
+    op = int(body[7:9], 16) / 255.0 if len(body) == 9 else 1.0
+    fill = f'fill="{body[:7]}" fill-opacity="{op:.3f}"'
     line = f'fill="{rim}" fill-opacity="{rim_alpha}"'
     out = []
     for state in ("normal", "normal-inactive"):
