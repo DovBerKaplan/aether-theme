@@ -82,12 +82,22 @@ if [[ -d "$HOME/.local/share/aurorae/themes/$scheme" ]] && [[ "$(kreadconfig6 --
   echo "titlebar -> $scheme"
 fi
 # Every aether wallpaper carries a dark and a light field: switch it on every desktop that wears one.
+# A stuck Mode here poisons every glass window at once (the translucency takes its tone from the
+# wallpaper), and the old write-if-different could fail silently: the config object can serve a
+# stale Mode, and `|| true` swallowed a dead plasmashell. Write unconditionally and verify it stuck.
 [[ $scheme == AetherGlass ]] && mode=dark || mode=light
-n="$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "var n = 0; desktops().forEach(function (d) {
+wset() { qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "desktops().forEach(function (d) {
   if (d.wallpaperPlugin.indexOf('org.aether.') != 0) return;
   d.currentConfigGroup = ['Wallpaper', d.wallpaperPlugin, 'General'];
-  if (d.readConfig('Mode') != '$mode') { d.writeConfig('Mode', '$mode'); n++; } }); print(n);" 2>/dev/null || true)"
-[[ -n $n && $n != 0 ]] && echo "wallpaper -> $mode"
+  d.writeConfig('Mode', '$mode'); });" >/dev/null 2>&1
+  qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "var n = 0; desktops().forEach(function (d) {
+  if (d.wallpaperPlugin.indexOf('org.aether.') != 0) return;
+  d.currentConfigGroup = ['Wallpaper', d.wallpaperPlugin, 'General'];
+  if (d.readConfig('Mode') != '$mode') n++; }); print(n);" 2>/dev/null; }
+for i in 1 2; do
+  [[ "$(wset)" == 0 ]] && { echo "wallpaper -> $mode"; break; }
+  sleep 2
+done
 profile="$HOME/.local/share/konsole/Aether.profile"
 if [[ -f $profile ]] && [[ "$(kreadconfig6 --file "$profile" --group Appearance --key ColorScheme)" != "$scheme" ]]; then
   kwriteconfig6 --file "$profile" --group Appearance --key ColorScheme "$scheme"
