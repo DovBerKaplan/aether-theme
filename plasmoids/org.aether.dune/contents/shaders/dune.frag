@@ -82,15 +82,15 @@ void main() {
     // The dunes, far to near. Each covers what is behind it with an edge one pixel soft; its face
     // is lit where the slope turns toward the sun and fades into the body below the crest; the
     // farther ones sink into the haze of the glow.
-    float e = 0.012;
+    float e = 0.006;
     for (int k = 0; k < 4; ++k) {
         float f = float(k);
         float yk = ridge(x, k);
         float below = y - yk;
-        // The slope is read a little up-wind as the face falls away, so the line between light and
-        // shadow runs down the slip face on a slant instead of dropping straight from the crest.
-        float xs = x + 0.55 * max(below, 0.0) * sign(x - sun.x);
-        float slope = (ridge(xs + e, k) - ridge(xs - e, k)) / (2.0 * e);   // > 0: falls away to the right
+        // The slope is read over a window that widens with depth: right under the crest the line
+        // between light and shadow is sharp, lower down it softens into the body, as on a slip face.
+        float w = e + 0.45 * max(below, 0.0);
+        float slope = (ridge(x + w, k) - ridge(x - w, k)) / (2.0 * w);   // > 0: falls away to the right
         float lit = smoothstep(-0.20, 0.35, (sun.x - x) * -slope / max(abs(sun.x - x), 0.05));
         float cover = smoothstep(-px, px, below);
         float face = lit * exp(-below / (0.03 + 0.025 * f));
