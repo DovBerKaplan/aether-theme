@@ -113,11 +113,14 @@ void main() {
     night += vec3(1.0) - exp(-light * 1.4);
     night *= 1.0 - 0.30 * pow(length(uv - vec2(0.5, 0.5)) * 1.25, 2.4);   // vignette
 
-    vec3 day = mix(hue(acc, 0.86, 0.0), hue(acc, 0.76, 0.0), smoothstep(0.1, 1.0, uv.y));
-    day = mix(day, hue(acc, 0.92, 0.0), clamp(pool * 3.0, 0.0, 0.3));
-    float ink = clamp(a0.x * 0.6 + a1.x, 0.0, 1.0);
-    day = mix(day, hue(mix(acc, top, 0.5 * (a0.y + a1.y)), 0.45, 0.0), clamp(ink * 0.80, 0.0, 0.75));
-    day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 0.5);   // daylight is softer: half the colour
+    // By day the sky keeps a clear mid blue of the accent and the curtain is light on it, as at
+    // night - a luminous veil turning toward its neighbouring hue, its hem the brightest line.
+    vec3 day = mix(hue(acc, 0.56, 0.0), hue(acc, 0.82, 0.0), smoothstep(0.0, 0.95, uv.y));
+    day = mix(day, hue(acc, 0.90, 0.0), clamp(pool * 3.0, 0.0, 0.3));
+    float veil = clamp((a0.x * 0.6 + a1.x) * 2.2, 0.0, 1.0);
+    day = mix(day, hue(mix(acc, top, 0.5 * (a0.y + a1.y)), 0.88, 0.85), clamp(veil * 0.9, 0.0, 0.9));
+    day = mix(day, vec3(1.0), clamp(a1.x * a1.x * 0.9, 0.0, 0.6));   // the hem, the curtain's one firm line
+    day = mix(vec3(dot(day, vec3(0.299, 0.587, 0.114))), day, 0.6);   // daylight is softer - though an aurora keeps more of its colour
 
     vec3 col = mix(day, night, clamp(dark, 0.0, 1.0));
     // A whisper of dither keeps the long gradients from banding.

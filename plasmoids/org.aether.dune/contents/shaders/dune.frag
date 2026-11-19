@@ -103,8 +103,13 @@ void main() {
         night = mix(night, sandN, cover);
         night += mix(acc, vec3(1.0), 0.35) * crest * (0.30 + 0.25 * f / 3.0);
 
-        vec3 sandD = mix(hue(acc, 0.56 - 0.07 * f, 0.0), hue(acc, 0.74, 0.0), haze * 0.45);
-        sandD = mix(sandD, hue(acc, 0.82 - 0.04 * f, 0.0), clamp(face * (0.35 + 0.4 * near), 0.0, 0.7));
+        // By day the sand stays light, a step deeper toward the viewer; the faces turned to the sun
+        // brighten, the ones turned away take a cool shade right under the crest, and the far
+        // dunes fade into the sky.
+        float shade = (1.0 - lit) * exp(-below / (0.04 + 0.03 * f));
+        vec3 sandD = mix(hue(acc, 0.74 - 0.05 * f, 0.0), hue(acc, 0.84, 0.0), haze * 0.5);
+        sandD = mix(sandD, hue(acc, 0.90 - 0.02 * f, 0.0), clamp(face * (0.45 + 0.4 * near), 0.0, 0.8));
+        sandD = mix(sandD, hue(acc, 0.56 - 0.03 * f, 0.0), clamp(shade * 0.55, 0.0, 0.55));
         day = mix(day, sandD, cover);
         day = mix(day, hue(acc, 0.95, 0.0), clamp(crest * 0.45, 0.0, 0.5));
     }

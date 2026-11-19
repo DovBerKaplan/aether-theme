@@ -90,7 +90,7 @@ PanelScaffold {
         }
     }
 
-    // One preview card: the field, its mark, a scrim under its name, and the ring of the choice.
+    // One preview card: the field, its mark, its name on a pill, and the ring of the choice.
     component WallCard: Item {
         id: entry
         required property var field
@@ -138,27 +138,27 @@ PanelScaffold {
                     color: displaySettings.dark ? Theme.accent : Qt.darker(Theme.accent, 1.3)
                     opacity: displaySettings.dark ? 1 : 0.85
                 }
-                Rectangle {      // a scrim under the name, so it reads on the light fields too
-                    anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-                    height: Math.min(parent.height * 0.42, 56)
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0) }
-                        GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.42) }
-                    }
-                }
             }
             Rectangle {          // a hairline rim, so the glass edge of the card stays crisp
                 anchors.fill: parent
                 radius: entry.corner
                 color: "transparent"
-                border { width: 1; color: Qt.rgba(1, 1, 1, 0.10) }
+                border { width: 1; color: displaySettings.dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.08) }
             }
 
-            Text {
-                anchors { left: parent.left; leftMargin: entry.featured ? 14 : 10; bottom: parent.bottom; bottomMargin: entry.featured ? 11 : 8 }
-                text: I18n.tr(entry.field.title)
-                font { family: Theme.font; pixelSize: entry.featured ? Tokens.type.title : Tokens.type.label; weight: Font.DemiBold }
-                color: "white"
+            Rectangle {          // the name on a pill of glass that suits the field: dark on the night, milk on the day
+                anchors { left: parent.left; leftMargin: entry.featured ? 12 : 8; bottom: parent.bottom; bottomMargin: entry.featured ? 12 : 8 }
+                width: name.implicitWidth + (entry.featured ? 20 : 14); height: name.implicitHeight + (entry.featured ? 8 : 6)
+                radius: height / 2
+                color: displaySettings.dark ? Qt.rgba(0, 0, 0, 0.38) : Qt.rgba(1, 1, 1, 0.72)
+                border { width: 1; color: displaySettings.dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.06) }
+                Text {
+                    id: name
+                    anchors.centerIn: parent
+                    text: I18n.tr(entry.field.title)
+                    font { family: Theme.font; pixelSize: entry.featured ? Tokens.type.label + 1 : Tokens.type.caption + 1; weight: Font.DemiBold }
+                    color: displaySettings.dark ? "white" : Qt.rgba(0.08, 0.12, 0.11, 0.88)
+                }
             }
             Rectangle {          // the check on the choice
                 anchors { right: parent.right; rightMargin: 8; top: parent.top; topMargin: 8 }
