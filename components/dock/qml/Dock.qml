@@ -6,9 +6,11 @@ import org.kde.taskmanager as TaskManager
 import org.kde.kirigami as Kirigami
 import AetherShared
 
-// The dock: one glass pill per screen edge ("bottom" or "left", set by the host). Hidden at rest:
-// the window is then a 2px invisible strip that only listens for the pointer. Touching it
-// springs the pill out of the edge in the island's material; leaving retracts it.
+// The dock: one glass pill per screen edge ("bottom" or "left", set by the host). The bottom one
+// lives Android's way: out on the open desktop, folding back to the strip the moment a window
+// covers the screen (still one touch away). The left edge keeps the hidden-at-rest trick - a 2px
+// invisible strip that only listens for the pointer; touching it springs the pill out of the edge
+// in the island's material, and leaving retracts it.
 Item {
     id: root
     // Same colour as the island: the user's pick from its colour panel; the scheme follows the system.
@@ -52,7 +54,28 @@ Item {
 
     property bool shown: false
     property bool pointerIn: false
-    readonly property bool holdOpen: menuOn || drag.active || allCell.holding || lensProg > 0
+    readonly property bool holdOpen: menuOn || winOn || drag.active || allCell.holding || lensProg > 0
+
+    // ---- Pinned open -----------------------------------------------------------------
+    // Android's home-screen model: the bottom bar lives out while the desktop shows, and the task
+    // model folds it back - to the 2px peek strip, still one touch away - the moment any window
+    // covers the screen (a floating window over the bottom just as much as fullscreen; minimized
+    // ones don't count). While it is out, Hide is refused - the leave timer and the D-Bus call
+    // both - so only the model closes it. The top island never talks to the dock, so it keeps
+    // opening over the bar freely.
+    property bool covered: true    // covered until proven otherwise: no flash open at startup
+    readonly property bool pinned: dock.edge === "bottom" && !covered
+    function probeCovered() {
+        let c = false
+        for (let i = 0; i < tasks.count; i++) {
+            if (isWindow(i) && !isMinimized(i)) { c = true; break }
+        }
+        if (c !== covered) covered = c
+    }
+    onPinnedChanged: {
+        if (pinned) root.setShown(true)
+        else if (root.shown && !root.pointerIn && !root.holdOpen) root.setShown(false)
+    }
 
     // ---- Jelly motion ---------------------------------------------------------------
     // Everything is drawn in (u, v): u runs along the screen edge, v is the distance from it.
@@ -66,7 +89,9 @@ Item {
     property real conn: 1          // 1 = the glass is tied to the edge, 0 = free; eases separately from `d`
     Behavior on conn { NumberAnimation { duration: root.shown ? 360 : 220; easing.type: Easing.InOutQuad } }
     readonly property real hiddenD: -thickness - 8
-    readonly property real popupRoom: 300                       // transparent room for the tooltip and the menu
+    // Transparent room for the popups. The chooser card (364 wide) reaches across the left dock's
+    // short axis, so there the room grows to cover it: icon run + gap + card + air.
+    readonly property real popupRoom: horiz ? 300 : Math.max(300, restD + thickness + popGap + winCard.width + 24)
     readonly property real vWin: thickness + restD + 36 + popupRoom   // + room for the overshoot
     readonly property real uPad: 14                            // room for the neck's flares
     property real d: hiddenD
@@ -90,7 +115,7 @@ Item {
     }
     onShownChanged: {
         d = shown ? restD : hiddenD; conn = shown ? 0 : 1
-        if (!shown) { menuOn = false; tipOn = false }
+        if (!shown) { menuOn = false; tipOn = false; winOn = false }
     }
     readonly property real stretch: Math.max(-0.3, Math.min(0.3, vel * 0.012))
 
@@ -106,7 +131,7 @@ Item {
     }
     onOpenChanged: applyWindow()
     onLWinChanged: if (open) applyWindow()
-    Component.onCompleted: { applyWindow(); reorder() }
+    Component.onCompleted: { applyWindow(); reorder(); probeCovered() }
 
     // Window coordinates of (u, v).
     function px(u, v) { return horiz ? u : v }
@@ -201,6 +226,7 @@ Item {
 
     function setShown(s) {
         if (s === shown) return
+        if (!s && pinned) return   // the pinned bar only folds when a window covers the screen
         peekTimer.stop(); leaveTimer.stop()
         shown = s
         if (s) dock.notifyShown()
@@ -208,6 +234,16 @@ Item {
     Connections {
         target: dock
         function onStateRequested(state) { root.setShown(state === "shown") }
+    }
+
+    // Test hook (qdbus org.aether.Dock /Dock org.aether.Dock.PreviewWindows): the chooser opens on
+    // the app owning the most windows. The delegate's box anchors it where its icon would.
+    function previewWindows() {
+        root.setShown(true)
+        let best = null
+        for (const g of root.groups) if (g.wins.length >= 1 && (!best || g.wins.length > best.wins.length)) best = g
+        if (!best) return
+        for (const c of grid.children) if (c.g && c.g.key === best.key) { root.openWindows(best, c.children[1] || c, false); return }
     }
 
     HoverHandler {
@@ -341,28 +377,46 @@ Item {
     function launcherBase(i) { return baseOf(role(i, TaskManager.AbstractTasksModel.LauncherUrl)) }
     function pinnedHas(base) { for (const u of tasks.launcherList) if (baseOf(u) === base) return true; return false }
 
-    // The model keeps insertion order (idle launchers first, then windows as they appeared), so the
-    // dock orders the rows itself: pinned apps in pin order, then free windows. `order` holds model rows.
+    // The model keeps insertion order (idle launchers first, then windows as they appeared). The dock
+    // groups the rows itself: one cell per app - pinned apps in pin order first (their idle launchers
+    // among them), then free apps in first-seen order. A group holds every model row of its app:
+    // the windows in `wins`, and a pinned app's launcher row alone when it is not running at all.
     function pinPos(base) {
         const l = tasks.launcherList
         for (let i = 0; i < l.length; i++) if (baseOf(l[i]) === base) return i
         return -1
     }
-    property var order: []
-    property int firstFree: -1      // position in `order` of the first free window
-    onRevChanged: reorder()
+    function groupKey(i) {
+        const b = launcherBase(i)
+        if (b !== "") return b
+        return "\u0001" + String(role(i, TaskManager.AbstractTasksModel.AppName))   // no .desktop: keep same-app rows together by name
+    }
+    property var groups: []
+    property int firstFree: -1      // position in `groups` of the first free app
+    onRevChanged: { reorder(); refreshWinRows(); probeCovered() }
     function reorder() {
-        const pinned = [], free = []
+        const byKey = new Map(), keys = []
         for (let i = 0; i < tasks.count; i++) {
-            const p = pinPos(launcherBase(i))
-            if (p >= 0) pinned.push({ i: i, p: p }); else free.push(i)
+            if (isStartup(i)) continue
+            const k = groupKey(i)
+            if (!byKey.has(k)) { byKey.set(k, { key: k, pin: -1, rows: [], wins: [] }); keys.push(k) }
+            byKey.get(k).rows.push(i)
         }
-        pinned.sort((a, b) => a.p - b.p)
-        const o = pinned.map(x => x.i).concat(free)
+        for (const g of byKey.values()) {
+            if (g.key.charAt(0) !== "\u0001") g.pin = pinPos(g.key)
+            for (const i of g.rows) if (isWindow(i)) g.wins.push(i)
+        }
+        const pinned = keys.map(k => byKey.get(k)).filter(g => g.pin >= 0).sort((a, b) => a.pin - b.pin)
+        const free = keys.map(k => byKey.get(k)).filter(g => g.pin < 0)
+        const gs = pinned.concat(free)
         const ff = free.length > 0 && pinned.length > 0 ? pinned.length : -1
-        if (JSON.stringify(o) !== JSON.stringify(order)) order = o
+        if (JSON.stringify(gs) !== JSON.stringify(groups)) groups = gs
         if (ff !== firstFree) firstFree = ff
     }
+    function repOf(g) { return g.wins.length > 0 ? g.wins[0] : g.rows[0] }   // icon and menu: first window, else the launcher row
+    function groupActive(g) { for (const i of g.wins) if (isActive(i)) return true; return false }
+    function groupMinimized(g) { for (const i of g.wins) if (!isMinimized(i)) return false; return g.wins.length > 0 }
+    function newInstance(g) { const idx = row(repOf(g)); if (idx.valid) tasks.requestNewInstance(idx) }
     // Three dots at the end of the dock: minimize every window; once all are down, bring them back.
     function minimizeAll() {
         let up = []
@@ -425,16 +479,15 @@ Item {
         opacity: Math.max(0, Math.min(1, (root.d - root.hiddenD) / (root.restD - root.hiddenD) * 1.5 - 0.4))
 
         Repeater {
-            model: root.order
+            model: root.groups
             delegate: Item {
                 id: cellItem
-                readonly property int mi: modelData
-                readonly property bool startup: root.isStartup(mi)
+                readonly property var g: modelData
                 readonly property bool sepBefore: root.firstFree === index
                 readonly property int extra: sepBefore ? root.sepExtra : 0
-                width: startup ? 0 : (root.horiz ? root.cell + extra : root.cell)
-                height: startup ? 0 : (root.horiz ? root.cell : root.cell + extra)
-                visible: !startup
+                readonly property int mi: root.repOf(g)   // the icon's row: the first window, else the idle launcher
+                width: root.horiz ? root.cell + extra : root.cell
+                height: root.horiz ? root.cell : root.cell + extra
 
                 Rectangle {   // pinned | running hairline
                     visible: cellItem.sepBefore
@@ -461,6 +514,17 @@ Item {
                         opacity: ma.containsMouse ? Tokens.material.tintHover : 0
                         Behavior on opacity { NumberAnimation { duration: 120 } }
                     }
+                    Rectangle {   // the stack: a ghost card peeking from behind the icon - this app owns several windows
+                        readonly property bool on: cellItem.g.wins.length > 1
+                        x: -4; y: -4
+                        width: root.iconSize * 0.8; height: width
+                        radius: Tokens.radius.sm
+                        color: root.ink
+                        opacity: on ? 0.14 : 0
+                        scale: on ? 1 : 0.75
+                        Behavior on opacity { NumberAnimation { duration: 150 } }
+                        Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                    }
                     Kirigami.Icon {
                         anchors.centerIn: parent
                         width: root.iconSize; height: root.iconSize
@@ -468,16 +532,16 @@ Item {
                         roundToIconSize: false
                         source: {
                             root.rev
-                            const idx = root.row(mi)
+                            const idx = root.row(cellItem.mi)
                             if (!idx.valid) return "application-x-executable"
                             const d = tasks.data(idx, Qt.DecorationRole)
                             return d !== undefined && d !== null && d !== false ? d : "application-x-executable"
                         }
-                        opacity: !root.isWindow(mi) || (root.isMinimized(mi) && root.pinPos(root.launcherBase(mi)) < 0) ? 0.5 : 1   // faded: a pinned app that is not running (a minimized pinned one is not)
+                        opacity: cellItem.g.wins.length === 0 ? 0.5 : 1   // faded: a pinned app that is not running
                         Behavior on opacity { NumberAnimation { duration: 150 } }
                     }
                     Rectangle {   // running: dot, focused: short pill; on the screen-edge side
-                        property int len: root.isActive(mi) ? 14 : 4
+                        property int len: root.groupActive(cellItem.g) ? 14 : 4
                         width: root.horiz ? len : 4
                         height: root.horiz ? 4 : len
                         radius: 2
@@ -485,7 +549,8 @@ Item {
                         // Below the icon, in the glass's own padding (left dock: to its screen-edge side).
                         x: root.horiz ? (parent.width - width) / 2 : -5
                         y: root.horiz ? parent.height + 2 : (parent.height - height) / 2
-                        opacity: root.isWindow(mi) ? (root.isMinimized(mi) ? 0.3 : (root.isActive(mi) ? 0.9 : 0.55)) : 0
+                        opacity: cellItem.g.wins.length === 0 ? 0
+                                 : (root.groupMinimized(cellItem.g) ? 0.3 : (root.groupActive(cellItem.g) ? 0.9 : 0.55))
                         Behavior on opacity { NumberAnimation { duration: 150 } }
                         Behavior on len { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                     }
@@ -494,16 +559,20 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-                        onContainsMouseChanged: root.hoverIcon(mi, box, containsMouse)
+                        onContainsMouseChanged: root.hoverIcon(cellItem.g, box, containsMouse)
                         onClicked: (mouse) => {
-                            const idx = root.row(mi)
-                            if (!idx.valid) return
+                            const g = cellItem.g
                             if (mouse.button === Qt.RightButton) {
-                                root.openMenu(mi, box)
-                            } else if (mouse.button === Qt.MiddleButton || root.role(mi, TaskManager.AbstractTasksModel.IsLauncher) === true) {
-                                tasks.requestNewInstance(idx)
+                                root.openMenu(g, box)
+                            } else if (mouse.button === Qt.MiddleButton || g.wins.length === 0) {
+                                root.newInstance(g)
+                            } else if (g.wins.length === 1) {
+                                // a click means the window: even when the hover preview is already
+                                // open on this very icon - that card must not swallow the click.
+                                root.winOn = false
+                                tasks.requestActivate(root.row(g.wins[0]))
                             } else {
-                                tasks.requestActivate(idx)
+                                root.cycleWindow(g)         // several windows: raise the least visible
                             }
                         }
                     }
@@ -597,11 +666,90 @@ Item {
     // hovering an icon shows its name and state; a right-click opens a short, state-aware menu.
     readonly property int popGap: 12
     property bool tipOn: false
-    property int tipMi: -1
+    property var tipG: null
     property point tipAnchor: Qt.point(0, 0)      // icon centre, window coordinates
     property bool menuOn: false
     property point menuAnchor: Qt.point(0, 0)
     property var menuItems: []
+    // The window chooser: opened by a left-click on an app that owns several windows. `winG` is the
+    // group at open time; every rebuild re-finds it by key (`winCur`), so the card lives across
+    // model churn. `winRows` is only re-published when its content actually changes, so hovering a
+    // row survives the model's progress ticks.
+    property bool winOn: false
+    property var winG: null
+    property point winAnchor: Qt.point(0, 0)      // icon centre, window coordinates
+    readonly property string winKey: winG ? winG.key : ""
+    readonly property var winCur: {
+        root.rev
+        const k = root.winKey
+        if (k === "") return null
+        for (const g of root.groups) if (g.key === k) return g
+        return null
+    }
+    property var winRows: []
+    property bool winFromHover: false     // hover previews fold when the pointer moves off; clicked ones stay
+    property var prevG: null              // the group the pointer is hovering, waiting out the show delay
+    property point prevAnchor: Qt.point(0, 0)
+    property var prevItem: null
+    Timer { id: prevTimer; interval: 400; onTriggered: if (root.shown && !root.menuOn && root.prevG) root.openWindows(root.prevG, root.prevItem, true) }
+    Timer { id: prevLeave; interval: 350; onTriggered: if (root.winFromHover && !winCard.hov) root.winOn = false }
+    function refreshWinRows() {
+        const g = root.winCur, out = []
+        if (g) for (const i of g.wins) {
+            const t = role(i, Qt.DisplayRole)
+            const wids = role(i, TaskManager.AbstractTasksModel.WinIdList)
+            out.push({
+                mi: i,
+                title: t !== undefined && t !== null ? String(t) : "",
+                active: isActive(i),
+                minimized: isMinimized(i),
+                uuid: wids !== undefined && wids !== null && wids.length > 0 ? String(wids[0]) : "",
+                live: role(i, TaskManager.AbstractTasksModel.IsMapped) === true,
+                born: Number(role(i, TaskManager.AbstractTasksModel.LastActivated) || 0)
+            })
+        }
+        // Most comfortable to pick from: the window you were just in, then the ones before it.
+        out.sort((a, b) => (b.active - a.active) || (b.born - a.born))
+        if (JSON.stringify(out) !== JSON.stringify(winRows)) winRows = out
+        if (root.winOn && (!g || g.wins.length === 0)) root.winOn = false   // the app is gone: fold the card
+    }
+    function openWindows(g, item, byHover) {
+        winG = g
+        winAnchor = iconCenter(item)
+        tipTimer.stop(); tipOn = false
+        menuOn = false
+        menuLeave.stop()
+        prevTimer.stop(); prevLeave.stop()
+        winFromHover = byHover
+        winOn = true
+        refreshWinRows()      // don't wait for the model's next tick: the rows are wanted now
+    }
+    function pickWindow(mi) {
+        winOn = false
+        const idx = row(mi)
+        if (idx.valid) tasks.requestActivate(idx)
+    }
+    function closeWindow(mi) { const idx = row(mi); if (idx.valid) tasks.requestClose(idx) }
+    // A click on a grouped icon raises the least-visible window (Dov's rule): a folded one wins
+    // over an open one, among folded - the last that was used, among open - the one that has been
+    // sitting in the back the longest, so repeated clicks walk the windows from back to front.
+    function cycleWindow(g) {
+        winOn = false
+        let best = -1, bestMin = false, bestBorn = 0, found = false
+        for (const i of g.wins) {
+            const min = isMinimized(i)
+            const born = Number(role(i, TaskManager.AbstractTasksModel.LastActivated) || 0)
+            let better
+            if (!found) better = true
+            else if (min !== bestMin) better = min
+            else better = min ? born > bestBorn : born < bestBorn
+            if (better) { best = i; bestMin = min; bestBorn = born; found = true }
+        }
+        if (best >= 0) {
+            const idx = row(best)
+            if (idx.valid) tasks.requestActivate(idx)
+        }
+    }
 
     function iconCenter(item) { const p = item.mapToItem(root, item.width / 2, item.height / 2); return Qt.point(p.x, p.y) }
     // Where a popup of size w x h sits: above the icon (bottom dock) or to its right (left dock).
@@ -609,41 +757,60 @@ Item {
         if (horiz) return Qt.point(Math.max(4, Math.min(lWin - w - 4, anchor.x - w / 2)), vWin - (d + thickness) - popGap - h)
         return Qt.point(d + thickness + popGap, Math.max(4, Math.min(lWin - h - 4, anchor.y - h / 2)))
     }
-    function stateText(mi) {
+    function stateText(g) {
         root.rev
-        if (mi < 0) return ""
-        if (!isWindow(mi)) return "Not running"
-        if (isMinimized(mi)) return "Minimized"
-        const t = String(role(mi, Qt.DisplayRole)), n = String(role(mi, TaskManager.AbstractTasksModel.AppName))
+        if (!g) return ""
+        if (g.wins.length === 0) return "Not running"
+        if (g.wins.length > 1) return g.wins.length + " windows"
+        const i = g.wins[0]
+        if (isMinimized(i)) return "Minimized"
+        const t = String(role(i, Qt.DisplayRole)), n = String(role(i, TaskManager.AbstractTasksModel.AppName))
         return t === n ? "" : t
     }
-    function hoverIcon(mi, item, inside) {
+    // Hovering an icon: a running app shows its windows' preview card (any count - one tile or
+    // several, like the big systems); an idle pinned app keeps the quiet two-line text tip.
+    function hoverIcon(g, item, inside) {
         if (inside) {
-            tipMi = mi; tipAnchor = iconCenter(item)
-            if (!menuOn) tipTimer.restart()
-        } else if (tipMi === mi) {
             tipTimer.stop(); tipOn = false
+            if (g.wins.length === 0) {
+                if (!menuOn && !winOn) { tipG = g; tipAnchor = iconCenter(item); tipTimer.restart() }
+            } else if (!menuOn) {
+                prevG = g; prevItem = item; prevAnchor = iconCenter(item)
+                prevLeave.stop()
+                if (winOn && winFromHover && winKey === g.key) return   // already showing this app
+                if (winOn && winFromHover) { openWindows(g, item, true); return }   // hop: switch at once
+                prevTimer.restart()
+            }
+        } else {
+            if (tipG === g) { tipTimer.stop(); tipOn = false }
+            if (winOn && winFromHover && winKey === g.key && !winCard.hov) prevLeave.restart()
         }
     }
-    Timer { id: tipTimer; interval: 400; onTriggered: root.tipOn = root.shown && !root.menuOn }
-    Timer { id: menuLeave; interval: 700; onTriggered: root.menuOn = false }
-    onPointerInChanged: { if (menuOn) { if (pointerIn) menuLeave.stop(); else menuLeave.restart() } }
+    Timer { id: tipTimer; interval: 400; onTriggered: root.tipOn = root.shown && !root.menuOn && !root.winOn }
+    Timer { id: menuLeave; interval: 700; onTriggered: { root.menuOn = false; root.winOn = false } }
+    onPointerInChanged: { if (menuOn || winOn) { if (pointerIn) menuLeave.stop(); else menuLeave.restart() } }
 
-    function openMenu(mi, item) {
-        buildMenu(mi)
+    function openMenu(g, item) {
+        buildMenu(g)
         menuAnchor = iconCenter(item)
         tipTimer.stop(); tipOn = false
+        winOn = false
         menuLeave.stop()
         menuOn = true
     }
-    function buildMenu(mi) {
-        const idx = row(mi), base = launcherBase(mi)
-        const run = isWindow(mi), down = isMinimized(mi) || !isActive(mi)
-        const url = role(mi, TaskManager.AbstractTasksModel.LauncherUrlWithoutIcon)
-        const it = [{ kind: "head", title: String(role(mi, TaskManager.AbstractTasksModel.AppName)), sub: stateText(mi) }]
+    // One window: the short state-aware menu as before. Several: the app-level menu - the windows
+    // themselves live in the chooser on a left-click, so here only "Close all" stands for them.
+    function buildMenu(g) {
+        const rep = repOf(g), idx = row(rep), base = launcherBase(rep)
+        const run = g.wins.length > 0, many = g.wins.length > 1
+        const down = run && (isMinimized(rep) || !isActive(rep))
+        const url = role(rep, TaskManager.AbstractTasksModel.LauncherUrlWithoutIcon)
+        const it = [{ kind: "head", title: String(role(rep, TaskManager.AbstractTasksModel.AppName)), sub: stateText(g) }]
         if (!run) it.push({ text: "Open", fn: () => tasks.requestNewInstance(idx) })
-        else it.push({ text: down ? "Show" : "Minimize", fn: () => down ? tasks.requestActivate(idx) : tasks.requestToggleMinimized(idx) })
-        if (run) it.push({ text: "New window", fn: () => tasks.requestNewInstance(idx) })
+        else {
+            if (!many) it.push({ text: down ? "Show" : "Minimize", fn: () => down ? tasks.requestActivate(idx) : tasks.requestToggleMinimized(idx) })
+            it.push({ text: "New window", fn: () => tasks.requestNewInstance(idx) })
+        }
         for (const a of dock.appActions(base)) it.push({ text: a.name, fn: () => dock.runExec(a.exec) })
         it.push({ kind: "sep" })
         const pinned = pinPos(base) >= 0
@@ -653,7 +820,8 @@ Item {
         } })
         if (run) {
             it.push({ kind: "sep" })
-            it.push({ text: "Close", danger: true, fn: () => tasks.requestClose(idx) })
+            it.push(many ? { text: "Close all", danger: true, fn: () => { for (const i of g.wins) tasks.requestClose(row(i)) } }
+                         : { text: "Close", danger: true, fn: () => tasks.requestClose(idx) })
         }
         menuItems = it
     }
@@ -662,6 +830,7 @@ Item {
         const r = []
         if (tip.opacity > 0.05) r.push({ x: tip.x, y: tip.y, w: tip.width, h: tip.height, r: Tokens.radius.md })
         if (menuCard.opacity > 0.05) r.push({ x: menuCard.x, y: menuCard.y, w: menuCard.width, h: menuCard.height, r: Tokens.radius.lg })
+        if (winCard.opacity > 0.05) r.push({ x: winCard.x, y: winCard.y, w: winCard.width, h: winCard.height, r: Tokens.radius.lg })
         return r
     }
 
@@ -688,7 +857,7 @@ Item {
             Text {
                 id: tipName
                 width: Math.min(implicitWidth, 256)
-                text: { root.rev; return root.tipMi < 0 ? "" : String(root.role(root.tipMi, TaskManager.AbstractTasksModel.AppName)) }
+                text: { root.rev; return root.tipG ? String(root.role(root.repOf(root.tipG), TaskManager.AbstractTasksModel.AppName)) : "" }
                 color: Theme.text; elide: Text.ElideRight
                 font.pixelSize: Tokens.type.body; font.family: Theme.font; font.weight: Font.Medium
             }
@@ -696,7 +865,7 @@ Item {
                 id: tipSub
                 width: Math.min(implicitWidth, 256)
                 visible: text !== ""
-                text: root.stateText(root.tipMi)
+                text: root.stateText(root.tipG)
                 color: Theme.subtext; elide: Text.ElideRight
                 font.pixelSize: Tokens.type.label; font.family: Theme.font
             }
@@ -771,5 +940,36 @@ Item {
                 }
             }
         }
+    }
+
+    // Window chooser: left-click on an app that owns several windows, hover on any running one.
+    // The card keeps showing while it fades: `winCur` and `winRows` stay even after `winOn` drops.
+    Connections {
+        target: winCard
+        function onHovChanged() {
+            if (!root.winOn || !root.winFromHover) return
+            if (winCard.hov) prevLeave.stop(); else prevLeave.restart()
+        }
+    }
+    WindowsCard {
+        transform: PopScale {}
+        id: winCard
+        transformOrigin: root.horiz ? Item.Bottom : Item.Left
+        readonly property point pos: root.popPos(root.winAnchor, width, height)
+        x: pos.x; y: pos.y
+        on: root.winOn && root.winCur !== null
+        appName: root.winCur ? String(root.role(root.repOf(root.winCur), TaskManager.AbstractTasksModel.AppName)) : ""
+        icon: {
+            root.rev
+            if (!root.winCur) return ""
+            const idx = root.row(root.repOf(root.winCur))
+            if (!idx.valid) return ""
+            const d = tasks.data(idx, Qt.DecorationRole)
+            return d !== undefined && d !== null && d !== false ? d : "application-x-executable"
+        }
+        count: root.winCur ? root.winCur.wins.length : 0
+        rows: root.winRows
+        onPick: (mi) => root.pickWindow(mi)
+        onCloseOne: (mi) => root.closeWindow(mi)
     }
 }
