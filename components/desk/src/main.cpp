@@ -346,7 +346,10 @@ int main(int argc, char **argv)
                                                  | LayerShellQt::Window::AnchorLeft | LayerShellQt::Window::AnchorRight));
     ls->setExclusiveZone(-1);   // the whole screen, like Folder View's grid
     ls->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
-    ls->setScope(QStringLiteral("desktop"));   // KWin types it a desktop window: it stays up through Show Desktop
+    // KWin types this window by the scope (layershellv1window.cpp): "desktop" keeps it up through
+    // Show Desktop, but KWin's blur refuses desktop-typed windows — "dock" keeps both: a dock also
+    // shows through Show Desktop, and blur applies behind it.
+    ls->setScope(QStringLiteral("dock"));
 
     view.engine()->addImageProvider(QStringLiteral("icon"), new IconProvider);
     view.engine()->addImportPath(sharedDir());
