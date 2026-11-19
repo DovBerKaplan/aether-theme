@@ -100,6 +100,7 @@ var dict = {
     "Warmth": "חום", "Theme": "ערכת נושא", "Light": "בהיר", "Picture from %1 - copied, paste it anywhere": "תמונה מ-%1 - הועתקה, אפשר להדביק בכל מקום", "Color": "צבע", "Accent": "הדגשה", "Hue": "גוון", "Brightness": "בהירות", "Lightness": "כהות", "Vividness": "עוצמה", "Your color": "הצבע שלך", "Theme color": "צבע הערכה", "Tap for light": "הקש לבהיר", "Tap for dark": "הקש לכהה", "By hours": "לפי השעות", "Auto": "אוטומטי",
     // Wallpaper
     "Wallpaper": "רקע", "Let it live": "להחיות את הרקע", "Ribbons": "סרטים", "Mist": "ערפל", "Aurora": "זוהר", "Ink": "דיו", "Dune": "דיונות",
+    "Mark": "סמל", "Distribution": "ההפצה", "Logo": "לוגו", "Image": "תמונה", "None": "ללא", "Choose an image…": "בחר תמונה…", "Another image…": "תמונה אחרת…",
     // Calendar
     "Hebrew dates: %1": "תאריך עברי: %1",
     // Power
@@ -151,14 +152,5 @@ var dict = {
     "Maximize pane": "הגדלת חלונית", "Restore size": "החזרת גודל", "Close pane": "סגירת חלונית",
     "Layout": "פריסה", "Single pane": "חלונית אחת", "Two columns": "שני טורים", "Two rows": "שתי שורות",
     "Three columns": "שלושה טורים", "Main and side": "ראשית וצד", "Grid 2×2": "רשת 2×2",
-    "Servers": "שרתים",
-
-    // desk: the desktop's right-click arrange panel
-    "Arrange desktop": "סידור שולחן העבודה",
-    "Pack to": "ערוך לכיוון", "Top": "למעלה", "Right": "ימין", "Left": "שמאל",
-    "Sort by": "מיון לפי", "Size": "גודל", "Date": "תאריך",
-    "Direction": "כיוון", "Ascending": "עולה", "Descending": "יורד",
-    "Folders first": "תיקיות בהתחלה",
-    "Free order": "סדר חופשי", "Free placement": "סדר חופשי",
-    "Shift + right-click: Plasma menu": "Shift + ימני: תפריט פלזמה"
+    "Servers": "שרתים"
 }

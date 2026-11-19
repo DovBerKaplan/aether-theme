@@ -96,7 +96,6 @@ class DeskController : public QObject
     Q_PROPERTY(QVariantList items READ items NOTIFY itemsChanged)
     Q_PROPERTY(QVariantMap grid READ grid NOTIFY itemsChanged)
     Q_PROPERTY(bool clean READ clean NOTIFY cleanChanged)
-    Q_PROPERTY(QString language READ language CONSTANT)   // the island's interface language (aetherislandrc)
 
 public:
     explicit DeskController(QQuickView *view)
@@ -106,27 +105,17 @@ public:
         m_appletsRc = QDir::homePath() + QStringLiteral("/.config/plasma-org.kde.plasma.desktop-appletsrc");
         m_clean = QSettings(configPath(), QSettings::IniFormat).value(QStringLiteral("Desk/Clean"), false).toBool();
 
-        // The desktop folder is watched for files coming and going (debounced, re-armed);
-        // appletsrc is watched too - the panel's state must follow sorts made elsewhere
-        // (Plasma's own settings UI). Plasma replaces the file on save, which drops the
-        // watch, so every pass re-arms it.
+        // The desktop folder is watched for files coming and going (debounced, re-armed).
         m_watcher.addPath(m_desktopDir);
-        if (QFileInfo::exists(m_appletsRc)) {
-            m_watcher.addPath(m_appletsRc);
-        }
         m_debounce.setSingleShot(true);
         m_debounce.setInterval(300);
         connect(&m_debounce, &QTimer::timeout, this, [this] {
             if (QFileInfo::exists(m_desktopDir) && !m_watcher.directories().contains(m_desktopDir)) {
                 m_watcher.addPath(m_desktopDir);
             }
-            if (QFileInfo::exists(m_appletsRc) && !m_watcher.files().contains(m_appletsRc)) {
-                m_watcher.addPath(m_appletsRc);
-            }
             readItems();
         });
         connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] { m_debounce.start(); });
-        connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this] { m_debounce.start(); });
 
         m_retry.setSingleShot(true);
         m_retry.setInterval(2000);
@@ -139,11 +128,6 @@ public:
     QVariantList items() const { return m_items; }
     QVariantMap grid() const { return m_grid; }
     bool clean() const { return m_clean; }
-    QString language() const
-    {
-        return QSettings(QDir::homePath() + QStringLiteral("/.config/aetherislandrc"), QSettings::IniFormat)
-            .value(QStringLiteral("Interface/Language"), QStringLiteral("en")).toString();
-    }
 
     // Clean hides Folder View's icons, not clean shows them; remembered across logins.
     Q_INVOKABLE void setClean(bool clean)
@@ -157,83 +141,23 @@ public:
         applyFilter();
     }
 
-    // Arrange: Folder View's own knobs, written through Plasma's desktop scripting so they land
-    // live and persist in appletsrc. Flow packs every icon into one direction: 0 rows from the
-    // top, 1 columns hugging the left edge, 2 columns hugging the right edge. A flow only shows
-    // while the icons are sorted (sortMode -1 = manual placement), so a manual desktop is given
-    // the name sort; the manual positions themselves are kept and come back with "free".
-    Q_INVOKABLE void arrange(int flow)
-    {
-        const int arrangement = flow == 0 ? 0 : 1;
-        const int alignment = flow == 2 ? 1 : 0;
-        sendArrange(QStringLiteral(
-            "desktops().forEach(function (d) {\n"
-            "    d.currentConfigGroup = [\"General\"];\n"
-            "    if (parseInt(d.readConfig(\"sortMode\", \"-1\")) === -1) d.writeConfig(\"sortMode\", 0);\n"
-            "    d.writeConfig(\"arrangement\", %1);\n"
-            "    d.writeConfig(\"alignment\", %2);\n"
-            "});").arg(arrangement).arg(alignment));
-    }
-
-    // Sort key 0..3 (name, size, type, date) - Folder View stores KDirModel's column numbers:
-    // name 0, size 1, date 2, type 6. -1 is manual placement (freeSort).
-    Q_INVOKABLE void sort(int key, bool desc, bool dirsFirst)
-    {
-        static const int column[4] = { 0, 1, 6, 2 };
-        const int mode = (key >= 0 && key < 4) ? column[key] : 0;
-        sendArrange(QStringLiteral(
-            "desktops().forEach(function (d) {\n"
-            "    d.currentConfigGroup = [\"General\"];\n"
-            "    d.writeConfig(\"sortMode\", %1);\n"
-            "    d.writeConfig(\"sortDesc\", %2);\n"
-            "    d.writeConfig(\"sortDirsFirst\", %3);\n"
-            "});").arg(mode).arg(desc ? QStringLiteral("true") : QStringLiteral("false"))
-                .arg(dirsFirst ? QStringLiteral("true") : QStringLiteral("false")));
-    }
-
-    Q_INVOKABLE void freeSort()
-    {
-        sendArrange(QStringLiteral(
-            "desktops().forEach(function (d) {\n"
-            "    d.currentConfigGroup = [\"General\"];\n"
-            "    d.writeConfig(\"sortMode\", -1);\n"
-            "});"));
-    }
-
-    // The glass parts of the surface: blurred behind, and the only parts that take the pointer.
-    // Each entry is {x, y, w, h, r}; while the arrange panel is open its rect joins the button's.
-    Q_INVOKABLE void setGlassRects(const QVariantList &rects)
+    // The button's glass: blurred behind and the only part of the surface that takes the pointer.
+    Q_INVOKABLE void setButtonRect(const QRectF &r, qreal radius)
     {
         QPainterPath p;
-        for (const QVariant &v : rects) {
-            const QVariantMap r = v.toMap();
-            const qreal rad = r.value(QStringLiteral("r")).toReal();
-            p.addRoundedRect(r.value(QStringLiteral("x")).toReal(), r.value(QStringLiteral("y")).toReal(),
-                             r.value(QStringLiteral("w")).toReal(), r.value(QStringLiteral("h")).toReal(), rad, rad);
-        }
+        p.addRoundedRect(r, radius, radius);
         const QRegion shape(p.toFillPolygon().toPolygon());
         KWindowEffects::enableBlurBehind(m_view, !shape.isEmpty(), shape);
         m_view->setMask(shape.isEmpty() ? QRegion(0, 0, 1, 1) : shape);
     }
 
-    Q_INVOKABLE void setButtonRect(const QRectF &r, qreal radius)
-    {
-        setGlassRects({ QVariantMap{ { QStringLiteral("x"), r.x() }, { QStringLiteral("y"), r.y() },
-                                      { QStringLiteral("w"), r.width() }, { QStringLiteral("h"), r.height() },
-                                      { QStringLiteral("r"), radius } } });
-    }
-
 public Q_SLOTS:
     void Toggle() { Q_EMIT toggleRequested(); }
-    // From AetherBridge (plasmashell's Folder View): the empty-desktop right click, in
-    // Folder View's coordinates - the desk's surface spans the same screen.
-    void OpenArrange(int x, int y) { Q_EMIT arrangeRequested(x, y); }
 
 Q_SIGNALS:
     void itemsChanged();
     void cleanChanged();
     void toggleRequested();
-    void arrangeRequested(int x, int y);
 
 private:
     static QString configPath()
@@ -241,40 +165,13 @@ private:
         return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/aetherdeskrc");
     }
 
-    // A Plasma desktop script against the live plasmashell: how the filter and every arrange
-    // write land (live and persisted).
-    QDBusPendingCall runScript(const QString &script)
+    void applyFilter()
     {
         QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
                                                         QStringLiteral("org.kde.PlasmaShell"), QStringLiteral("evaluateScript"));
-        m << script;
-        return QDBusConnection::sessionBus().asyncCall(m);
-    }
-
-    // After an arrange write: plasmashell saves appletsrc on its own schedule, so read twice,
-    // early and late; readItems only signals when something actually moved.
-    void arrangeWritten()
-    {
-        QTimer::singleShot(400, this, [this] { readItems(); });
-        QTimer::singleShot(1500, this, [this] { readItems(); });
-    }
-
-    void sendArrange(const QString &script)
-    {
-        auto *w = new QDBusPendingCallWatcher(runScript(script), this);
-        connect(w, &QDBusPendingCallWatcher::finished, this, [this, w] {
-            w->deleteLater();
-            if (w->isError()) {
-                qWarning().noquote() << "aether-desk: arrange script failed:" << w->error().message();
-            }
-            arrangeWritten();
-        });
-    }
-
-    void applyFilter()
-    {
+        m << QString::fromLatin1(m_clean ? kHideScript : kShowScript);
         const bool wanted = m_clean;
-        auto *w = new QDBusPendingCallWatcher(runScript(QString::fromLatin1(m_clean ? kHideScript : kShowScript)), this);
+        auto *w = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(m), this);
         connect(w, &QDBusPendingCallWatcher::finished, this, [this, w, wanted] {
             w->deleteLater();
             if (w->isError() && wanted == m_clean && ++m_attempts < 30) {
@@ -283,27 +180,19 @@ private:
         });
     }
 
-    // The desktop's entries in Folder View's current order (readGrid's sort), so the stand-ins
-    // land in the cells the real icons will occupy: folders lead when sortDirsFirst says so,
-    // then the key the panel picked - a natural, case-insensitive name (a .desktop file shows
-    // its Name=), size, type or modified time.
+    // The desktop's entries in Folder View's default order: folders first, then a natural,
+    // case-insensitive sort by the shown name (a .desktop file shows its Name=).
     void readItems()
     {
-        // Plasma replaced appletsrc on its last save and the watch died: re-arm.
-        if (QFileInfo::exists(m_appletsRc) && !m_watcher.files().contains(m_appletsRc)) {
-            m_watcher.addPath(m_appletsRc);
-        }
-        const QVariantMap g = readGrid();
-        struct Entry { QString name, icon, type; bool dir; qint64 size; qint64 mtime; };
+        struct Entry { QString name, icon; bool dir; };
         QList<Entry> entries;
         const QString lang = QLocale().name().section(QLatin1Char('_'), 0, 0);
         QMimeDatabase mimes;
         const QFileInfoList list = QDir(m_desktopDir).entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::System);
         for (const QFileInfo &fi : list) {
-            Entry e{ fi.fileName(), QString(), QString(), fi.isDir(), fi.size(), fi.lastModified().toSecsSinceEpoch() };
+            Entry e{ fi.fileName(), QString(), fi.isDir() };
             if (fi.isDir()) {
                 e.icon = QStringLiteral("folder");
-                e.type = QStringLiteral("inode/directory");
                 const QString dot = fi.absoluteFilePath() + QStringLiteral("/.directory");
                 if (QFileInfo::exists(dot)) {
                     const QString ic = QSettings(dot, QSettings::IniFormat).value(QStringLiteral("Desktop Entry/Icon")).toString();
@@ -319,10 +208,8 @@ private:
                     e.name = n;
                 }
                 e.icon = d.value(QStringLiteral("Icon"), QStringLiteral("application-x-executable")).toString();
-                e.type = QStringLiteral("application/x-desktop");
             } else {
                 const QMimeType mt = mimes.mimeTypeForFile(fi);
-                e.type = mt.name();
                 e.icon = QIcon::hasThemeIcon(mt.iconName()) ? mt.iconName() : mt.genericIconName();
             }
             entries << e;
@@ -330,26 +217,17 @@ private:
         QCollator coll;
         coll.setNumericMode(true);
         coll.setCaseSensitivity(Qt::CaseInsensitive);
-        const int mode = g.value(QStringLiteral("sortMode")).toInt();   // KDirModel column: 0 name, 1 size, 2 date, 6 type; -1 manual
-        const bool desc = g.value(QStringLiteral("sortDesc")).toBool();
-        const bool dirsFirst = g.value(QStringLiteral("sortDirsFirst")).toBool() && mode != -1;
-        std::stable_sort(entries.begin(), entries.end(), [&](const Entry &a, const Entry &b) {
-            if (dirsFirst && a.dir != b.dir) {
+        std::stable_sort(entries.begin(), entries.end(), [&coll](const Entry &a, const Entry &b) {
+            if (a.dir != b.dir) {
                 return a.dir;
             }
-            bool eq, less;
-            switch (mode) {
-            case 1:  eq = a.size == b.size; less = a.size < b.size; break;
-            case 6:  eq = a.type == b.type; less = coll.compare(a.type, b.type) < 0; break;
-            case 2:  eq = a.mtime == b.mtime; less = a.mtime < b.mtime; break;
-            default: eq = a.name == b.name; less = coll.compare(a.name, b.name) < 0; break;
-            }
-            return desc ? !eq && !less : less;   // ties keep the folder's own order
+            return coll.compare(a.name, b.name) < 0;
         });
         QVariantList out;
         for (const Entry &e : entries) {
             out << QVariantMap{ { QStringLiteral("name"), wrapPoints(e.name) }, { QStringLiteral("icon"), e.icon } };
         }
+        const QVariantMap g = readGrid();
         if (out != m_items || g != m_grid) {
             m_items = out;
             m_grid = g;
@@ -386,9 +264,7 @@ private:
     QVariantMap readGrid() const
     {
         QVariantMap g{ { QStringLiteral("iconSize"), 3 }, { QStringLiteral("labelWidth"), 1 }, { QStringLiteral("textLines"), 2 },
-                       { QStringLiteral("arrangement"), 0 }, { QStringLiteral("alignment"), 0 },
-                       { QStringLiteral("sortMode"), -1 }, { QStringLiteral("sortDesc"), false },
-                       { QStringLiteral("sortDirsFirst"), true } };
+                       { QStringLiteral("arrangement"), 0 }, { QStringLiteral("alignment"), 0 } };
         QFile f(m_appletsRc);
         if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
             return g;
@@ -422,15 +298,8 @@ private:
         }
         const auto conf = general.value(pick);
         for (auto it = g.begin(); it != g.end(); ++it) {
-            if (!conf.contains(it.key())) {
-                continue;
-            }
-            const QString v = conf.value(it.key());
-            // KConfig writes bools as true/false in the ini, everything else as plain integers
-            if (it.value().typeId() == QMetaType::Bool) {
-                it.value() = (v == QLatin1String("true") || v == QLatin1String("1"));
-            } else {
-                it.value() = v.toInt();
+            if (conf.contains(it.key())) {
+                it.value() = conf.value(it.key()).toInt();
             }
         }
         return g;
