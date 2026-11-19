@@ -18,8 +18,10 @@ T = load()
 _K = T["kvantum"]
 HACKS = _K.pop("hacks")
 GENERAL = _K.pop("general")
-# The frame's glass: Kvantum takes "how much to fade the window", the apps tokens "how opaque".
-GENERAL["reduce_window_opacity"] = str(round((1 - T["apps"]["chrome-alpha"]) * 100))
+# The glass has one fade: window.color carries the apps tokens' own alpha (tokens.toml) and the
+# frame's SVG pieces repeat it (window_frame) - reduce_window_opacity stays off, or Kvantum fades
+# the body a second time (~10% glass) while the frame keeps its full alpha and reads as a band.
+GENERAL["reduce_window_opacity"] = "0"
 THEMES = _K
 
 
