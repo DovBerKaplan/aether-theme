@@ -4,7 +4,7 @@ GEN   := theme/generators
 APPS  := island toasts dock console lens desk
 
 .DEFAULT_GOAL := help
-.PHONY: help all tokens theme fonts components install install-island install-apps install-login install-gestures direction-install zcode-rtl-install uninstall restore check clean
+.PHONY: help all tokens theme fonts components install install-island install-apps install-login install-gestures install-overview direction-install zcode-rtl-install uninstall restore check clean
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-18s %s\n", $$1, $$2}'
@@ -46,6 +46,9 @@ install-login: ## Install the login screen (asks for sudo)
 
 install-gestures: ## Install 3-finger touchpad gestures (needs the input group, see docs/INSTALL.md)
 	system/gestures/install-gestures.sh
+
+install-overview: ## Glass restyle for the KWin Overview tiles (asks for sudo; re-apply after kwin updates)
+	sudo install/install-overview.sh
 
 direction-install: ## Install per-app RTL/LTR launch rules (aether-direction)
 	system/direction/install-direction.sh

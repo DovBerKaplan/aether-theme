@@ -83,6 +83,7 @@ wget -O ~/.local/share/aether-lens/models/mobile_sam.pt \
 |---|---|---|
 | `make install-login` | Aether Lock login screen | needs sudo; revert with `sudo install/install-sddm.sh --revert` |
 | `make install-gestures` | 3-finger touchpad gestures (libinput-gestures) | needs your user in the `input` group, then log out and in |
+| `make install-overview` | Glass restyle for the KWin Overview tiles | needs sudo; a kwin package update reverts it — run again (revert: `sudo install/install-overview.sh --restore`) |
 | `make zcode-rtl-install` | RTL kit for the ZCode Electron app | only if you use that app |
 
 ## Optional: YouTube Music backend (no root needed)
