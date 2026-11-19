@@ -151,5 +151,14 @@ var dict = {
     "Maximize pane": "הגדלת חלונית", "Restore size": "החזרת גודל", "Close pane": "סגירת חלונית",
     "Layout": "פריסה", "Single pane": "חלונית אחת", "Two columns": "שני טורים", "Two rows": "שתי שורות",
     "Three columns": "שלושה טורים", "Main and side": "ראשית וצד", "Grid 2×2": "רשת 2×2",
-    "Servers": "שרתים"
+    "Servers": "שרתים",
+
+    // desk: the desktop's right-click arrange panel
+    "Arrange desktop": "סידור שולחן העבודה",
+    "Pack to": "ערוך לכיוון", "Top": "למעלה", "Right": "ימין", "Left": "שמאל",
+    "Sort by": "מיון לפי", "Size": "גודל", "Date": "תאריך",
+    "Direction": "כיוון", "Ascending": "עולה", "Descending": "יורד",
+    "Folders first": "תיקיות בהתחלה",
+    "Free order": "סדר חופשי", "Free placement": "סדר חופשי",
+    "Shift + right-click: Plasma menu": "Shift + ימני: תפריט פלזמה"
 }
