@@ -1,0 +1,35 @@
+# `make check` on every push and pull request: scripts syntax-checked, the split-model test, the
+# design tokens in sync, the wallpaper shaders compiled, and all six components built. The
+# components need Plasma 6's Qt/KF6, so the job runs on Ubuntu 24.04 with the KDE neon user
+# archive - the same packages the desktop runs on.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - name: KDE neon archive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl gpg
+          curl -fsSL https://archive.neon.kde.org/public.key | gpg --dearmor -o /usr/share/keyrings/neon-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/neon-archive-keyring.gpg] http://archive.neon.kde.org/user noble main" > /etc/apt/sources.list.d/neon.list
+          apt-get update
+
+      - name: Build dependencies
+        run: |
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git make cmake ninja-build g++ pkg-config python3 nodejs \
+            qt6-base-dev qt6-declarative-dev qt6-wayland-dev qt6-shadertools \
+            kf6-extra-cmake-modules kf6-kwindowsystem-dev kf6-krunner-dev \
+            liblayershellqtinterface-dev libatspi2.0-dev
+
+      - uses: actions/checkout@v4
+
+      - name: make check
+        run: make check
