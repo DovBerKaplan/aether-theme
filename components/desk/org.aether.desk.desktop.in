@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Aether Desk
+Exec=@EXEC@
+NoDisplay=true
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2

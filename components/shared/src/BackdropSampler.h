@@ -9,6 +9,8 @@
 #include <QObject>
 #include <QRect>
 
+#include <functional>
+
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -29,60 +31,15 @@ public:
     // `area` is in compositor (global) coordinates.
     void sample(const QRect &area)
     {
-        if (m_busy || area.width() < 1 || area.height() < 1) {
+        if (m_busy) {
             return;
         }
-        int fds[2];
-        if (::pipe2(fds, O_CLOEXEC | O_NONBLOCK) != 0) {
-            return;
-        }
-        QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/org/kde/KWin/ScreenShot2"),
-                                                           QStringLiteral("org.kde.KWin.ScreenShot2"), QStringLiteral("CaptureArea"));
-        call << area.x() << area.y() << uint(area.width()) << uint(area.height())
-             << QVariantMap{{QStringLiteral("native-resolution"), true}}
-             << QVariant::fromValue(QDBusUnixFileDescriptor(fds[1]));
-        ::close(fds[1]);   // KWin has its own copy; ours must go so the reader sees the end
-        m_busy = true;
-        const int rfd = fds[0];
-        auto *w = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(call, 1500), this);
-        connect(w, &QDBusPendingCallWatcher::finished, this, [this, rfd](QDBusPendingCallWatcher *w) {
-            w->deleteLater();
+        m_busy = capture(this, area, [this](const QImage &img) {
             m_busy = false;
-            const QDBusPendingReply<QVariantMap> reply = *w;
-            QByteArray data;
-            char buf[8192];
-            for (;;) {
-                const ssize_t n = ::read(rfd, buf, sizeof buf);
-                if (n <= 0) {
-                    break;   // end, or EAGAIN: KWin wrote the little it has at once
-                }
-                data.append(buf, int(n));
-            }
-            ::close(rfd);
-            if (!reply.isValid()) {
-                if (!m_warned) {
-                    m_warned = true;
-                    qWarning() << "backdrop sampling unavailable:" << reply.error().message();
-                }
+            if (img.isNull()) {
                 return;
             }
-            const QVariantMap meta = reply.value();
-            const int iw = meta.value(QStringLiteral("width")).toInt();
-            const int ih = meta.value(QStringLiteral("height")).toInt();
-            const int stride = meta.value(QStringLiteral("stride")).toInt();
-            const auto fmt = QImage::Format(meta.value(QStringLiteral("format")).toInt());
-            if (iw <= 0 || ih <= 0 || data.size() < qsizetype(stride) * ih) {
-                return;
-            }
-            const QImage img(reinterpret_cast<const uchar *>(data.constData()), iw, ih, stride, fmt);
-            double sum = 0;
-            for (int y = 0; y < ih; ++y) {
-                for (int x = 0; x < iw; ++x) {
-                    const QRgb c = img.pixel(x, y);
-                    sum += 0.299 * qRed(c) + 0.587 * qGreen(c) + 0.114 * qBlue(c);
-                }
-            }
-            const double luma = sum / (double(iw) * ih * 255.0);
+            const double luma = meanLuma(img, img.rect());
             if (!m_valid) {
                 m_valid = true;
                 Q_EMIT lightChanged();
@@ -96,6 +53,82 @@ public:
         });
     }
 
+    // Mean luma (0..1) of `r` within `img`. With `skipInk`, pixels near pure white or pure black are
+    // left out: those are text and its shadow over the backdrop, not the backdrop itself.
+    static double meanLuma(const QImage &img, const QRect &r, bool skipInk = false)
+    {
+        const QRect a = r.intersected(img.rect());
+        double sum = 0;
+        qint64 n = 0;
+        for (int y = a.top(); y <= a.bottom(); ++y) {
+            for (int x = a.left(); x <= a.right(); ++x) {
+                const QRgb c = img.pixel(x, y);
+                const double l = (0.299 * qRed(c) + 0.587 * qGreen(c) + 0.114 * qBlue(c)) / 255.0;
+                if (skipInk && (l > 0.96 || l < 0.04)) {
+                    continue;
+                }
+                sum += l;
+                ++n;
+            }
+        }
+        return n ? sum / n : -1;
+    }
+
+    // One shot of `area` (global coordinates); `done` gets the pixels, or a null image when KWin
+    // refused. Returns false when nothing was asked (empty area, no pipe) - `done` is not called then.
+    static bool capture(QObject *ctx, const QRect &area, std::function<void(const QImage &)> done)
+    {
+        if (area.width() < 1 || area.height() < 1) {
+            return false;
+        }
+        int fds[2];
+        if (::pipe2(fds, O_CLOEXEC | O_NONBLOCK) != 0) {
+            return false;
+        }
+        QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/org/kde/KWin/ScreenShot2"),
+                                                           QStringLiteral("org.kde.KWin.ScreenShot2"), QStringLiteral("CaptureArea"));
+        call << area.x() << area.y() << uint(area.width()) << uint(area.height())
+             << QVariantMap{{QStringLiteral("native-resolution"), true}}
+             << QVariant::fromValue(QDBusUnixFileDescriptor(fds[1]));
+        ::close(fds[1]);   // KWin has its own copy; ours must go so the reader sees the end
+        const int rfd = fds[0];
+        auto *w = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(call, 1500), ctx);
+        QObject::connect(w, &QDBusPendingCallWatcher::finished, ctx, [rfd, done](QDBusPendingCallWatcher *w) {
+            w->deleteLater();
+            const QDBusPendingReply<QVariantMap> reply = *w;
+            QByteArray data;
+            char buf[8192];
+            for (;;) {
+                const ssize_t n = ::read(rfd, buf, sizeof buf);
+                if (n <= 0) {
+                    break;   // end, or EAGAIN: KWin wrote the little it has at once
+                }
+                data.append(buf, int(n));
+            }
+            ::close(rfd);
+            if (!reply.isValid()) {
+                static bool warned = false;
+                if (!warned) {
+                    warned = true;
+                    qWarning() << "backdrop sampling unavailable:" << reply.error().message();
+                }
+                done(QImage());
+                return;
+            }
+            const QVariantMap meta = reply.value();
+            const int iw = meta.value(QStringLiteral("width")).toInt();
+            const int ih = meta.value(QStringLiteral("height")).toInt();
+            const int stride = meta.value(QStringLiteral("stride")).toInt();
+            const auto fmt = QImage::Format(meta.value(QStringLiteral("format")).toInt());
+            if (iw <= 0 || ih <= 0 || data.size() < qsizetype(stride) * ih) {
+                done(QImage());
+                return;
+            }
+            done(QImage(reinterpret_cast<const uchar *>(data.constData()), iw, ih, stride, fmt).copy());
+        });
+        return true;
+    }
+
 Q_SIGNALS:
     void lightChanged();
 
@@ -103,5 +136,4 @@ private:
     bool m_light = false;
     bool m_valid = false;
     bool m_busy = false;
-    bool m_warned = false;
 };

@@ -8,11 +8,13 @@
 // takes input, so the rest of the desktop works as before.
 #include <QCollator>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
@@ -31,9 +33,12 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QtMath>
 
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
+
+#include <BackdropSampler.h>
 
 // image://icon/<theme-name or absolute path>
 class IconProvider : public QQuickImageProvider
@@ -90,12 +95,98 @@ desktops().forEach(function (d) {
 });
 )JS";
 
+// Folder View draws every desktop label white with a black shadow, on any wallpaper. A local copy
+// of its package (KPackage prefers ~/.local/share over /usr/share) swaps the label for
+// AetherInkLabel, which inks it black or white for the wallpaper under it. The copy is rebuilt
+// whenever the system package or our label changes (a Plasma update), and taken away when the
+// label it patches is no longer there, so the desktop falls back to Plasma's own and never breaks.
+// plasmashell reads the package when it starts.
+static void ensureInkLabels(const QString &assets)
+{
+    const QString system = QStringLiteral("/usr/share/plasma/plasmoids/org.kde.desktopcontainment");
+    const QString local = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+        + QStringLiteral("/plasma/plasmoids/org.kde.desktopcontainment");
+    const QString stampPath = local + QStringLiteral("/.aether-ink");
+    const QStringList ours{ QStringLiteral("AetherInkLabel.qml"), QStringLiteral("ink.frag.qsb") };
+    const QString delegate = QStringLiteral("/contents/ui/FolderItemDelegate.qml");
+    if (QFileInfo::exists(local) && !QFileInfo::exists(stampPath)) {
+        qInfo() << "ink labels: a desktop containment override that is not ours is in place; leaving it";
+        return;
+    }
+    if (!QFileInfo::exists(system + delegate)) {
+        return;
+    }
+
+    QCryptographicHash hash(QCryptographicHash::Sha1);
+    QStringList files;
+    QDirIterator it(system, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        files << it.next().mid(system.size());
+    }
+    files.sort();
+    for (const QString &f : files) {
+        QFile in(system + f);
+        if (in.open(QIODevice::ReadOnly)) {
+            hash.addData(f.toUtf8());
+            hash.addData(in.readAll());
+        }
+    }
+    for (const QString &f : ours) {
+        QFile in(assets + QLatin1Char('/') + f);
+        if (!in.open(QIODevice::ReadOnly)) {
+            qWarning() << "ink labels: missing" << in.fileName();
+            return;
+        }
+        hash.addData(in.readAll());
+    }
+    const QByteArray stamp = hash.result().toHex();
+    QFile old(stampPath);
+    if (old.open(QIODevice::ReadOnly) && old.readAll().trimmed() == stamp) {
+        return;   // current
+    }
+
+    QFile src(system + delegate);
+    src.open(QIODevice::ReadOnly);
+    QString qml = QString::fromUtf8(src.readAll());
+    const QString from = QStringLiteral("PlasmaExtras.ShadowedLabel {");
+    if (qml.count(from) != 1) {
+        qWarning() << "ink labels: Folder View's label is not where it was; using Plasma's own";
+        QDir(local).removeRecursively();
+        return;
+    }
+    qml.replace(from, QStringLiteral("AetherInkLabel {"));
+
+    QDir(local).removeRecursively();
+    for (const QString &f : files) {
+        QDir().mkpath(QFileInfo(local + f).path());
+        QFile::copy(system + f, local + f);
+    }
+    QFile out(local + delegate);
+    out.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        QDir(local).removeRecursively();
+        return;
+    }
+    out.write(qml.toUtf8());
+    out.close();
+    for (const QString &f : ours) {
+        QFile::copy(assets + QLatin1Char('/') + f, local + QStringLiteral("/contents/ui/") + f);
+    }
+    QFile st(stampPath);
+    st.open(QIODevice::WriteOnly);
+    st.write(stamp + '\n');
+    qInfo() << "ink labels: desktop containment written to" << local << "(plasmashell picks it up when it starts)";
+}
+
 class DeskController : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantList items READ items NOTIFY itemsChanged)
     Q_PROPERTY(QVariantMap grid READ grid NOTIFY itemsChanged)
     Q_PROPERTY(bool clean READ clean NOTIFY cleanChanged)
+    // Per stand-in, in `items` order: true where the desktop under its label is bright, so it
+    // takes black ink like the real label (AetherInkLabel) will.
+    Q_PROPERTY(QVariantList ink READ ink NOTIFY inkChanged)
 
 public:
     explicit DeskController(QQuickView *view)
@@ -128,6 +219,42 @@ public:
     QVariantList items() const { return m_items; }
     QVariantMap grid() const { return m_grid; }
     bool clean() const { return m_clean; }
+    QVariantList ink() const { return m_ink; }
+
+    // One shot of the desktop over all the labels' rects (this window's coordinates), a luma for
+    // each. Asked when the pointer comes to the button, so the answer is in by the click. Text
+    // pixels are left out of the mean: the real labels may be showing in those rects.
+    Q_INVOKABLE void sampleInk(const QVariantList &rects)
+    {
+        if (m_inkBusy || rects.isEmpty()) {
+            return;
+        }
+        const QPoint origin = m_view->screen() ? m_view->screen()->geometry().topLeft() : QPoint();
+        QList<QRect> rs;
+        QRect all;
+        for (const QVariant &v : rects) {
+            const QRect r = v.toRectF().toAlignedRect().translated(origin);
+            rs << r;
+            all |= r;
+        }
+        m_inkBusy = BackdropSampler::capture(this, all, [this, rs, all](const QImage &img) {
+            m_inkBusy = false;
+            if (img.isNull()) {
+                return;
+            }
+            const double sx = double(img.width()) / all.width(), sy = double(img.height()) / all.height();
+            QVariantList out;
+            for (const QRect &r : rs) {
+                const QRect local = r.translated(-all.topLeft());
+                const QRect px(qFloor(local.x() * sx), qFloor(local.y() * sy), qCeil(local.width() * sx), qCeil(local.height() * sy));
+                out << (BackdropSampler::meanLuma(img, px, true) > 0.56);   // the label shader's midpoint
+            }
+            if (out != m_ink) {
+                m_ink = out;
+                Q_EMIT inkChanged();
+            }
+        });
+    }
 
     // Clean hides Folder View's icons, not clean shows them; remembered across logins.
     Q_INVOKABLE void setClean(bool clean)
@@ -157,6 +284,7 @@ public Q_SLOTS:
 Q_SIGNALS:
     void itemsChanged();
     void cleanChanged();
+    void inkChanged();
     void toggleRequested();
 
 private:
@@ -312,6 +440,8 @@ private:
     int m_attempts = 0;
     QVariantList m_items;
     QVariantMap m_grid;
+    QVariantList m_ink;
+    bool m_inkBusy = false;
     bool m_clean = false;
 };
 
@@ -319,6 +449,11 @@ static QString qmlDir()
 {
     const QString installed = QCoreApplication::applicationDirPath() + QStringLiteral("/../share/aether-desk/qml");
     return QDir(installed).exists() ? QDir(installed).canonicalPath() : QStringLiteral(AETHER_QML_DIR);
+}
+static QString folderviewDir()
+{
+    const QString installed = QCoreApplication::applicationDirPath() + QStringLiteral("/../share/aether-desk/folderview");
+    return QDir(installed).exists() ? QDir(installed).canonicalPath() : QStringLiteral(AETHER_FOLDERVIEW_DIR);
 }
 static QString sharedDir()
 {
@@ -331,6 +466,7 @@ int main(int argc, char **argv)
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("aether-desk"));
+    ensureInkLabels(folderviewDir());
 
     QQuickView view;
     view.setColor(Qt::transparent);

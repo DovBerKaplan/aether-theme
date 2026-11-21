@@ -66,6 +66,7 @@ Item {
     function toggle() {
         if (phase !== "idle")
             return;
+        sampleInk();                             // in case the pointer did not come by first (DBus Toggle)
         if (count === 0) {                       // nothing to throw: just flip
             broom = !broom;
             desk.setClean(!broom);
@@ -89,6 +90,16 @@ Item {
     Connections {
         target: desk
         function onToggleRequested() { root.toggle(); }
+    }
+    // The labels' rects in their cells, for desk.sampleInk: the stand-ins take the ink the real
+    // labels have there (black over a bright wallpaper), so the hand-over does not flash.
+    function sampleInk() {
+        const rects = [];
+        for (let i = 0; i < count; i++) {
+            const c = cellOf(i);
+            rects.push(Qt.rect(c.x + 1.5 * sp, c.y + 3 * sp + iconSize, cellW - 3 * sp, gu * textLines));
+        }
+        desk.sampleInk(rects);
     }
     function launchAll(out) {
         for (let i = 0; i < count; i++)
@@ -262,6 +273,7 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
+            onContainsMouseChanged: if (containsMouse && root.phase === "idle") root.sampleInk()
             onClicked: root.toggle()
         }
     }
@@ -331,9 +343,10 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: parent.width - 3 * root.sp      // Folder View: frame (cell - 2 spacing) minus one spacing
                     text: g.modelData.name
-                    color: "white"
+                    readonly property bool bright: desk.ink[g.index] === true
+                    color: bright ? "black" : "white"
                     style: Text.Raised
-                    styleColor: Qt.rgba(0, 0, 0, 0.35)
+                    styleColor: bright ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(0, 0, 0, 0.35)
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
                     maximumLineCount: root.textLines

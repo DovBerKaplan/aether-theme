@@ -23,6 +23,10 @@ rm -f "$HOME/.config/systemd/user/aether-island.service" "$HOME/.config/systemd/
       "$HOME/.local/share/applications/aether-console-toggle.desktop" \
       "$HOME/.local/bin/aether-island" "$HOME/.local/bin/aether-toasts"
 rm -rf "$HOME/.local/share/aether-island" "$HOME/.local/share/aether-toasts" "$HOME/.local/share/aether-dock" "$HOME/.local/share/aether-console" "$HOME/.local/share/aether-lens" "$HOME/.local/share/aether-desk"
+# aether-desk's inked desktop labels: its copy of Folder View's package (only if it is ours).
+FV="$HOME/.local/share/plasma/plasmoids/org.kde.desktopcontainment"
+[[ -f $FV/.aether-ink ]] && rm -rf "$FV"
+rm -f "$HOME/.local/share/applications/org.aether.desk.desktop"
 # The app accent sync (install-apps.sh); the themes themselves stay, restore.sh brings back the old look.
 systemctl --user disable --now aether-accent-sync.path 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/aether-accent-sync.service" "$HOME/.config/systemd/user/aether-accent-sync.path" "$HOME/.local/bin/aether-accent-sync"
