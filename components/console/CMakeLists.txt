@@ -21,7 +21,9 @@ qt_add_executable(aether-console
     src/Launcher.h
     src/Metrics.h
     src/LogStream.h
-    src/Sftp.h)
+    src/Sftp.h
+    ../shared/src/BackdropSampler.h)
+target_include_directories(aether-console PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src)
 target_link_libraries(aether-console PRIVATE
     Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus
     KF6::WindowSystem LayerShellQt::Interface)

@@ -12,6 +12,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
+#include <QHash>
 #include <QMap>
 #include <QSet>
 #include <QObject>
@@ -27,6 +28,10 @@
 
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
+
+#include <BackdropSampler.h>
+
+#include <algorithm>
 
 // The console's window: one layer-shell surface pinned to the right edge (top+bottom anchored,
 // so it is always the full screen height). The window itself never resizes - it spans the whole
@@ -79,6 +84,13 @@ public:
         m_poll.start();
         reread();
         nmWatch();
+
+        // The seated terminals' ink follows what shows through their glass (sampleInk).
+        m_inkReady = writeInkProfiles();
+        m_inkLight = !m_systemDark;   // until the first sample: the glass the system mode wears
+        m_inkTimer.setInterval(1500);
+        connect(&m_inkTimer, &QTimer::timeout, this, &ConsoleController::sampleInk);
+        m_inkTimer.start();
     }
 
     int screenWidth() const { return m_view->screen() ? m_view->screen()->size().width() : 1920; }
@@ -439,6 +451,129 @@ private:
         }
     }
 
+    // ---- Terminal ink ----------------------------------------------------------------------------
+    // A seated terminal is Konsole on clear glass: over a bright window its white text washes out.
+    // Every 1.5 s, while terminals are seated, a thin strip of the screen just left of the shelf is
+    // captured - what lies behind the shelf, seen where nothing covers it (KWin's capture draws a
+    // translucent window over black, so the glass itself cannot be read). Its median luma picks the
+    // profile for every seated terminal: AetherDark (light text on the dark glass) or AetherLight
+    // (dark text on the Serenity glass), switched over Konsole's DBus, with hysteresis: light past
+    // 0.55, dark again below 0.40.
+
+    // AetherDark / AetherLight: the user's Aether profile (font, margins, cursor) with the dark or
+    // the light scheme. Rewritten only when they differ.
+    static bool writeInkProfiles()
+    {
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/konsole");
+        QFile base(dir + QStringLiteral("/Aether.profile"));
+        if (!base.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return false;
+        }
+        const QStringList lines = QString::fromUtf8(base.readAll()).split(QLatin1Char('\n'));
+        const QList<std::pair<QString, QString>> variants{ { QStringLiteral("AetherDark"), QStringLiteral("AetherGlass") },
+                                                           { QStringLiteral("AetherLight"), QStringLiteral("AetherSerenity") } };
+        for (const auto &[name, scheme] : variants) {
+            QStringList out;
+            QString group;
+            bool schemeSet = false;
+            for (const QString &l : lines) {
+                if (l.startsWith(QLatin1Char('['))) {
+                    if (group == QLatin1String("[Appearance]") && !schemeSet) {
+                        out << QStringLiteral("ColorScheme=") + scheme;
+                        schemeSet = true;
+                    }
+                    group = l.trimmed();
+                }
+                if (group == QLatin1String("[Appearance]") && l.startsWith(QLatin1String("ColorScheme="))) {
+                    out << QStringLiteral("ColorScheme=") + scheme;
+                    schemeSet = true;
+                } else if (group == QLatin1String("[General]") && l.startsWith(QLatin1String("Name="))) {
+                    out << QStringLiteral("Name=") + name;
+                } else {
+                    out << l;
+                }
+            }
+            if (!schemeSet) {
+                out.prepend(QStringLiteral("[Appearance]\nColorScheme=") + scheme + QLatin1Char('\n'));
+            }
+            const QByteArray text = out.join(QLatin1Char('\n')).toUtf8();
+            QFile f(dir + QLatin1Char('/') + name + QStringLiteral(".profile"));
+            if (f.open(QIODevice::ReadOnly) && f.readAll() == text) {
+                continue;
+            }
+            f.close();
+            if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                return false;
+            }
+            f.write(text);
+        }
+        return true;
+    }
+
+    void setTermProfile(int pid, bool light)
+    {
+        m_termLight[pid] = light;
+        QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.kde.konsole-%1").arg(pid), QStringLiteral("/Sessions/1"),
+                                                        QStringLiteral("org.kde.konsole.Session"), QStringLiteral("setProfile"));
+        m << (light ? QStringLiteral("AetherLight") : QStringLiteral("AetherDark"));
+        // Konsole applies the profile and still answers AccessDenied ("security sensitive DBus API
+        // is disabled"), so the reply is not looked at.
+        QDBusConnection::sessionBus().asyncCall(m);
+        qInfo().noquote() << "terminal" << pid << "ink:" << (light ? "dark on light glass" : "light on dark glass");
+    }
+
+    void sampleInk()
+    {
+        if (!m_inkReady) {
+            return;
+        }
+        for (auto it = m_termLight.begin(); it != m_termLight.end();) {   // forget closed terminals
+            if (!m_seatPids.contains(it.key())) {
+                it = m_termLight.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        if (m_seats.isEmpty() || m_inkBusy) {
+            return;
+        }
+        QRect span;
+        for (auto it = m_seats.cbegin(); it != m_seats.cend(); ++it) {
+            span |= it.value();
+            if (!m_termLight.contains(it.key())) {
+                setTermProfile(it.key(), m_inkLight);   // a new terminal joins the others' ink
+            }
+        }
+        // The shelf's glass reaches a little past its terminals; the strip starts beyond that.
+        const QRect strip(span.left() - 48, span.top(), 8, span.height());
+        if (strip.left() < 0) {
+            return;
+        }
+        m_inkBusy = BackdropSampler::capture(this, strip, [this](const QImage &img) {
+            m_inkBusy = false;
+            QList<double> lumas;
+            for (int y = 0; y < img.height(); y += 2) {
+                for (int x = 0; x < img.width(); ++x) {
+                    const QRgb c = img.pixel(x, y);
+                    lumas.append((0.299 * qRed(c) + 0.587 * qGreen(c) + 0.114 * qBlue(c)) / 255.0);
+                }
+            }
+            if (lumas.size() < 16) {
+                return;
+            }
+            auto mid = lumas.begin() + lumas.size() / 2;
+            std::nth_element(lumas.begin(), mid, lumas.end());
+            const bool light = m_inkLight ? *mid > 0.40 : *mid > 0.55;
+            if (light != m_inkLight) {
+                m_inkLight = light;
+                qInfo().noquote() << "terminals: the backdrop is" << (light ? "light" : "dark") << "luma" << *mid;
+                for (auto it = m_seats.cbegin(); it != m_seats.cend(); ++it) {
+                    setTermProfile(it.key(), light);
+                }
+            }
+        });
+    }
+
     QQuickView *m_view;
     QFileSystemWatcher m_watcher;
     QTimer m_debounce;
@@ -457,6 +592,11 @@ private:
     int m_focusPid = 0;
     QSet<int> m_seatPids;
     bool m_online = true;
+    QTimer m_inkTimer;
+    bool m_inkReady = false;
+    QHash<int, bool> m_termLight;   // pid -> on AetherLight (dark text)
+    bool m_inkLight = false;        // the backdrop beside the shelf is bright
+    bool m_inkBusy = false;
 
 private Q_SLOTS:
     void nmStateChanged(quint32 state)
