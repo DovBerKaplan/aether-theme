@@ -289,7 +289,8 @@ def dark() -> list[tuple[str, str, str]]:
         ("historyToDownShadow", "#00000040", ""),
         # composer
         # the chat header and the writing bar are glass over the backdrop, not opaque bands
-        ("historyComposeAreaBg", tint("ink-850", body)[0] + "dd", tint("ink-850", body)[1]),
+        # the compose pill is glass the client paints itself; what lies on it brings no fill
+        ("historyComposeAreaBg", "#00000000", ""),
         ("topBarBg", tint("ink-850", body)[0] + "d2", tint("ink-850", body)[1]),
         ("historyComposeAreaFg", p["fog-100"], ""),
         ("historyComposeAreaFgService", p["fog-500"], ""),
@@ -386,7 +387,7 @@ def light() -> list[tuple[str, str, str]]:
         "historyUnreadBarFg": p["graphite-500"],
         "historyToDownBg": p["paper-0"], "historyToDownBgOver": p["paper-100"], "historyToDownBgRipple": p["fog-50"],
         "historyToDownFg": p["graphite-500"], "historyToDownFgOver": p["graphite-900"], "historyToDownShadow": "#0000001f",
-        "historyComposeAreaBg": p["paper-0"] + "e0", "topBarBg": p["paper-0"] + "d8", "historyComposeAreaFg": p[fg],
+        "historyComposeAreaBg": "#00000000", "topBarBg": p["paper-0"] + "d8", "historyComposeAreaFg": p[fg],
         "historyComposeAreaFgService": p["graphite-500"], "historyComposeIconFg": p["graphite-500"],
         "historyComposeIconFgOver": DEEP, "historySendIconFg": DEEP, "historySendIconFgOver": DEEP + "e6",
         "historyComposeButtonBg": p["paper-0"], "historyComposeButtonBgOver": p["paper-100"],
