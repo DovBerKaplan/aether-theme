@@ -101,7 +101,8 @@ def dark() -> list[tuple[str, str, str]]:
         ("windowActiveTextFg", ACCENT, ""),
         ("windowShadowFg", "#000000", ""),
         ("windowShadowFgFallback", p["ink-950"], ""),
-        ("shadowFg", "#00000030", ""),
+        ("shadowFg", "#00000000", ""),            # no hairlines: the shelves are separated by space
+        ("boxDividerFg", "#00000000", ""),
         # buttons
         ("activeButtonBg", ACCENT, ""),
         ("activeButtonBgOver", HOVER, ""),
@@ -135,7 +136,10 @@ def dark() -> list[tuple[str, str, str]]:
         ("scrollBarBgOver", "#ffffff5c", ""),
         # search field
         ("filterInputBorderFg", ACCENT, ""),
-        ("filterInputActiveBg", *tint("ink-950", body)),
+        # the focused search field stays a soft chip (a little lighter), not a black hole
+        ("filterInputActiveBg", *veil("#ffffff", 0.11, "dialogsBg", p["ink-850"])),
+        # the bands that head search results are not slabs across the card
+        ("searchedBarBg", "#00000000", ""),
         ("filterInputInactiveBg", *tint("ink-800", body)),
         # own title bar (when the system one is off)
         ("titleBg", *tint("ink-850", body)),
@@ -284,7 +288,9 @@ def dark() -> list[tuple[str, str, str]]:
         ("historyToDownFgOver", p["fog-100"], ""),
         ("historyToDownShadow", "#00000040", ""),
         # composer
-        ("historyComposeAreaBg", *tint("ink-850", body)),
+        # the chat header and the writing bar are glass over the backdrop, not opaque bands
+        ("historyComposeAreaBg", tint("ink-850", body)[0] + "dd", tint("ink-850", body)[1]),
+        ("topBarBg", tint("ink-850", body)[0] + "d2", tint("ink-850", body)[1]),
         ("historyComposeAreaFg", p["fog-100"], ""),
         ("historyComposeAreaFgService", p["fog-500"], ""),
         ("historyComposeIconFg", p["fog-500"], ""),
@@ -314,7 +320,7 @@ def light() -> list[tuple[str, str, str]]:
         "windowBgRipple": p["fog-50"], "windowFgOver": p[fg], "windowSubTextFg": p["graphite-500"],
         "windowSubTextFgOver": p["graphite-700"], "windowBoldFg": p["graphite-900"], "windowBoldFgOver": p["graphite-900"],
         "windowBgActive": DEEP, "windowFgActive": WHITE, "windowActiveTextFg": DEEP,
-        "windowShadowFgFallback": p["paper-100"], "shadowFg": "#00000018",
+        "windowShadowFgFallback": p["paper-100"], "shadowFg": "#00000000", "boxDividerFg": "#00000000",
         "activeButtonBg": DEEP, "activeButtonBgOver": DEEP + "e6", "activeButtonBgRipple": INK,
         "activeButtonFg": WHITE, "activeButtonFgOver": WHITE, "activeButtonSecondaryFg": WHITE + "b3",
         "activeButtonSecondaryFgOver": WHITE + "b3",
@@ -327,7 +333,7 @@ def light() -> list[tuple[str, str, str]]:
         "menuIconFg": p["graphite-500"], "menuIconFgOver": p["graphite-900"], "menuSubmenuArrowFg": p["graphite-500"],
         "menuFgDisabled": p["fog-500"], "menuSeparatorFg": "#0000001a",
         "scrollBarBg": "#0000003a", "scrollBarBgOver": "#0000005c",
-        "filterInputBorderFg": DEEP, "filterInputActiveBg": p["paper-0"], "filterInputInactiveBg": p["paper-100"],
+        "filterInputBorderFg": DEEP, "searchedBarBg": "#00000000", "filterInputActiveBg": p["paper-0"], "filterInputInactiveBg": p["paper-100"],
         "titleBg": tint("paper-50", paper), "titleBgActive": tint("paper-50", paper), "titleFg": p["graphite-500"],
         "titleFgActive": p[fg], "titleButtonFg": p["graphite-500"], "titleButtonBgOver": p["paper-100"],
         "titleButtonFgOver": p[fg], "titleButtonFgActive": p["graphite-700"], "titleButtonFgActiveOver": p[fg],
@@ -380,7 +386,7 @@ def light() -> list[tuple[str, str, str]]:
         "historyUnreadBarFg": p["graphite-500"],
         "historyToDownBg": p["paper-0"], "historyToDownBgOver": p["paper-100"], "historyToDownBgRipple": p["fog-50"],
         "historyToDownFg": p["graphite-500"], "historyToDownFgOver": p["graphite-900"], "historyToDownShadow": "#0000001f",
-        "historyComposeAreaBg": p["paper-0"], "historyComposeAreaFg": p[fg],
+        "historyComposeAreaBg": p["paper-0"] + "e0", "topBarBg": p["paper-0"] + "d8", "historyComposeAreaFg": p[fg],
         "historyComposeAreaFgService": p["graphite-500"], "historyComposeIconFg": p["graphite-500"],
         "historyComposeIconFgOver": DEEP, "historySendIconFg": DEEP, "historySendIconFgOver": DEEP + "e6",
         "historyComposeButtonBg": p["paper-0"], "historyComposeButtonBgOver": p["paper-100"],
