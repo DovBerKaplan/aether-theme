@@ -54,7 +54,7 @@ Item {
 
     property bool shown: false
     property bool pointerIn: false
-    readonly property bool holdOpen: menuOn || winOn || drag.active || allCell.holding || lensProg > 0
+    readonly property bool holdOpen: menuOn || winOn || drag.active || dKey !== "" || allCell.holding || lensProg > 0
 
     // ---- Pinned open -----------------------------------------------------------------
     // Android's home-screen model: the bottom bar lives out while the desktop shows, and the task
@@ -428,6 +428,63 @@ Item {
     }
     function savePins() { dock.launchers = tasks.launcherList }
 
+    // ---- Reorder: drag a pinned app along the row ---------------------------------------
+    // The grabbed icon follows the pointer, its neighbours slide aside on springs to open the slot,
+    // and on release it settles into place before the new pin order is written. Only pinned apps
+    // have an order of their own (the free ones follow first-seen), so the drag stays inside them.
+    readonly property real stride: cell + gap
+    readonly property int pinnedN: { let n = 0; for (const g of groups) if (g.pin >= 0) n++; return n }
+    property string dKey: ""          // the grabbed app's group key, "" when nothing is held
+    property real dOff: 0             // its offset from its own cell along the row
+    property int dTo: -1              // the slot it would land in
+    property bool dAnim: false        // neighbours spring only while a drag is live
+    property bool dSettle: false      // released: the icon is gliding into its slot
+    property bool dCommit: false      // the new order is written, waiting for the row to rebuild
+    readonly property int dFrom: dKey === "" ? -1 : groups.findIndex(g => g.key === dKey)
+    function shiftOf(i) {
+        if (dKey === "" || dFrom < 0) return 0
+        if (i === dFrom) return dOff
+        if (dFrom < dTo && i > dFrom && i <= dTo) return -stride
+        if (dFrom > dTo && i >= dTo && i < dFrom) return stride
+        return 0
+    }
+    function beginDrag(g) {
+        prevTimer.stop(); tipTimer.stop(); tipOn = false; winOn = false
+        dAnim = true; dOff = 0; dSettle = false; dCommit = false
+        dKey = g.key
+        dTo = dFrom
+    }
+    function dragTo(off) {
+        if (dFrom < 0) return
+        dOff = Math.max(-dFrom * stride, Math.min((pinnedN - 1 - dFrom) * stride, off))
+        dTo = Math.max(0, Math.min(pinnedN - 1, Math.round(dFrom + dOff / stride)))
+    }
+    function endDrag() {
+        if (dKey === "" || dSettle) return
+        dSettle = true
+        settleAnim.to = (dTo - dFrom) * stride
+        settleAnim.restart()
+    }
+    function clearDrag() {
+        settleAnim.stop(); settleTimer.stop()
+        dAnim = false; dKey = ""; dOff = 0; dTo = -1; dSettle = false; dCommit = false
+    }
+    function commitDrag() {
+        if (dFrom < 0 || dTo === dFrom) { clearDrag(); return }
+        const from = groups[dFrom].pin, to = groups[dTo].pin
+        const l = tasks.launcherList.slice()
+        l.splice(to, 0, l.splice(from, 1)[0])
+        dCommit = true
+        settleTimer.restart()      // fallback: never leave the row held if the rebuild does not come
+        dock.launchers = l
+    }
+    onGroupsChanged: {
+        if (dCommit) clearDrag()
+        else if (dKey !== "" && dFrom < 0) clearDrag()
+    }
+    NumberAnimation { id: settleAnim; target: root; property: "dOff"; duration: 170; easing.type: Easing.OutCubic; onFinished: root.commitDrag() }
+    Timer { id: settleTimer; interval: 400; onTriggered: root.clearDrag() }
+
     // ---- The glass: the island's material on the silhouette --------------------------
     Shape {
         transform: PopScale {}
@@ -488,6 +545,10 @@ Item {
                 readonly property int mi: root.repOf(g)   // the icon's row: the first window, else the idle launcher
                 width: root.horiz ? root.cell + extra : root.cell
                 height: root.horiz ? root.cell : root.cell + extra
+                readonly property bool held: root.dKey === g.key
+                z: held ? 10 : 0
+                property real sx: root.shiftOf(index)     // reorder: slides aside / follows the pointer
+                Behavior on sx { enabled: root.dAnim && !cellItem.held; SpringAnimation { spring: 5; damping: 0.55; epsilon: 0.2 } }
 
                 Rectangle {   // pinned | running hairline
                     visible: cellItem.sepBefore
@@ -501,10 +562,10 @@ Item {
 
                 Item {
                     id: box
-                    x: root.horiz ? cellItem.extra : 0
-                    y: root.horiz ? 0 : cellItem.extra
+                    x: root.horiz ? cellItem.extra + cellItem.sx : 0
+                    y: root.horiz ? 0 : cellItem.extra + cellItem.sx
                     width: root.cell; height: root.cell
-                    scale: ma.pressed ? 0.88 : 1
+                    scale: cellItem.held ? 1.14 : ma.pressed ? 0.88 : 1
                     Behavior on scale { SpringAnimation { spring: 4; damping: 0.45; mass: 0.6 } }
 
                     Rectangle {   // hover: one calm tonal chip
@@ -559,8 +620,26 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-                        onContainsMouseChanged: root.hoverIcon(cellItem.g, box, containsMouse)
+                        onContainsMouseChanged: if (root.dKey === "") root.hoverIcon(cellItem.g, box, containsMouse)
+                        // Reorder: a pinned app dragged a little leaves its cell and follows the pointer.
+                        property real pressAt: 0
+                        property bool suppressClick: false
+                        function along(mouse) { const p = mapToItem(root, mouse.x, mouse.y); return root.horiz ? p.x : p.y }
+                        onPressed: (mouse) => { if (mouse.button === Qt.LeftButton) pressAt = along(mouse) }
+                        onPositionChanged: (mouse) => {
+                            if (!pressed || !(pressedButtons & Qt.LeftButton) || cellItem.g.pin < 0 || root.pinnedN < 2 || root.dSettle) return
+                            const a = along(mouse)
+                            if (root.dKey === "") {
+                                if (Math.abs(a - pressAt) < 8) return
+                                root.beginDrag(cellItem.g)
+                                pressAt = a
+                            } else if (!cellItem.held) return
+                            root.dragTo(a - pressAt)
+                        }
+                        onReleased: { if (cellItem.held) { suppressClick = true; root.endDrag() } }
+                        onCanceled: { if (cellItem.held) root.clearDrag() }
                         onClicked: (mouse) => {
+                            if (suppressClick) { suppressClick = false; return }
                             const g = cellItem.g
                             if (mouse.button === Qt.RightButton) {
                                 root.openMenu(g, box)
