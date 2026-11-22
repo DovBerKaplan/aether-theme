@@ -1,5 +1,5 @@
 # Aether's two-line bash prompt, sourced from ~/.bashrc (install/install-apps.sh adds the line):
-#   ┌──(user⟨distro⟩host)-[~/dir]
+#   ┌──(user ⟨distro⟩ host)-[~/dir]
 #   └─$
 # The frame wears the theme's cyan, the name its blue, a failed command turns the frame red.
 # The mark is the running distro's own Nerd-Font logo, read once from /etc/os-release —
@@ -53,6 +53,6 @@ __aether_prompt() {
   (( s )) && frame='\[\e[0;31m\]'
   local mark=$__AETHER_MARK sign='$'
   (( EUID == 0 )) && { name='\[\e[1;31m\]'; mark='💀'; sign='#'; }
-  PS1="\[\e]0;\u@\h: \w\a\]${frame}┌──(${name}\u${mark}\h${frame})-[${dir}\w${frame}]${off}\n${frame}└─${name}${sign}${off} "
+  PS1="\[\e]0;\u@\h: \w\a\]${frame}┌──(${name}\u ${mark} \h${frame})-[${dir}\w${frame}]${off}\n${frame}└─${name}${sign}${off} "
 }
 PROMPT_COMMAND="__aether_prompt${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
