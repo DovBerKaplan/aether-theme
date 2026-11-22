@@ -100,11 +100,14 @@ def roles(hls) -> dict[str, str]:
 
 def lit(hls):
     """The accent raised until it reads as text on the dark surfaces (a navy accent turns a readable
-    blue there) and its hover shade still carries an ink (badges, buttons); bright accents pass unchanged."""
+    blue there), on the soft-tinted outgoing bubble (whose lightness is fixed, not the accent's) and
+    its hover shade still carries an ink (badges, buttons); bright accents pass unchanged."""
     h, l, s = hls
     def inked(fill):
         return max(contrast(fill, hexof(h, 0.12, s)), contrast(fill, "#ffffff"))
-    while l < 0.9 and (contrast(hexof(h, l, s), INK700) < 4.6 or inked(hexof(h, l * 0.92, s)) < 4.6):
+    while l < 0.9 and (contrast(hexof(h, l, s), INK700) < 4.6
+                       or contrast(hexof(h, l, s), hexof(h, 0.24, 0.22)) < 4.6
+                       or inked(hexof(h, l * 0.92, s)) < 4.6):
         l += 0.01
     return h, l, s
 
@@ -137,17 +140,28 @@ def recolor(text: str, colors: dict[str, str] | None) -> str:
     return text
 
 
+def blend(top: str, under: str) -> str:
+    """#rrggbb[aa] composited onto an opaque #rrggbb, as an opaque #rrggbb."""
+    a = int(top[7:9], 16) / 255 if len(top) == 9 else 1.0
+    return "#" + "".join("%02x" % round(int(top[i:i + 2], 16) * a + int(under[i:i + 2], 16) * (1 - a))
+                         for i in (1, 3, 5))
+
+
 TG_MARK = re.compile(r"^\w+: (#[0-9a-fA-F]{6})[0-9a-fA-F]{0,2}; // (on|beside)-(\w+)( .*)?$|"
-                     r"^\w+: (#[0-9a-fA-F]{6})[0-9a-fA-F]{0,2}; // tint ([\d.]+) ([\d.]+)$", re.M)
+                     r"^\w+: (#[0-9a-fA-F]{6})[0-9a-fA-F]{0,2}; // tint ([\d.]+) ([\d.]+)(?: \+(\d+))?$", re.M)
+VEIL_MARK = re.compile(r"^(\w+): (#[0-9a-fA-F]{6})[0-9a-fA-F]{0,2}; // veil (#[0-9a-fA-F]{6}) ([\d.]+) (\w+)$", re.M)
 
 
 def tg_fix(text: str, colors: dict[str, str] | None, hue: float | None = None) -> str:
-    """Recolour a Telegram palette, then resolve the marked lines (alpha kept):
+    """Recolour a Telegram palette, then resolve the marked lines (alpha kept, mark kept for the next run):
       // on-ROLE            the ink that reads best on that role's fill: the dark ink or white
       // beside-ROLE #a #b  a fill that shares on-ROLE's ink (tdesktop draws a muted badge with the
                             plain badge's ink): #a under the dark ink, #b under white
-      // tint L S           with a colour chosen, the accent's hue at that lightness and saturation
-                            (the island's tinted glass); else the neutral value stays"""
+      // tint L S [+D]      with a colour chosen, the accent's hue (turned D degrees) at that lightness
+                            and saturation (the island's tinted glass; sender names fan out from the
+                            accent this way); else the neutral value stays
+      // veil #hex A key    an opaque #hex at alpha A composited over the key's final value (after
+                            the tints above are resolved): a quiet selection veil over the list"""
     text = recolor(text, colors)
     if not colors:
         return text
@@ -162,38 +176,46 @@ def tg_fix(text: str, colors: dict[str, str] | None, hue: float | None = None) -
             return line.replace(m.group(1), v, 1)
         if hue is None:
             return line
-        return line.replace(m.group(5), hexof(hue, float(m.group(6)), float(m.group(7))), 1)
-    return TG_MARK.sub(fix, text)
+        turned = (hue + int(m.group(8) or 0) / 360) % 1.0
+        return line.replace(m.group(5), hexof(turned, float(m.group(6)), float(m.group(7))), 1)
+    text = TG_MARK.sub(fix, text)
+
+    def veil(m):
+        under = re.search(rf"^{m.group(5)}: (#[0-9a-fA-F]{{6}});", text, re.M)
+        return m.group(0) if not under else m.group(0).replace(
+            m.group(2), blend(m.group(3) + "%02x" % round(float(m.group(4)) * 255), under.group(1)), 1)
+    return VEIL_MARK.sub(veil, text)
 
 
 def tg_background(hue: float, light: bool) -> bytes:
-    """Aethergram's chat background, in the wallpapers' language (docs/WALLPAPERS.md): a deep field in
-    the accent's hue (pale on light), one soft glow, a vignette and fine grain. Drawn small and scaled
-    up - the field is all soft gradient - then grained at full size: well under a second."""
+    """Aethergram's chat background, in the wallpapers' language (docs/WALLPAPERS.md): a quiet, almost
+    flat field in the accent's hue (pale on light), no glow in the dark, at most a whisper on light,
+    a light vignette and fine grain. Drawn small and scaled up - the field is all soft gradient - then
+    grained at full size: well under a second."""
     from PIL import Image, ImageChops
     import random
     def rgb(l, s):
         return tuple(round(c * 255) for c in colorsys.hls_to_rgb(hue, l, s))
     w, h, W, H = 480, 270, 1920, 1080
-    top, bottom, glow, vig = ((rgb(0.955, 0.30), rgb(0.915, 0.26), rgb(0.86, 0.55), 0.06) if light else
-                              (rgb(0.105, 0.32), rgb(0.060, 0.30), rgb(0.30, 0.50), 0.42))
+    top, bottom, glow, vig, peak = ((rgb(0.965, 0.06), rgb(0.94, 0.06), rgb(0.995, 0.12), 0.12, 0.12) if light else
+                                    (rgb(0.115, 0.08), rgb(0.080, 0.06), rgb(0.145, 0.12), 0.12, 0.0))
     field = Image.composite(Image.new("RGB", (w, h), bottom), Image.new("RGB", (w, h), top),
                             Image.linear_gradient("L").resize((w, h)))
-    # radial_gradient: 0 at the centre, 181 at the edge's midpoint (radius 128 of 256); the falloff is
-    # flat at the heart, so the glow has no bright point.
-    peak = 0.70 if light else 0.48
-    blob = Image.radial_gradient("L").point(lambda v: round(255 * peak * max(0.0, 1 - (v / 181) ** 2) ** 2))
-    size = round(w * 1.0)
-    mask = Image.new("L", (w, h), 0)
-    mask.paste(blob.resize((size, size), Image.BICUBIC), (round(w * 0.70) - size // 2, round(h * 0.28) - size // 2))
-    field = Image.composite(Image.new("RGB", (w, h), glow), field, mask)
+    if peak:
+        # radial_gradient: 0 at the centre, 181 at the edge's midpoint (radius 128 of 256); the falloff is
+        # flat at the heart, so the glow has no bright point.
+        blob = Image.radial_gradient("L").point(lambda v: round(255 * peak * max(0.0, 1 - (v / 181) ** 2) ** 2))
+        size = round(w * 1.0)
+        mask = Image.new("L", (w, h), 0)
+        mask.paste(blob.resize((size, size), Image.BICUBIC), (round(w * 0.70) - size // 2, round(h * 0.28) - size // 2))
+        field = Image.composite(Image.new("RGB", (w, h), glow), field, mask)
     def shade(v):
         t = min(max((v / 255 - 0.40) / 0.60, 0), 1)
         return round(255 * (1 - vig * t * t * (3 - 2 * t)))
     v = Image.radial_gradient("L").resize((w, h)).point(shade)
     img = ImageChops.multiply(field, Image.merge("RGB", (v, v, v))).resize((W, H), Image.BICUBIC)
     rnd, n = random.Random(11), 256
-    tile = Image.frombytes("L", (n, n), bytes(min(255, max(0, round(rnd.gauss(128, 2.5 if light else 3.2))))
+    tile = Image.frombytes("L", (n, n), bytes(min(255, max(0, round(rnd.gauss(128, 1.5))))
                                               for _ in range(n * n)))
     grain = Image.new("L", (W, H))
     for y in range(0, H, n):
@@ -219,16 +241,27 @@ def tg_theme(palette: str, background: bytes, tag: str) -> bytes:
     return buf.getvalue()
 
 
+BACKDROP_DIR = Path(os.environ.get("AETHER_BACKDROP_OUT") or DATA / "aether")
+
+
 def tg_theme_for(path: Path, palette: str, hue: float, light: bool) -> bytes:
-    """The theme for this palette and hue; the one at `path` is reused when it already is that."""
-    tag = f"aether background v1 hue={hue:.4f} {'light' if light else 'dark'}"
+    """The theme for this palette and hue; the one at `path` is reused when it already is that. The chat
+    background is the desktop wallpaper drawn quiet (aether-chat-backdrop) when that is there, else a
+    plain field in the accent's hue."""
+    mode = "light" if light else "dark"
+    rendered = BACKDROP_DIR / f"chat-backdrop-{mode}.jpg"
+    try:
+        st = rendered.stat()
+        tag = f"aether backdrop v3 {mode} {st.st_size} {int(st.st_mtime)}"
+    except OSError:
+        rendered, tag = None, f"aether background v2 hue={hue:.4f} {mode}"
     try:
         with zipfile.ZipFile(path) as z:
             if z.comment.decode() == tag and z.read("colors.tdesktop-theme").decode() == palette:
                 return path.read_bytes()
     except (OSError, KeyError, zipfile.BadZipFile, UnicodeDecodeError):
         pass
-    return tg_theme(palette, tg_background(hue, light), tag)
+    return tg_theme(palette, rendered.read_bytes() if rendered else tg_background(hue, light), tag)
 
 
 def mode_is_light() -> bool:
@@ -345,6 +378,11 @@ def main() -> int:
     # Aethergram: per mode the recoloured palette and its theme (palette + background in the accent's
     # hue), beside the live pair, which follows the current mode. Every file lands by a rename.
     live = "light" if mode_is_light() else "dark"
+    backdrop = Path(__file__).resolve().with_name("aether-chat-backdrop")
+    if not backdrop.exists():
+        backdrop = Path.home() / ".local/bin/aether-chat-backdrop"
+    if backdrop.exists():   # a no-op when the wallpaper and hue are the ones already drawn
+        subprocess.run([sys.executable, str(backdrop)], check=False, capture_output=True, timeout=120)
     for mode in ("dark", "light"):
         src = TEMPLATES / "telegram" / f"aether-{mode}.tdesktop-palette"
         if not src.exists():

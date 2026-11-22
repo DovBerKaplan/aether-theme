@@ -50,7 +50,7 @@ ACCENT, HOVER, DEEP, INK = "#00f2fe", "#00dce6", "#00696f", "#00373a"
 PLACEHOLDER = {"accent": ACCENT, "hover": HOVER, "deep": DEEP, "ink": INK}
 PLACEHOLDER_HUE = 183 / 360   # the island's default AccentHue
 WHITE = "#ffffff"
-TEST_ACCENTS = ("#00f2fe", "#b97b75", "#1d3557")   # bright cyan, a muted rose, a dark navy
+TEST_ACCENTS = ("#00f2fe", "#b97b75", "#1d3557", "#75b98c")   # bright cyan, a muted rose, a dark navy, a sage
 
 T = load()
 P = T["palette"]
@@ -63,6 +63,19 @@ def tint(token: str, s: float) -> tuple[str, str]:
     return h, f"tint {l:.3f} {s}"
 
 
+def tinted_up(token: str, dl: float, s: float) -> tuple[str, str]:
+    """The same tint with its lightness raised by dl (a selected surface sits a touch higher)."""
+    hue, l, _ = colorsys.rgb_to_hls(*(int(P[token][i:i + 2], 16) / 255 for i in (1, 3, 5)))
+    l = min(max(l + dl, 0.0), 1.0)
+    return hexl(hue * 360, l, s), f"tint {l:.3f} {s}"
+
+
+def veil(hex: str, alpha: float, base: str, base_value: str) -> tuple[str, str]:
+    """An opaque veil of `hex` at `alpha` over the final value of the `base` key: the mark is resolved
+    in tg_fix after the tints, the value here is the same composite over the neutral base."""
+    return over(hex + "%02x" % round(alpha * 255), base_value), f"veil {hex} {alpha} {base}"
+
+
 def muted(role: str) -> str:
     """The muted badge fill beside a ROLE badge: pale under the dark ink, graphite under white."""
     return f"beside-{role} {P['fog-300']} {P['graphite-500']}"
@@ -71,7 +84,7 @@ def muted(role: str) -> str:
 def dark() -> list[tuple[str, str, str]]:
     """(key, colour, mark)."""
     p = P
-    body, raised = 0.12, 0.16   # the tint's saturation: the glass body, the raised glass above it
+    body, raised = 0.06, 0.08   # the tint's saturation: the glass body, the raised glass above it
     return [
         # basic: the window is the glass body, the list beneath it its darker foot
         ("windowBg", *tint("ink-900", body)),
@@ -162,7 +175,7 @@ def dark() -> list[tuple[str, str, str]]:
         ("dialogsUnreadBg", ACCENT, ""),
         ("dialogsUnreadBgMuted", p["fog-300"], muted("accent")),
         ("dialogsUnreadFg", INK, "on-accent"),
-        ("dialogsBgOver", *tint("ink-750", body)),
+        ("dialogsBgOver", *veil("#ffffff", 0.07, "dialogsBg", p["ink-850"])),
         ("dialogsNameFgOver", p["fog-50"], ""),
         ("dialogsChatIconFgOver", p["fog-50"], ""),
         ("dialogsDateFgOver", p["fog-300"], ""),
@@ -174,75 +187,81 @@ def dark() -> list[tuple[str, str, str]]:
         ("dialogsUnreadBgOver", HOVER, ""),
         ("dialogsUnreadBgMutedOver", p["fog-300"], muted("hover")),
         ("dialogsUnreadFgOver", INK, "on-hover"),
-        ("dialogsBgActive", DEEP, ""),
-        ("dialogsNameFgActive", WHITE, "on-deep"),
-        ("dialogsChatIconFgActive", WHITE, "on-deep"),
-        ("dialogsDateFgActive", WHITE + "cc", "on-deep"),
-        ("dialogsTextFgActive", WHITE + "cc", "on-deep"),
-        ("dialogsTextFgServiceActive", WHITE, "on-deep"),
-        ("dialogsDraftFgActive", WHITE, "on-deep"),
-        ("dialogsSendingIconFgActive", WHITE + "cc", "on-deep"),
-        ("dialogsSentIconFgActive", WHITE, "on-deep"),
-        # on the selected row (deep, always dark: aether-accent-sync caps it) the badges turn pale
-        ("dialogsUnreadBgActive", WHITE, ""),
+        # hover and selection are quiet veils over the list itself, not fills of their own
+        ("dialogsBgActive", *veil("#ffffff", 0.14, "dialogsBg", p["ink-850"])),
+        ("dialogsNameFgActive", p["fog-50"], ""),
+        ("dialogsChatIconFgActive", p["fog-50"], ""),
+        ("dialogsDateFgActive", p["fog-300"], ""),
+        ("dialogsTextFgActive", p["fog-300"], ""),
+        ("dialogsTextFgServiceActive", p["fog-300"], ""),
+        ("dialogsDraftFgActive", p["red-200"], ""),
+        ("dialogsSendingIconFgActive", p["fog-300"], ""),
+        ("dialogsSentIconFgActive", ACCENT, ""),
+        # the selected row stays the list's colour, so its badge stays the accent
+        ("dialogsUnreadBgActive", ACCENT, ""),
         ("dialogsUnreadBgMutedActive", p["fog-300"], ""),
-        ("dialogsUnreadFgActive", INK, ""),
+        ("dialogsUnreadFgActive", INK, "on-accent"),
         ("dialogsRippleBg", *tint("ink-700", body)),
-        ("dialogsRippleBgActive", INK, ""),
-        # messages: incoming on the raised glass, outgoing in the deep accent
-        ("msgInBg", *tint("ink-700", raised)),
-        ("msgInBgSelected", *tint("ink-600", raised)),
-        ("msgOutBg", DEEP, ""),
-        ("msgOutBgSelected", INK, ""),
-        *[(k, "#00000040", "") for k in ("msgInShadow", "msgInShadowSelected", "msgOutShadow", "msgOutShadowSelected")],
+        ("dialogsRippleBgActive", "#ffffff14", ""),
+        # messages: incoming a neutral glass, outgoing a soft opaque tint of the accent
+        ("msgInBg", *tint("ink-600", 0.06)),
+        ("msgInBgSelected", *tinted_up("ink-600", 0.05, 0.06)),
+        ("msgOutBg", hexl(PLACEHOLDER_HUE * 360, 0.24, 0.22), "tint 0.24 0.22"),
+        ("msgOutBgSelected", hexl(PLACEHOLDER_HUE * 360, 0.29, 0.22), "tint 0.29 0.22"),
+        *[(k, "#00000000", "") for k in ("msgInShadow", "msgInShadowSelected", "msgOutShadow", "msgOutShadowSelected")],
         ("msgInServiceFg", ACCENT, ""),
         ("msgInServiceFgSelected", ACCENT, ""),
-        ("msgOutServiceFg", WHITE, "on-deep"),
-        ("msgOutServiceFgSelected", WHITE, "on-deep"),
+        ("msgOutServiceFg", p["fog-300"], ""),
+        ("msgOutServiceFgSelected", p["fog-300"], ""),
         ("msgInDateFg", p["fog-500"], ""),
         ("msgInDateFgSelected", p["fog-300"], ""),
-        ("msgOutDateFg", WHITE + "aa", "on-deep"),
-        ("msgOutDateFgSelected", WHITE + "aa", "on-deep"),
+        ("msgOutDateFg", p["fog-300"], ""),
+        ("msgOutDateFgSelected", p["fog-300"], ""),
         ("msgInReplyBarColor", ACCENT, ""),
         ("msgInReplyBarSelColor", ACCENT, ""),
-        ("msgOutReplyBarColor", WHITE, "on-deep"),
-        ("msgOutReplyBarSelColor", WHITE, "on-deep"),
-        ("msgServiceBg", "#00000066", ""),
-        ("msgServiceBgSelected", "#00000088", ""),
-        ("msgServiceFg", WHITE, ""),
+        ("msgOutReplyBarColor", ACCENT, ""),
+        ("msgOutReplyBarSelColor", ACCENT, ""),
+        ("msgServiceBg", "#2a2d34cc", ""),
+        ("msgServiceBgSelected", "#ffffff24", ""),
+        ("msgServiceFg", p["fog-300"], ""),
         ("msgInMonoFg", p["fog-300"], ""),
         ("msgInMonoFgSelected", p["fog-300"], ""),
-        ("msgOutMonoFg", WHITE + "dd", "on-deep"),
-        ("msgOutMonoFgSelected", WHITE + "dd", "on-deep"),
+        ("msgOutMonoFg", p["fog-300"], ""),
+        ("msgOutMonoFgSelected", p["fog-300"], ""),
         ("historyTextInFg", p["fog-100"], ""),
         ("historyTextInFgSelected", p["fog-100"], ""),
-        ("historyTextOutFg", WHITE, "on-deep"),
-        ("historyTextOutFgSelected", WHITE, "on-deep"),
+        ("historyTextOutFg", p["fog-50"], ""),
+        ("historyTextOutFgSelected", p["fog-50"], ""),
         ("historyLinkInFg", ACCENT, ""),
         ("historyLinkInFgSelected", ACCENT, ""),
-        ("historyLinkOutFg", WHITE, "on-deep"),
-        ("historyLinkOutFgSelected", WHITE, "on-deep"),
+        ("historyLinkOutFg", ACCENT, ""),
+        ("historyLinkOutFgSelected", ACCENT, ""),
         ("historyFileNameInFg", p["fog-100"], ""),
         ("historyFileNameInFgSelected", p["fog-100"], ""),
-        ("historyFileNameOutFg", WHITE, "on-deep"),
-        ("historyFileNameOutFgSelected", WHITE, "on-deep"),
-        ("historyOutIconFg", WHITE, "on-deep"),
-        ("historyOutIconFgSelected", WHITE, "on-deep"),
-        ("historySendingOutIconFg", WHITE + "aa", "on-deep"),
-        # files: the download circle wears the accent in, a pale disc on the deep bubble out
+        ("historyFileNameOutFg", p["fog-50"], ""),
+        ("historyFileNameOutFgSelected", p["fog-50"], ""),
+        ("historyOutIconFg", ACCENT, ""),
+        ("historyOutIconFgSelected", ACCENT, ""),
+        ("historySendingOutIconFg", p["fog-300"], ""),
+        # sender names: eight hues evenly spaced from the accent's own, calm in both modes
+        # (a "tint L S +D" mark: each name follows the live accent, turned 45 degrees per index)
+        *[(f"historyPeer{i}NameFg{v}", hexl((PLACEHOLDER_HUE * 360 + 45 * (i - 1)) % 360, l, 0.40),
+           f"tint {l} 0.40 +{45 * (i - 1)}")
+          for i in range(1, 9) for v, l in (("", 0.72), ("Selected", 0.72))],
+        # files: the download circle wears the accent on both bubbles now
         ("msgFileInBg", ACCENT, ""),
         ("msgFileInBgOver", HOVER, ""),
         ("msgFileInBgSelected", HOVER, ""),
         ("historyFileInIconFg", INK, "on-accent"),
         ("historyFileInIconFgSelected", INK, "on-hover"),
-        ("msgFileOutBg", WHITE, "on-deep"),
-        ("msgFileOutBgSelected", WHITE + "e6", "on-deep"),
-        ("historyFileOutIconFg", DEEP, ""),
-        ("historyFileOutIconFgSelected", INK, ""),
+        ("msgFileOutBg", ACCENT, ""),
+        ("msgFileOutBgSelected", HOVER, ""),
+        ("historyFileOutIconFg", INK, "on-accent"),
+        ("historyFileOutIconFgSelected", INK, "on-hover"),
         ("msgFileThumbLinkInFg", ACCENT, ""),
         ("msgFileThumbLinkInFgSelected", ACCENT, ""),
-        ("msgFileThumbLinkOutFg", WHITE, "on-deep"),
-        ("msgFileThumbLinkOutFgSelected", WHITE, "on-deep"),
+        ("msgFileThumbLinkOutFg", ACCENT, ""),
+        ("msgFileThumbLinkOutFgSelected", ACCENT, ""),
         # shared files' squares: Telegram's four colours, calmed to the glass (white glyphs on them)
         *[(f"msgFile{i}{v}", hsl, "") for i, hue in enumerate((210, 150, 5, 38), 1)
           for v, hsl in (("Bg", hexl(hue, 0.42)), ("BgDark", hexl(hue, 0.36)), ("BgOver", hexl(hue, 0.33)),
@@ -250,9 +269,14 @@ def dark() -> list[tuple[str, str, str]]:
         # chat view
         *[(k, v, "") for k, v in (("historyScrollBarBg", "#ffffff38"), ("historyScrollBarBgOver", "#ffffff5c"),
                                   ("historyScrollBg", "#ffffff10"), ("historyScrollBgOver", "#ffffff1c"))],
-        ("historyUnreadBarBg", *tint("ink-800", raised)),
-        ("historyUnreadBarBorder", "#00000030", ""),
-        ("historyUnreadBarFg", ACCENT, ""),
+        # selection and media overlays: white veils, never fills
+        ("msgSelectOverlay", "#ffffff24", ""),
+        ("msgStickerOverlay", "#ffffff2e", ""),
+        ("msgDateImgBgSelected", "#00000066", ""),
+        # the unread bar is just its text on the field
+        ("historyUnreadBarBg", "#00000000", ""),
+        ("historyUnreadBarBorder", "#00000000", ""),
+        ("historyUnreadBarFg", p["fog-300"], ""),
         ("historyToDownBg", *tint("ink-750", raised)),
         ("historyToDownBgOver", *tint("ink-600", raised)),
         ("historyToDownBgRipple", *tint("ink-700", raised)),
@@ -283,7 +307,7 @@ def light() -> list[tuple[str, str, str]]:
     as a (colour, mark) pair keeps that mark; a bare colour takes the dark row's on-/beside- mark,
     moved onto the deep fill (the light badges and buttons are deep), and drops a tint."""
     p = P
-    paper = 0.25   # the tint's saturation on paper
+    paper = 0.10   # the tint's saturation on paper
     fg = "graphite-950"
     over = {
         "windowBg": p["paper-0"], "windowFg": p[fg], "windowBgOver": p["paper-100"],
@@ -315,21 +339,32 @@ def light() -> list[tuple[str, str, str]]:
         "dialogsDateFg": p["graphite-500"], "dialogsTextFg": p["graphite-500"], "dialogsTextFgService": p["graphite-700"],
         "dialogsDraftFg": p["red-700"], "dialogsSendingIconFg": p["fog-500"], "dialogsSentIconFg": DEEP,
         "dialogsUnreadBg": DEEP, "dialogsUnreadBgMuted": p["graphite-500"], "dialogsUnreadFg": WHITE,
-        "dialogsBgOver": tint("paper-100", paper), "dialogsNameFgOver": p[fg], "dialogsChatIconFgOver": p[fg],
+        "dialogsBgOver": veil("#000000", 0.035, "dialogsBg", p["paper-50"]), "dialogsNameFgOver": p[fg],
+        "dialogsChatIconFgOver": p[fg],
         "dialogsDateFgOver": p["graphite-700"], "dialogsTextFgOver": p["graphite-500"],
         "dialogsTextFgServiceOver": p["graphite-900"], "dialogsDraftFgOver": p["red-700"],
         "dialogsSendingIconFgOver": p["graphite-500"], "dialogsSentIconFgOver": DEEP,
         "dialogsUnreadBgOver": DEEP, "dialogsUnreadBgMutedOver": p["graphite-500"], "dialogsUnreadFgOver": WHITE,
         "dialogsRippleBg": p["fog-50"],
+        # the quiet selection: a black veil over the paper list, its text the list's own
+        "dialogsBgActive": veil("#000000", 0.06, "dialogsBg", p["paper-50"]),
+        "dialogsNameFgActive": p[fg], "dialogsChatIconFgActive": p[fg],
+        "dialogsDateFgActive": p["graphite-500"], "dialogsTextFgActive": p["graphite-500"],
+        "dialogsTextFgServiceActive": p["graphite-500"], "dialogsDraftFgActive": p["red-700"],
+        "dialogsSendingIconFgActive": p["graphite-500"], "dialogsSentIconFgActive": DEEP,
+        "dialogsUnreadBgActive": DEEP, "dialogsUnreadBgMutedActive": p["graphite-500"],
+        "dialogsUnreadFgActive": WHITE, "dialogsRippleBgActive": "#0000000f",
         # the outgoing bubble is a pale, opaque tint of the accent: dark ink on it, no on-deep marks
         "msgInBg": p["paper-0"], "msgInBgSelected": p["fog-50"],
-        "msgOutBg": (hexl(183, 0.90, 0.55), "tint 0.90 0.55"), "msgOutBgSelected": (hexl(183, 0.84, 0.50), "tint 0.84 0.5"),
-        "msgInShadow": "#0000001f", "msgInShadowSelected": "#0000001f",
-        "msgOutShadow": "#0000001f", "msgOutShadowSelected": "#0000001f",
+        "msgOutBg": (hexl(PLACEHOLDER_HUE * 360, 0.90, 0.30), "tint 0.90 0.3"),
+        "msgOutBgSelected": (hexl(PLACEHOLDER_HUE * 360, 0.84, 0.30), "tint 0.84 0.3"),
+        "msgInShadow": "#00000000", "msgInShadowSelected": "#00000000",
+        "msgOutShadow": "#00000000", "msgOutShadowSelected": "#00000000",
         "msgInServiceFg": DEEP, "msgInServiceFgSelected": DEEP,
         "msgInDateFg": p["graphite-500"], "msgInDateFgSelected": p["graphite-700"],
         "msgInReplyBarColor": DEEP, "msgInReplyBarSelColor": DEEP,
-        "msgServiceBg": "#00000040", "msgServiceBgSelected": "#00000059",
+        "msgServiceBg": "#0000000f", "msgServiceBgSelected": "#00000018", "msgServiceFg": p["graphite-700"],
+        "msgSelectOverlay": "#0000000f", "msgStickerOverlay": "#0000001a",
         "msgInMonoFg": p["graphite-700"], "msgInMonoFgSelected": p["graphite-700"],
         "historyTextInFg": p[fg], "historyTextInFgSelected": p[fg],
         "historyLinkInFg": DEEP, "historyLinkInFgSelected": DEEP,
@@ -341,7 +376,8 @@ def light() -> list[tuple[str, str, str]]:
         "msgFileThumbLinkInFg": DEEP, "msgFileThumbLinkInFgSelected": DEEP,
         "historyScrollBarBg": "#0000003a", "historyScrollBarBgOver": "#0000005c",
         "historyScrollBg": "#00000010", "historyScrollBgOver": "#0000001c",
-        "historyUnreadBarBg": p["paper-100"], "historyUnreadBarBorder": "#00000018", "historyUnreadBarFg": DEEP,
+        "historyUnreadBarBg": "#00000000", "historyUnreadBarBorder": "#00000000",
+        "historyUnreadBarFg": p["graphite-500"],
         "historyToDownBg": p["paper-0"], "historyToDownBgOver": p["paper-100"], "historyToDownBgRipple": p["fog-50"],
         "historyToDownFg": p["graphite-500"], "historyToDownFgOver": p["graphite-900"], "historyToDownShadow": "#0000001f",
         "historyComposeAreaBg": p["paper-0"], "historyComposeAreaFg": p[fg],
@@ -357,6 +393,9 @@ def light() -> list[tuple[str, str, str]]:
                                     "historyFileNameOutFgSelected")},
         **{k: (p["graphite-500"], "") for k in ("msgOutDateFg", "msgOutDateFgSelected", "historySendingOutIconFg")},
         **{k: (p["graphite-700"], "") for k in ("msgOutMonoFg", "msgOutMonoFgSelected")},
+        **{f"historyPeer{i}NameFg{v}": (hexl((PLACEHOLDER_HUE * 360 + 45 * (i - 1)) % 360, 0.36, 0.40),
+                                        f"tint 0.36 0.40 +{45 * (i - 1)}")
+           for i in range(1, 9) for v in ("", "Selected")},
     }
     rows = []
     for key, value, mark in dark():
@@ -397,12 +436,22 @@ PAIRS = [tuple(p.split("/")) for p in """
     msgInBg/historyTextInFg msgInBgSelected/historyTextInFgSelected msgOutBg/historyTextOutFg
     msgOutBgSelected/historyTextOutFgSelected msgInBg/historyLinkInFg msgOutBg/historyLinkOutFg
     msgInBg/msgInServiceFg msgOutBg/msgOutServiceFg msgInBg/historyFileNameInFg msgOutBg/historyFileNameOutFg
+    msgServiceBg/msgServiceFg historyUnreadBarBg/historyUnreadBarFg
     dialogsBg/dialogsNameFg dialogsBg/dialogsTextFg dialogsBgOver/dialogsNameFgOver dialogsBgOver/dialogsTextFgOver
     dialogsBgActive/dialogsNameFgActive dialogsBgActive/dialogsTextFgActive dialogsBgActive/dialogsDateFgActive
     activeButtonBg/activeButtonFg activeButtonBgOver/activeButtonFgOver lightButtonBg/lightButtonFg
     lightButtonBgOver/lightButtonFgOver windowBgActive/windowFgActive windowBg/windowFg windowBg/windowActiveTextFg
     menuBg/windowFg historyComposeAreaBg/historyComposeAreaFg""".split()]
 MIN_CONTRAST = 4.5
+
+# What each alpha fill actually sits on: the dialogs over the list, messages over their bubble (or the
+# selected bubble over the plain one), the service chips and the unread bar over the field.
+BASES = (("dialogs", "dialogsBg"), ("msgIn", "msgInBg"), ("msgOut", "msgOutBg"),
+         ("msgService", "windowBg"), ("historyUnreadBar", "windowBg"))
+
+
+def base_of(key: str) -> str:
+    return next((base for prefix, base in BASES if key.startswith(prefix)), "windowBg")
 
 
 def over(top: str, under: str) -> str:
@@ -419,7 +468,7 @@ def contrast_failures(name: str, text: str) -> list[str]:
         if missing:
             bad.append(f"{name}: {bg}/{fg}: not set ({', '.join(missing)})")
             continue
-        b = over(pal[bg], pal["windowBg"])
+        b = over(pal[bg], pal[base_of(bg)])
         c = SYNC.contrast(over(pal[fg], b), b)
         if c < MIN_CONTRAST:
             bad.append(f"{name}: {bg} / {fg}: {c:.2f}:1 < {MIN_CONTRAST}")
@@ -488,7 +537,7 @@ def main() -> int:
         (a.out / f"{name}.tdesktop-palette").write_text(palette)
         print("built", a.out / f"{name}.tdesktop-palette")
         light_mode = name.endswith("light")
-        tag = f"aether background v1 hue={PLACEHOLDER_HUE:.4f} {'light' if light_mode else 'dark'}"
+        tag = f"aether background v2 hue={PLACEHOLDER_HUE:.4f} {'light' if light_mode else 'dark'}"
         theme = SYNC.tg_theme(palette, SYNC.tg_background(PLACEHOLDER_HUE, light_mode), tag)
         (a.out / f"{name}.tdesktop-theme").write_bytes(theme)
         print("built", a.out / f"{name}.tdesktop-theme")

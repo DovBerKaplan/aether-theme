@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""aether-chat-backdrop: the desktop wallpaper, drawn quiet, for the chat background of Aethergram.
+
+The wallpaper the user chose is rendered by its own shader (the same code the desktop runs), wide, so
+its ribbons / banks / rays / ink lie along the edges and the middle - where the conversation is - stays
+calm. The render is then toned down to a "background": the whole thing sits in a narrow lightness band
+around the field, in the accent's hue, with the seams softened into a glow. Dark and light are both
+written, so a mode switch only has to pick one.
+
+  aether-chat-backdrop            render for the current wallpaper + accent (skips when nothing changed)
+  aether-chat-backdrop --force    render anyway
+  aether-chat-backdrop --preview OUT.png   a board of every wallpaper, dark and light, three accents
+
+Output (atomic): $XDG_DATA_HOME/aether/chat-backdrop-{dark,light}.jpg and chat-backdrop.json.
+Env: AETHER_ISLANDRC, AETHER_APPLETSRC, AETHER_BACKDROP_OUT (output dir), AETHER_ROOT (shaders + qml).
+Reads the island's and Plasma's config; never writes them."""
+import colorsys
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageFilter
+
+VERSION = 2
+HOME = Path.home()
+ISLANDRC = Path(os.environ.get("AETHER_ISLANDRC", HOME / ".config/aetherislandrc"))
+APPLETSRC = Path(os.environ.get("AETHER_APPLETSRC", HOME / ".config/plasma-org.kde.plasma.desktop-appletsrc"))
+DATA = Path(os.environ.get("XDG_DATA_HOME") or HOME / ".local/share")
+OUT = Path(os.environ.get("AETHER_BACKDROP_OUT") or DATA / "aether")
+CACHE = Path(os.environ.get("XDG_CACHE_HOME") or HOME / ".cache") / "aether/qsb"
+STYLES = ("ribbons", "mist", "aurora", "ink", "dune")
+# Wide shaders (the ribbons, rays and dunes lie along the edges); ink and mist read better at 16:9.
+WIDE = {"ribbons": (3840, 1080), "aurora": (3840, 1080), "dune": (3840, 1080), "mist": (1920, 1080), "ink": (1920, 1080)}
+SIZE = (2560, 1440)
+
+
+def root() -> Path:
+    for c in (os.environ.get("AETHER_ROOT"), DATA / "aether/backdrop", Path(__file__).resolve().parent.parent):
+        if c and (Path(c) / "tools/wallpaper-shot.qml").exists():
+            return Path(c)
+    sys.exit("aether-chat-backdrop: no tools/wallpaper-shot.qml (set AETHER_ROOT)")
+
+
+def ini(path: Path, group: str, key: str) -> str | None:
+    try:
+        cur = ""
+        for line in path.read_text(errors="replace").splitlines():
+            if line.startswith("["):
+                cur = line.strip("[]")
+            elif cur == group and line.startswith(key + "="):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return None
+
+
+def active_style() -> tuple[str, str | None]:
+    """(style, image path). style is one of STYLES, 'image' or 'neutral'."""
+    s = ini(ISLANDRC, "Wallpaper", "Style") or ""
+    if s.startswith("org.aether."):
+        s = s[len("org.aether."):]
+    if s in STYLES:
+        return s, None
+    try:  # Plasma's own record: the containment of the first screen
+        text = APPLETSRC.read_text(errors="replace")
+        for block in re.split(r"(?m)^(?=\[Containments\]\[\d+\]\n)", text):
+            if re.search(r"(?m)^lastScreen=0$", block):
+                m = re.search(r"(?m)^wallpaperplugin=(\S+)", block)
+                if m and m.group(1).startswith("org.aether.") and m.group(1)[11:] in STYLES:
+                    return m.group(1)[11:], None
+                img = re.search(r"(?m)^Image=(.+)$", block)
+                if m and m.group(1) == "org.kde.image" and img:
+                    return "image", re.sub(r"^file://", "", img.group(1).strip())
+    except OSError:
+        pass
+    return "neutral", None
+
+
+def accent_hls() -> tuple[float, float, float]:
+    """The accent the island shows (hue is all this uses); the island's own hue when it is set."""
+    h = ini(ISLANDRC, "Appearance", "AccentHue")
+    s = ini(ISLANDRC, "Appearance", "AccentSat")
+    try:
+        return (int(h) % 360) / 360, 0.5, float(s) if s else 0.6
+    except (TypeError, ValueError):
+        return 183 / 360, 0.5, 0.8
+
+
+def hls2rgb(h, L, S):
+    m2 = np.where(L <= 0.5, L * (1 + S), L + S - L * S)
+    m1 = 2 * L - m2
+
+    def v(x):
+        x = x % 1.0
+        return np.where(x < 1 / 6, m1 + (m2 - m1) * x * 6, np.where(x < .5, m2, np.where(
+            x < 2 / 3, m1 + (m2 - m1) * (2 / 3 - x) * 6, m1)))
+    return np.stack([v(h + 1 / 3), v(h), v(h - 1 / 3)], -1)
+
+
+def quiet(im: Image.Image, hue: float, light: bool, grey: bool, soft: float = 14, amount: float = 1.0) -> Image.Image:
+    """Tone a render down to a background. The motif's deviation from the field (lines can be lighter
+    OR darker than it - the wallpapers draw darker ones by day) is normalised so every wallpaper shows
+    the same amount of it, then laid over a flat field of the mode's lightness."""
+    a = np.asarray(im.convert("RGB")).astype(np.float32) / 255
+    L = (a.max(-1) + a.min(-1)) / 2
+    if soft:  # seams turn into a soft glow
+        Lb = np.asarray(Image.fromarray((L * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(soft))).astype(np.float32) / 255
+        L = 0.45 * L + 0.55 * Lb
+    d = L - np.median(L)
+    n = np.clip(d / max(float(np.percentile(np.abs(d), 99.5)), 1e-3), -1, 1)
+    m = np.sign(n) * np.abs(n) ** 1.2
+    if light:
+        Lq, Sq = 0.945 + 0.07 * amount * m, 0.06 + 0.12 * np.abs(n)   # paper reads fainter than ink: more of it
+    else:
+        Lq, Sq = 0.088 + 0.07 * amount * np.maximum(m, -0.35), 0.07 + 0.15 * np.abs(n)
+    if grey:
+        Sq = Sq * 0
+    rgb = hls2rgb(hue, np.clip(Lq, 0, 1), Sq)
+    rgb = rgb + np.random.default_rng(7).normal(0, 1 / 255, rgb.shape)
+    return Image.fromarray((rgb.clip(0, 1) * 255).astype(np.uint8))
+
+
+def cover(im: Image.Image, size=SIZE) -> Image.Image:
+    w, h = im.size
+    tw = min(w, int(h * size[0] / size[1]))
+    th = int(tw * size[1] / size[0])
+    x, y = (w - tw) // 2, (h - th) // 2
+    return im.crop((x, y, x + tw, y + th)).resize(size, Image.LANCZOS)
+
+
+def qsb(style: str, base: Path) -> Path:
+    src = base / f"plasmoids/org.aether.{style}/contents/shaders/{style}.frag"
+    if not src.exists():
+        src = base / f"{style}.frag"
+    out = CACHE / f"{style}.frag.qsb"
+    if not out.exists() or out.stat().st_mtime < src.stat().st_mtime:
+        CACHE.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["qsb6", "--glsl", "100 es,120,150", "--hlsl", "50", "--msl", "12", "-o", str(out), str(src)],
+                       check=True, capture_output=True, timeout=60)
+    return out
+
+
+def render(style: str, accent_hex: str, dark: bool, base: Path) -> Image.Image | None:
+    w, h = WIDE[style]
+    with tempfile.TemporaryDirectory() as td:
+        png = Path(td) / "r.png"
+        env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_QUICK_BACKEND="rhi", QSG_RHI_BACKEND="opengl")
+        try:
+            subprocess.run(["qml6", str(base / "tools/wallpaper-shot.qml"), "--", str(qsb(style, base)), str(png),
+                            f"accent={accent_hex}", f"dark={1 if dark else 0}", "time=0", f"width={w}", f"height={h}"],
+                           env=env, check=True, capture_output=True, timeout=40)
+            return Image.open(png).convert("RGB")
+        except (subprocess.SubprocessError, OSError, FileNotFoundError):
+            return None
+
+
+def field(light: bool) -> Image.Image:
+    """No wallpaper to draw (or no GPU): a quiet vertical gradient."""
+    y = np.linspace(0, 1, SIZE[1], dtype=np.float32)[:, None] * np.ones((1, SIZE[0]), np.float32)
+    return Image.fromarray(((0.965 - 0.02 * y if light else 0.11 - 0.025 * y) * 255).astype(np.uint8)).convert("RGB")
+
+
+def backdrop(style: str, img_path: str | None, hue: float, grey: bool, light: bool, base: Path | None) -> Image.Image:
+    accent = "#%02x%02x%02x" % tuple(round(c * 255) for c in colorsys.hls_to_rgb(hue, 0.55, 0.7))
+    src = None
+    if style == "image" and img_path:
+        try:
+            src = Image.open(img_path).convert("RGB").filter(ImageFilter.GaussianBlur(24))
+            src = cover(src)
+        except OSError:
+            src = None
+    elif style in STYLES and base:
+        src = render(style, accent, not light, base)
+        if src is not None:
+            src = cover(src)
+    return quiet(src if src is not None else field(light), hue, light, grey, soft=0 if src is None else 14)
+
+
+def write_atomic(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
+
+
+def save_jpg(im: Image.Image, path: Path) -> None:
+    import io
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=92, subsampling=0)
+    write_atomic(path, buf.getvalue())
+
+
+def preview(out: str) -> None:
+    from PIL import ImageDraw
+    base = root()
+    W, H = 480, 270
+    accents = ((0.9, 0.5, 0.45), (0.38, 0.5, 0.45), (0.0, 0.5, 0.0))
+    board = Image.new("RGB", (W * 6 + 50, (H + 10) * 5), (8, 8, 10))
+    for i, st in enumerate(STYLES):
+        k = 0
+        for hue, _, sat in accents:
+            for light in (False, True):
+                im = backdrop(st, None, hue, sat == 0, light, base).resize((W, H), Image.LANCZOS)
+                d = ImageDraw.Draw(im)
+                d.rounded_rectangle((W * .06, H * .30, W * .42, H * .44), radius=9, fill=(255, 255, 255) if light else (48, 49, 53))
+                d.rounded_rectangle((W * .55, H * .56, W * .94, H * .70), radius=9, fill=(236, 214, 226) if light else (78, 58, 70))
+                d.text((W * .08, H * .33), f"{st} {'light' if light else 'dark'}", fill=(30, 30, 35) if light else (225, 225, 230))
+                board.paste(im, (k * (W + 10), i * (H + 10)))
+                k += 1
+    board.save(out)
+    print(f"wrote {out}")
+
+
+def main(argv: list[str]) -> int:
+    if "--preview" in argv:
+        preview(argv[argv.index("--preview") + 1])
+        return 0
+    style, img_path = active_style()
+    hue, _, sat = accent_hls()
+    grey = sat < 0.05
+    meta = OUT / "chat-backdrop.json"
+    key = {"version": VERSION, "style": style, "hue": round(hue, 4), "image": img_path}
+    try:
+        old = json.loads(meta.read_text())
+        if "--force" not in argv and all(old.get(k) == v for k, v in key.items()) and \
+                (OUT / "chat-backdrop-dark.jpg").exists() and (OUT / "chat-backdrop-light.jpg").exists():
+            print(f"chat backdrop up to date ({style})")
+            return 0
+    except (OSError, ValueError):
+        pass
+    base = root() if style in STYLES else None
+    for light in (False, True):
+        save_jpg(backdrop(style, img_path, hue, grey, light, base), OUT / f"chat-backdrop-{'light' if light else 'dark'}.jpg")
+    write_atomic(meta, json.dumps({**key, "dark": str(OUT / "chat-backdrop-dark.jpg"),
+                                   "light": str(OUT / "chat-backdrop-light.jpg"),
+                                   "rendered": datetime.now(timezone.utc).isoformat(timespec="seconds")}, indent=1).encode())
+    print(f"chat backdrop rendered ({style}, hue {hue:.3f})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

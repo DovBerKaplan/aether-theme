@@ -57,6 +57,16 @@ command -v update-desktop-database >/dev/null && update-desktop-database -q "$D/
 
 echo "== palettes and themes"
 python3 "$ROOT/theme/generators/build_telegram.py"
+# the chat backdrop: the desktop wallpaper's own shader drawn quiet, so the renderer, the qml that draws a
+# shader offscreen and the five shaders live where the installed sync can find them
+BD="$D/aether/backdrop"
+mkdir -p "$BD/tools" "$BD/plasmoids"
+install -m 755 "$ROOT/system/aether-chat-backdrop" "$HOME/.local/bin/aether-chat-backdrop"
+install -m 644 "$ROOT/tools/wallpaper-shot.qml" "$BD/tools/wallpaper-shot.qml"
+for s in ribbons mist aurora ink dune; do
+  mkdir -p "$BD/plasmoids/org.aether.$s/contents/shaders"
+  install -m 644 "$ROOT/plasmoids/org.aether.$s/contents/shaders/$s.frag" "$BD/plasmoids/org.aether.$s/contents/shaders/$s.frag"
+done
 install -m 755 "$ROOT/system/aether-accent-sync" "$HOME/.local/bin/aether-accent-sync"
 install -m 755 "$ROOT/system/aether-mode-sync" "$HOME/.local/bin/aether-mode-sync"
 "$HOME/.local/bin/aether-accent-sync"
