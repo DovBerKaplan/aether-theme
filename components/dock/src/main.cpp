@@ -8,9 +8,11 @@
 #include <QDebug>
 #include <QDBusArgument>
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
 #include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDBusReply>
+#include <QDBusServiceWatcher>
 #include <QDBusUnixFileDescriptor>
 #include <QDir>
 #include <QDateTime>
@@ -82,6 +84,7 @@ class DockController : public QObject
     Q_PROPERTY(int screenHeight READ screenHeight CONSTANT)
     Q_PROPERTY(QStringList launchers READ launchers WRITE setLaunchers NOTIFY launchersChanged)
     Q_PROPERTY(bool allAtStart READ allAtStart WRITE setAllAtStart NOTIFY allAtStartChanged)
+    Q_PROPERTY(QVariantMap badges READ badges NOTIFY badgesChanged)   // desktop id -> {count, progress, urgent}
 
 public:
     DockController(QQuickView *view, const QString &edge)
@@ -136,7 +139,30 @@ public:
             }
         });
         m_sample.start();
+
+        // App badges: anyone may broadcast com.canonical.Unity.LauncherEntry.Update (Telegram,
+        // Thunderbird, Chrome's downloads...). An entry dies with the program that sent it.
+        QDBusConnection::sessionBus().connect(QString(), QString(), QStringLiteral("com.canonical.Unity.LauncherEntry"),
+                                              QStringLiteral("Update"), this, SLOT(onLauncherEntry(QString, QVariantMap, QDBusMessage)));
+        m_entryOwners.setConnection(QDBusConnection::sessionBus());
+        m_entryOwners.setWatchMode(QDBusServiceWatcher::WatchForUnregistration);
+        connect(&m_entryOwners, &QDBusServiceWatcher::serviceUnregistered, this, [this](const QString &owner) {
+            m_entryOwners.removeWatchedService(owner);
+            bool changed = false;
+            for (auto it = m_badges.begin(); it != m_badges.end();) {
+                if (it.value().toMap().value(QStringLiteral("owner")) == owner) {
+                    it = m_badges.erase(it);
+                    changed = true;
+                } else {
+                    ++it;
+                }
+            }
+            if (changed) {
+                Q_EMIT badgesChanged();
+            }
+        });
     }
+    QVariantMap badges() const { return m_badges; }
     // Hold on the grab line: ask the resident Lens program to open out of that point of the edge.
     Q_INVOKABLE void activateLens(const QString &edge, double frac)
     {
@@ -276,12 +302,52 @@ public:
     }
 
 public Q_SLOTS:
+    // Update(s app_uri, a{sv} props): each signal carries only what changed, so it is merged into
+    // what the app said before. app_uri is "application://<desktop id>".
+    void onLauncherEntry(const QString &appUri, const QVariantMap &props, const QDBusMessage &msg)
+    {
+        QString id = appUri.section(QStringLiteral("://"), -1);
+        if (id.isEmpty()) {
+            return;
+        }
+        if (!id.endsWith(QLatin1String(".desktop"))) {
+            id += QStringLiteral(".desktop");
+        }
+        QVariantMap e = m_badges.value(id).toMap();
+        static const QList<std::pair<QString, QString>> keys = {
+            { QStringLiteral("count"), QStringLiteral("count") }, { QStringLiteral("count-visible"), QStringLiteral("countVisible") },
+            { QStringLiteral("progress"), QStringLiteral("progress") }, { QStringLiteral("progress-visible"), QStringLiteral("progressVisible") },
+            { QStringLiteral("urgent"), QStringLiteral("urgent") } };
+        for (const auto &[bus, qml] : keys) {
+            if (props.contains(bus)) {
+                e[qml] = props.value(bus);
+            }
+        }
+        // QML has no int64: the count goes over as a double (exact far beyond any unread count).
+        e[QStringLiteral("count")] = e.value(QStringLiteral("count")).toDouble();
+        e[QStringLiteral("progress")] = qBound(0.0, e.value(QStringLiteral("progress")).toDouble(), 1.0);
+        e[QStringLiteral("owner")] = msg.service();
+        // A one-shot sender (gdbus emit, a script) is often gone before the signal is read: its
+        // badge stays until told otherwise, as nothing would ever clear it.
+        if (!msg.service().isEmpty() && !m_entryOwners.watchedServices().contains(msg.service())) {
+            m_entryOwners.addWatchedService(msg.service());
+            if (!QDBusConnection::sessionBus().interface()->isServiceRegistered(msg.service())) {
+                m_entryOwners.removeWatchedService(msg.service());
+                e.remove(QStringLiteral("owner"));
+            }
+        }
+        if (m_badges.value(id) != QVariant(e)) {
+            m_badges[id] = e;
+            Q_EMIT badgesChanged();
+        }
+    }
     void Show() { Q_EMIT stateRequested(QStringLiteral("shown")); }
     void Hide() { Q_EMIT stateRequested(QStringLiteral("hidden")); }
 
 Q_SIGNALS:
     void launchersChanged();
     void allAtStartChanged();
+    void badgesChanged();
     void darkChanged();
     void lensEnabledChanged();
     void accentChanged();
@@ -364,6 +430,8 @@ private:
     QString m_islandRc;
     QColor m_accent = QColor(Qt::transparent);
     bool m_dark = true;
+    QVariantMap m_badges;
+    QDBusServiceWatcher m_entryOwners;
 };
 
 // Exported as org.aether.Dock so a shortcut or script can drive the dock:

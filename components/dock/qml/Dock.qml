@@ -373,6 +373,14 @@ Item {
     function isActive(i) { return role(i, TaskManager.AbstractTasksModel.IsActive) === true }
     function isMinimized(i) { return role(i, TaskManager.AbstractTasksModel.IsMinimized) === true }
     function isStartup(i) { return role(i, TaskManager.AbstractTasksModel.IsStartup) === true }
+    // Unread counts as the badge shows them: 7, 99, 99+, 1K, 12K, 3M.
+    function compactCount(n) {
+        n = Math.floor(n)
+        if (n <= 99) return String(n)
+        if (n < 1000) return "99+"
+        if (n < 1000000) return Math.floor(n / 1000) + "K"
+        return Math.floor(n / 1000000) + "M"
+    }
     function baseOf(u) { const s = String(u); return s.slice(Math.max(s.lastIndexOf("/"), s.lastIndexOf(":")) + 1) }
     function launcherBase(i) { return baseOf(role(i, TaskManager.AbstractTasksModel.LauncherUrl)) }
     function pinnedHas(base) { for (const u of tasks.launcherList) if (baseOf(u) === base) return true; return false }
@@ -543,6 +551,7 @@ Item {
                 readonly property bool sepBefore: root.firstFree === index
                 readonly property int extra: sepBefore ? root.sepExtra : 0
                 readonly property int mi: root.repOf(g)   // the icon's row: the first window, else the idle launcher
+                readonly property var badge: dock.badges[g.key] || null   // the app's LauncherEntry (unread count, progress)
                 width: root.horiz ? root.cell + extra : root.cell
                 height: root.horiz ? root.cell : root.cell + extra
                 readonly property bool held: root.dKey === g.key
@@ -614,6 +623,51 @@ Item {
                                  : (root.groupMinimized(cellItem.g) ? 0.3 : (root.groupActive(cellItem.g) ? 0.9 : 0.55))
                         Behavior on opacity { NumberAnimation { duration: 150 } }
                         Behavior on len { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                    }
+                    Rectangle {   // unread count: an accent pill on the icon's top corner (top-left in RTL)
+                        id: countPill
+                        readonly property bool on: cellItem.badge !== null && cellItem.badge.countVisible === true
+                                                   && cellItem.badge.count > 0
+                        // The last number shown stays while the pill fades out (no "0" flashing by).
+                        property string label: ""
+                        function relabel() { if (on) label = root.compactCount(cellItem.badge.count) }
+                        onOnChanged: relabel()
+                        Connections { target: cellItem; function onBadgeChanged() { countPill.relabel() } }
+                        Component.onCompleted: relabel()
+                        height: 16
+                        width: Math.max(height, countText.implicitWidth + 9)
+                        radius: height / 2
+                        color: Theme.accent
+                        readonly property real inset: (parent.width - root.iconSize) / 2
+                        x: I18n.rtl ? inset - 5 : parent.width - inset - width + 5
+                        y: inset - 5
+                        opacity: on ? 1 : 0
+                        scale: on ? 1 : 0.5
+                        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+                        Behavior on scale { SpringAnimation { spring: 4; damping: 0.4; mass: 0.5 } }
+                        Text {
+                            id: countText
+                            anchors.centerIn: parent
+                            text: parent.label
+                            color: Theme.onAccent
+                            font.pixelSize: Tokens.type.caption; font.family: Theme.font; font.weight: Font.DemiBold
+                        }
+                    }
+                    Item {   // progress (a download, a sync): a thin accent bar in the cell's inset under the icon
+                        readonly property bool on: cellItem.badge !== null && cellItem.badge.progressVisible === true
+                        width: root.iconSize * 0.7; height: 3
+                        x: (parent.width - width) / 2
+                        y: parent.height - Tokens.dock.cellInset
+                        opacity: on ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: Tokens.motion.duration.fast } }
+                        Rectangle { anchors.fill: parent; radius: height / 2; color: root.ink; opacity: 0.18 }
+                        Rectangle {
+                            height: parent.height; radius: height / 2
+                            width: parent.width * (cellItem.badge ? cellItem.badge.progress : 0)
+                            x: I18n.rtl ? parent.width - width : 0
+                            color: Theme.accent
+                            Behavior on width { NumberAnimation { duration: Tokens.motion.duration.base } }
+                        }
                     }
                     MouseArea {
                         id: ma
