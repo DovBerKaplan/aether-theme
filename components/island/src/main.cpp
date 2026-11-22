@@ -44,6 +44,7 @@
 #include "TetherController.h"
 #include "SystemPanels.h"
 #include "TileStore.h"
+#include "ThemeBus.h"
 #include "GlyphStore.h"
 #include "SystemInfo.h"
 #include "SearchEngine.h"
@@ -470,6 +471,11 @@ int main(int argc, char **argv)
     auto bus = QDBusConnection::sessionBus();
     bus.registerService(QStringLiteral("org.aether.Island"));
     bus.registerObject(QStringLiteral("/Island"), &controller, QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals);
+
+    // The desktop's theme for every client that wants to dress like it (docs/THEME-BUS.md).
+    ThemeBus themeBus(&tiles, &displayModel);
+    bus.registerService(QStringLiteral("org.aether.Theme"));
+    bus.registerObject(QStringLiteral("/Theme"), &themeBus, QDBusConnection::ExportScriptableSlots | QDBusConnection::ExportScriptableSignals);
 
     // The island also owns org.freedesktop.Notifications: every Notify is accepted (so
     // clients succeed and the bus monitors see the traffic) and nothing is shown by the
