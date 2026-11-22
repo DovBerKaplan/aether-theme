@@ -5,9 +5,10 @@
 # The mark is the running distro's own Nerd-Font logo, read once from /etc/os-release —
 # clones on other distros wear their own; anything unrecognised falls back to Tux,
 # and root trades the logo for the skull.
-# The logo sits between name and host with no spaces at all — the gaps are the
-# glyph's own cell margins (see tools/patch-distro-glyphs.py, which fits these
-# glyphs inside their cell so both sides read even at letter distance).
+# The logo rides two cells: the prompt gives it a space of its own, and the
+# glyph's ink is centred on its pen (tools/patch-distro-glyphs.py fits it to
+# the size of the "@") — so it fills that seat, a letter's distance from
+# either word, never touching one.
 [[ $- == *i* ]] || return 0
 
 __aether_mark() (
@@ -56,6 +57,6 @@ __aether_prompt() {
   (( s )) && frame='\[\e[0;31m\]'
   local mark=$__AETHER_MARK sign='$'
   (( EUID == 0 )) && { name='\[\e[1;31m\]'; mark='💀'; sign='#'; }
-  PS1="\[\e]0;\u@\h: \w\a\]${frame}┌──(${name}\u${mark}\h${frame})-[${dir}\w${frame}]${off}\n${frame}└─${name}${sign}${off} "
+  PS1="\[\e]0;\u@\h: \w\a\]${frame}┌──(${name}\u ${mark}\h${frame})-[${dir}\w${frame}]${off}\n${frame}└─${name}${sign}${off} "
 }
 PROMPT_COMMAND="__aether_prompt${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
