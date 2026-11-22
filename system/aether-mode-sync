@@ -159,6 +159,14 @@ if [[ -d $fk && -f $profile ]]; then
   cp "$profile" "$HOME"/.local/share/konsole/Aether*.colorscheme "$fk/data/konsole/"
   kwriteconfig6 --file "$fk/config/konsolerc" --group "Desktop Entry" --key DefaultProfile Aether.profile
 fi
+# Aethergram watches its live palette and re-applies it: put the mode's recoloured copy there (both
+# are kept beside it by aether-accent-sync), through a temp file and a rename, never half-written.
+tg="${AETHER_TG_OUT:-${XDG_DATA_HOME:-$HOME/.local/share}/aethergram/aether.tdesktop-palette}"
+[[ $scheme == AetherGlass ]] && tgsrc="$(dirname "$tg")/aether-dark.tdesktop-palette" || tgsrc="$(dirname "$tg")/aether-light.tdesktop-palette"
+if [[ -f $tgsrc ]] && ! cmp -s "$tgsrc" "$tg"; then
+  tmp="$(mktemp "$(dirname "$tg")/.aether.tdesktop-palette.XXXXXX")"
+  cp "$tgsrc" "$tmp" && mv -f "$tmp" "$tg" && echo "aethergram -> $(basename "$tgsrc" .tdesktop-palette)"
+fi
 # The mode moved while this ran (the writes behind it did not start a new run): follow it.
 if [[ "$(judge)" != "$scheme" ]] && (( ${AETHER_MODE_SYNC_PASS:-0} < 3 )); then
   AETHER_MODE_SYNC_PASS=$(( ${AETHER_MODE_SYNC_PASS:-0} + 1 )) exec "$0"

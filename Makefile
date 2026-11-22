@@ -4,7 +4,7 @@ GEN   := theme/generators
 APPS  := island toasts dock console lens desk
 
 .DEFAULT_GOAL := help
-.PHONY: help all tokens theme fonts components install install-island install-apps install-login install-gestures install-overview direction-install zcode-rtl-install uninstall restore check clean
+.PHONY: help all tokens theme fonts components install install-island install-apps install-telegram install-login install-gestures install-overview direction-install zcode-rtl-install uninstall restore check clean
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-18s %s\n", $$1, $$2}'
@@ -14,12 +14,13 @@ all: theme components ## Generate the theme and build the island, toasts, dock, 
 tokens: ## Regenerate the QML design tokens from theme/tokens.toml
 	python3 $(GEN)/build_tokens_qml.py
 
-theme: tokens ## Generate colors, Kvantum, Plasma theme, global themes, Konsole, wallpapers, login backgrounds
+theme: tokens ## Generate colors, Kvantum, Plasma theme, global themes, Konsole, Telegram palettes, wallpapers, login backgrounds
 	python3 $(GEN)/gen_grain.py
 	python3 $(GEN)/build_colors.py
 	python3 $(GEN)/build_kvantum.py
 	python3 $(GEN)/build_desktoptheme.py
 	python3 $(GEN)/build_lnf_konsole.py
+	python3 $(GEN)/build_telegram.py
 	python3 $(GEN)/gen_wallpaper.py
 	python3 $(GEN)/gen_lock_wallpaper.py
 
@@ -40,6 +41,9 @@ install-island: ## Build and (re)start the six aether services (quick rebuild pa
 
 install-apps: ## Dress the apps (Kvantum, Aurorae titlebar, Konsole, GTK, KDE Flatpaks) and keep them on the island's accent
 	install/install-apps.sh
+
+install-telegram: ## Install Aethergram (Telegram fork) from a release, or a local build: make install-telegram TG=~/aethergram/out/Release/Telegram
+	install/install-telegram.sh $(TG)
 
 install-login: ## Install the login screen (asks for sudo)
 	sudo install/install-sddm.sh
@@ -70,6 +74,7 @@ check: ## Syntax-check scripts, run the split-model test and build all six compo
 	node --check system/zcode-rtl/zcode-rtl-inject.mjs
 	node components/console/tests/split-model.test.js
 	python3 $(GEN)/build_tokens_qml.py --check
+	python3 $(GEN)/build_telegram.py --check
 	@for s in ribbons mist aurora ink dune; do qsb6 --glsl "100 es,120,150" --hlsl 50 --msl 12 -o /dev/null plasmoids/org.aether.$$s/contents/shaders/$$s.frag || exit 1; done
 	node -e "new Function(require('fs').readFileSync('system/layout.js','utf8'))"
 	$(MAKE) components
