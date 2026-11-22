@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install Aethergram, the unofficial Telegram Desktop fork that wears the Aether palette, and dress it:
-# the palettes are generated, recoloured to the island's accent and the live one put where the fork
-# watches it (aether-accent-sync, and aether-mode-sync on every light/dark switch).
+# the palettes and themes (palette + a chat background in the accent's hue) are generated, recoloured
+# to the island's accent and the live ones put where the fork watches them (aether-accent-sync, and
+# aether-mode-sync on every light/dark switch).
 #   install-telegram.sh                         latest release of DovBerKaplan/aethergram (needs gh)
 #   install-telegram.sh ~/aethergram/out/Release/Telegram   a local build
 # No sudo.
@@ -14,6 +15,7 @@ APPID=io.github.dovberkaplan.Aethergram
 REPO=DovBerKaplan/aethergram
 need() { command -v "$1" >/dev/null || { echo "missing $1" >&2; exit 1; }; }
 need python3
+python3 -c 'import PIL' 2>/dev/null || { echo "missing Pillow (python3-pil): it draws the chat background" >&2; exit 1; }
 
 echo "== binary"
 mkdir -p "$OPT" "$HOME/.local/bin" "$D/applications"
@@ -53,7 +55,7 @@ X-KDE-Wayland-Interfaces=org_kde_kwin_blur
 EOF
 command -v update-desktop-database >/dev/null && update-desktop-database -q "$D/applications" || true
 
-echo "== palettes"
+echo "== palettes and themes"
 python3 "$ROOT/theme/generators/build_telegram.py"
 install -m 755 "$ROOT/system/aether-accent-sync" "$HOME/.local/bin/aether-accent-sync"
 install -m 755 "$ROOT/system/aether-mode-sync" "$HOME/.local/bin/aether-mode-sync"

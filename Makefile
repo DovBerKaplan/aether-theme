@@ -14,7 +14,7 @@ all: theme components ## Generate the theme and build the island, toasts, dock, 
 tokens: ## Regenerate the QML design tokens from theme/tokens.toml
 	python3 $(GEN)/build_tokens_qml.py
 
-theme: tokens ## Generate colors, Kvantum, Plasma theme, global themes, Konsole, Telegram palettes, wallpapers, login backgrounds
+theme: tokens ## Generate colors, Kvantum, Plasma theme, global themes, Konsole, Telegram palettes and themes, wallpapers, login backgrounds
 	python3 $(GEN)/gen_grain.py
 	python3 $(GEN)/build_colors.py
 	python3 $(GEN)/build_kvantum.py
@@ -66,7 +66,7 @@ uninstall: ## Stop and remove all six aether services
 restore: ## Restore the KDE settings from the latest backup
 	install/restore.sh
 
-check: ## Syntax-check scripts, run the split-model test and build all six components
+check: ## Syntax-check scripts, run the split-model test, check the Telegram palettes (keys, contrast) and build all six components
 	@for f in install/*.sh system/*.sh system/aether-mode-sync system/gestures/*.sh system/direction/*.sh system/zcode-rtl/*.sh; do bash -n $$f || exit 1; done
 	python3 -m py_compile $(GEN)/*.py system/shortcuts/*.py tools/*.py system/aether-accent-sync system/direction/aether-direction system/direction/aether-direction-run system/vibe/aether-vibe system/agents/aether-agent-run
 	node --check system/zcode-rtl/zcode-rtl-inspect.mjs
