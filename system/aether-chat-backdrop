@@ -116,7 +116,7 @@ def quiet(im: Image.Image, hue: float, light: bool, grey: bool, soft: float = 14
     n = np.clip(d / max(float(np.percentile(np.abs(d), 99.5)), 1e-3), -1, 1)
     m = np.sign(n) * np.abs(n) ** 1.2
     if light:
-        Lq, Sq = 0.895 + 0.07 * amount * m, 0.06 + 0.12 * np.abs(n)   # paper reads fainter than ink: more of it
+        Lq, Sq = 0.865 + 0.11 * amount * m, 0.15 + 0.25 * np.abs(n)   # paper reads fainter than ink: more of it
     else:
         Lq, Sq = 0.088 + 0.07 * amount * np.maximum(m, -0.35), 0.07 + 0.15 * np.abs(n)
     if grey:
