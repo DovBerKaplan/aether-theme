@@ -56,7 +56,7 @@ class TileStore : public QObject
 public:
     explicit TileStore(QObject *parent = nullptr)
         : QObject(parent)
-        , m_settings(QDir::homePath() + QStringLiteral("/.config/aetherislandrc"), QSettings::IniFormat)
+        , m_settings(rcPath(), QSettings::IniFormat)
     {
         for (const QString &id : m_settings.value(QStringLiteral("Tiles/Order")).toStringList()) {
             if (known(id) && !m_order.contains(id)) {
@@ -130,6 +130,14 @@ public:
         });
     }
     ~TileStore() override { release(); }
+
+    // The island's settings file. AETHER_ISLANDRC aims the store at another copy (test sandboxes:
+    // the real file is never the one an experiment writes to).
+    static QString rcPath()
+    {
+        const QString o = qEnvironmentVariable("AETHER_ISLANDRC");
+        return o.isEmpty() ? QDir::homePath() + QStringLiteral("/.config/aetherislandrc") : o;
+    }
 
     QStringList widgets() const
     {
@@ -223,6 +231,7 @@ public:
                 QVariantMap{{QStringLiteral("id"), QStringLiteral("org.aether.dune")}, {QStringLiteral("title"), QStringLiteral("Dune")}, {QStringLiteral("shader"), QStringLiteral("dune")}}};
     }
     QString wallpaperStyle() const { return m_wallpaper; }
+    bool wallpaperChosen() const { return m_settings.contains(QStringLiteral("Wallpaper/Style")); }   // else the style is only our default
     bool wallpaperAnimate() const { return m_wallpaperAnimate; }
     Q_INVOKABLE void setWallpaper(const QString &id)
     {

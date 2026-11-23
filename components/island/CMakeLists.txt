@@ -13,7 +13,7 @@ find_package(KF6WindowSystem REQUIRED)
 find_package(KF6Runner REQUIRED)   # the search engine runs KRunner's own plugins in-process
 find_package(LayerShellQt REQUIRED)
 
-qt_add_executable(aether-island src/main.cpp ../shared/src/BackdropSampler.h src/SystemInfo.h src/MediaController.h src/PrefsGuard.h src/AudioLevels.h src/NotificationStore.h src/NetworkModel.h src/AudioModel.h src/BluetoothModel.h src/TetherController.h src/SystemPanels.h src/TileStore.h src/ConnectModel.h src/ConnectInput.h src/GlyphStore.h src/SearchEngine.h src/UsageIndex.h)
+qt_add_executable(aether-island src/main.cpp ../shared/src/BackdropSampler.h src/SystemInfo.h src/MediaController.h src/PrefsGuard.h src/AudioLevels.h src/NotificationStore.h src/NetworkModel.h src/AudioModel.h src/BluetoothModel.h src/TetherController.h src/SystemPanels.h src/TileStore.h src/ThemeBus.h src/ConnectModel.h src/ConnectInput.h src/GlyphStore.h src/SearchEngine.h src/UsageIndex.h)
 target_link_libraries(aether-island PRIVATE
     Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::DBus Qt6::Sql Qt6::Concurrent
     KF6::WindowSystem KF6::Runner LayerShellQt::Interface)
