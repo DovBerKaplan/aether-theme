@@ -41,6 +41,7 @@ SCHEMES = HOME / ".local/share/color-schemes"
 DATA = Path(os.environ.get("XDG_DATA_HOME") or HOME / ".local/share")
 TG_LIVE = Path(os.environ.get("AETHER_TG_OUT", DATA / "aethergram/aether.tdesktop-palette"))
 TG_THEME = Path(os.environ.get("AETHER_TG_THEME_OUT", TG_LIVE.with_name("aether.tdesktop-theme")))
+TG_ICON = Path(os.environ.get("AETHER_TG_ICON_OUT", TG_LIVE.with_name("aethergram.png")))
 # The dark surfaces the accent meets (theme/tokens.toml): ink-850 under the selected row and the
 # outgoing bubble, ink-700 the brightest one it is read on as text (incoming bubbles, menus).
 INK850, INK700 = "#121418", "#1d2026"
@@ -264,6 +265,31 @@ def tg_theme_for(path: Path, palette: str, hue: float, light: bool) -> bytes:
     return tg_theme(palette, rendered.read_bytes() if rendered else tg_background(hue, light), tag)
 
 
+def tg_icon(hls) -> bytes:
+    """Aethergram's icon: a paper plane in the accent on a rounded glass square tinted by its hue."""
+    from PIL import Image, ImageDraw
+    hue = hls[0] if hls else 183 / 360
+    acc = tuple(round(c * 255) for c in colorsys.hls_to_rgb(hue, 0.62, 0.45))
+    body = tuple(round(c * 255) for c in colorsys.hls_to_rgb(hue, 0.19, 0.08))
+    n, k = 256, 4
+    N = n * k
+    im = Image.new("RGBA", (N, N), (0, 0, 0, 0))
+    m, r = int(N * 0.06), int(N * 0.24)
+    box = (m, m, N - m - 1, N - m - 1)
+    ImageDraw.Draw(im).rounded_rectangle(box, r, fill=body + (255,))
+    veil = Image.new("RGBA", (N, N), (255, 255, 255, 0))
+    ImageDraw.Draw(veil).rounded_rectangle(box, r, fill=(255, 255, 255, 14))
+    im = Image.alpha_composite(im, veil)
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle(box, r, outline=acc + (110,), width=max(1, int(N * 0.012)))
+    P = lambda x, y: (N * x, N * y)
+    d.polygon([P(.24, .50), P(.76, .27), P(.62, .74), P(.50, .58)], fill=acc + (255,))
+    d.polygon([P(.24, .50), P(.50, .58), P(.43, .70), P(.41, .55)], fill=tuple(int(c * 0.72) for c in acc) + (255,))
+    out = io.BytesIO()
+    im.resize((n, n), Image.LANCZOS).save(out, "PNG")
+    return out.getvalue()
+
+
 def mode_is_light() -> bool:
     """aether-mode-sync's judge(): the scheme's name, else (under an aether look-and-feel) the window colour."""
     cp = configparser.ConfigParser(interpolation=None, strict=False)
@@ -397,6 +423,13 @@ def main() -> int:
             changed.append(f"telegram/{mode}")
         if mode == live and (replace_atomic(TG_LIVE, palette) | bool(theme and replace_atomic(TG_THEME, theme))):
             changed.append(f"aethergram ({mode})")
+
+    # ...and so does its icon, which the desktop entry points at (dock, launcher, task switcher).
+    try:
+        if replace_atomic(TG_ICON, tg_icon(hls)):
+            changed.append("aethergram icon")
+    except ImportError:
+        pass
 
     # Konsole: the cursor wears the accent.
     if KONSOLE_PROFILE.exists():

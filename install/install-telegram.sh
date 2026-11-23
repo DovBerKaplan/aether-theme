@@ -26,6 +26,10 @@ if [[ $# -gt 0 ]]; then
   # A source tree build: its icon sits in the tree, two levels above out/Release.
   art="$(cd "$(dirname "$src")/../.." && pwd)/Telegram/Resources/art/icon256.png"
   [[ -f $art ]] && install -Dm 644 "$art" "$OPT/aethergram.png" && icon="$OPT/aethergram.png"
+  # The accent-coloured icon aether-accent-sync keeps (it follows the system colour); the art above
+  # is the fallback until the first sync.
+  [[ -f $D/aethergram/aethergram.png ]] || { [[ -f $art ]] && install -Dm 644 "$art" "$D/aethergram/aethergram.png"; }
+  [[ -f $D/aethergram/aethergram.png ]] && icon="$D/aethergram/aethergram.png"
 else
   need gh
   dl="$(mktemp -d)"; trap 'rm -rf "$dl"' EXIT
