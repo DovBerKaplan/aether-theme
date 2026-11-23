@@ -89,7 +89,7 @@ show a client's state without polling it:
 
 | | |
 |---|---|
-| Service | `io.github.dovberkaplan.Aethergram` |
+| Service | `org.aether.Aethergram` (not the app id: GApplication owns that one for its single instance) |
 | Object | `/Aether` |
 | Interface | `org.aether.Client1` |
 

@@ -81,7 +81,7 @@ def muted(role: str) -> str:
     return f"beside-{role} {P['fog-300']} {P['graphite-500']}"
 
 
-def dark() -> list[tuple[str, str, str]]:
+def _dark_rows() -> list[tuple[str, str, str]]:
     """(key, colour, mark)."""
     p = P
     body, raised = 0.06, 0.08   # the tint's saturation: the glass body, the raised glass above it
@@ -271,9 +271,9 @@ def dark() -> list[tuple[str, str, str]]:
         ("msgFileThumbLinkOutFg", ACCENT, ""),
         ("msgFileThumbLinkOutFgSelected", ACCENT, ""),
         # shared files' squares: Telegram's four colours, calmed to the glass (white glyphs on them)
-        *[(f"msgFile{i}{v}", hsl, "") for i, hue in enumerate((210, 150, 5, 38), 1)
-          for v, hsl in (("Bg", hexl(hue, 0.42)), ("BgDark", hexl(hue, 0.36)), ("BgOver", hexl(hue, 0.33)),
-                         ("BgSelected", hexl(hue, 0.30)))],
+        *[(f"msgFile{i}{v}", *_hue_tint(l, 0.30, d))
+          for i, d in enumerate((0, 90, 180, 270), 1)
+          for v, l in (("Bg", 0.42), ("BgDark", 0.36), ("BgOver", 0.33), ("BgSelected", 0.30))],
         # chat view
         *[(k, v, "") for k, v in (("historyScrollBarBg", "#ffffff38"), ("historyScrollBarBgOver", "#ffffff5c"),
                                   ("historyScrollBg", "#ffffff10"), ("historyScrollBgOver", "#ffffff1c"))],
@@ -311,6 +311,28 @@ def dark() -> list[tuple[str, str, str]]:
 def hexl(hue: float, l: float, s: float = 0.30) -> str:
     r, g, b = colorsys.hls_to_rgb(hue / 360, l, s)
     return "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def _hue_tint(l: float, s: float, d: int = 0) -> tuple[str, str]:
+    """A colour in the chosen hue (turned d degrees) at lightness l: the placeholder and its mark."""
+    return hexl((PLACEHOLDER_HUE * 360 + d) % 360, l, s), f"tint {l:.3f} {s}" + (f" +{d}" if d else "")
+
+
+def dark() -> list[tuple[str, str, str]]:
+    """The dark rows, with everything the system hue should reach: text takes a breath of it, the
+    bot keyboard's primary/success buttons and the file-type chips are turned from it."""
+    rows = []
+    texts = {P["fog-100"]: 0.90, P["fog-50"]: 0.94}
+    for key, value, mark in _dark_rows():
+        if not mark and value in texts:
+            value, mark = _hue_tint(texts[value], 0.16)
+        rows.append((key, value, mark))
+    for key, d, l, s, a in (
+            ("botKbPrimaryBg", 0, 0.34, 0.42, "cc"), ("botKbSuccessBg", 40, 0.34, 0.42, "cc"),
+            ("botKbInlinePrimaryBg", 0, 0.30, 0.38, "b3"), ("botKbInlineSuccessBg", 40, 0.30, 0.38, "b3")):
+        value, mark = _hue_tint(l, s, d)
+        rows.append((key, value + a, mark))
+    return rows
 
 
 def light() -> list[tuple[str, str, str]]:
@@ -407,6 +429,12 @@ def light() -> list[tuple[str, str, str]]:
         **{f"historyPeer{i}NameFg{v}": (hexl((PLACEHOLDER_HUE * 360 + 45 * (i - 1)) % 360, 0.36, 0.40),
                                         f"tint 0.36 0.40 +{45 * (i - 1)}")
            for i in range(1, 9) for v in ("", "Selected")},
+        # the bot keyboard's primary/success and the file chips, turned from the chosen hue
+        **{k: _hue_tint(0.40 if "Inline" not in k else 0.44, 0.40, 40 if "Success" in k else 0) + ()
+           for k in ("botKbPrimaryBg", "botKbSuccessBg", "botKbInlinePrimaryBg", "botKbInlineSuccessBg")},
+        **{f"msgFile{n}{suffix}": _hue_tint(l, 0.32, d)
+           for n, d in ((1, 0), (2, 90), (3, 180), (4, 270))
+           for suffix, l in (("Bg", 0.44), ("BgDark", 0.38), ("BgOver", 0.36), ("BgSelected", 0.33))},
     }
     rows = []
     for key, value, mark in dark():
