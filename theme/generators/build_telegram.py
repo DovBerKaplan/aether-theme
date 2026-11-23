@@ -113,9 +113,13 @@ def dark() -> list[tuple[str, str, str]]:
         ("activeButtonSecondaryFgOver", INK + "b3", "on-hover"),
         ("activeLineFg", ACCENT, ""),
         ("activeLineFgError", p["red-200"], ""),
-        ("lightButtonBg", *tint("ink-900", body)),
-        ("lightButtonBgOver", *tint("ink-800", body)),
-        ("lightButtonBgRipple", *tint("ink-700", body)),
+        # the island's tonal button: a chip on the glass, not the glass itself
+        ("lightButtonBg", *veil("#ffffff", 0.10, "windowBg", p["ink-900"])),
+        ("lightButtonBgOver", *veil("#ffffff", 0.13, "windowBg", p["ink-900"])),
+        ("lightButtonBgRipple", *veil("#ffffff", 0.18, "windowBg", p["ink-900"])),
+        # sliders and the switch's off track: the island's chip under an accent fill
+        ("sliderBgInactive", *veil("#ffffff", 0.16, "windowBg", p["ink-900"])),
+        ("tooltipBorderFg", *veil("#ffffff", 0.16, "windowBg", p["ink-900"])),
         ("lightButtonFg", ACCENT, ""),
         ("lightButtonFgOver", ACCENT, ""),
         ("attentionButtonFg", p["red-200"], ""),
